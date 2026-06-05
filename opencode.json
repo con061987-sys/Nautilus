@@ -1,0 +1,72 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4-flash-free",
+  "agent": {
+    "explore": {
+      "disable": true
+    },
+    "general": {
+      "disable": true
+    }
+  },
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "enabled": true,
+      "environment": {
+        "GITHUB_TOKEN": "{env:GITHUB_TOKEN}"
+      }
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true
+    },
+    "gh_grep": {
+      "type": "remote",
+      "url": "https://mcp.grep.app",
+      "enabled": true
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "enabled": true
+    },
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/workspaces/NVINDIA_CUD"],
+      "enabled": false
+    }
+  },
+  "tools": {
+    "context7": true,
+    "gh_grep": true,
+    "github": true,
+    "sequential-thinking": true,
+    "filesystem": false
+  },
+  "lsp": true,
+  "formatter": true,
+  "permission": {
+    "bash": "allow",
+    "write": "allow",
+    "edit": "allow",
+    "read": "allow"
+  },
+  "plugin": [
+    "oh-my-openagent@latest",
+    "oh-my-opencode-slim",
+    "superpowers@git+https://github.com/obra/superpowers.git"
+  ],
+  "instructions": [
+    "AGENTS.md",
+    "docs/PRD.md",
+    "docs/TECH_SPEC.md"
+  ],
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 15000
+  }
+}
