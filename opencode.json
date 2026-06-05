@@ -1,14 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode/deepseek-v4-flash-free",
-  "agent": {
-    "explore": {
-      "disable": true
-    },
-    "general": {
-      "disable": true
-    }
-  },
   "mcp": {
     "github": {
       "type": "local",
@@ -39,15 +31,6 @@
       "enabled": false
     }
   },
-  "tools": {
-    "context7": true,
-    "gh_grep": true,
-    "github": true,
-    "sequential-thinking": true,
-    "filesystem": false
-  },
-  "lsp": true,
-  "formatter": true,
   "permission": {
     "bash": "allow",
     "write": "allow",
@@ -56,17 +39,11 @@
   },
   "plugin": [
     "oh-my-openagent@latest",
-    "oh-my-opencode-slim",
-    "superpowers@git+https://github.com/obra/superpowers.git"
+    "oh-my-opencode-slim"
   ],
   "instructions": [
     "AGENTS.md",
     "docs/PRD.md",
     "docs/TECH_SPEC.md"
-  ],
-  "compaction": {
-    "auto": true,
-    "prune": true,
-    "reserved": 15000
-  }
+  ]
 }

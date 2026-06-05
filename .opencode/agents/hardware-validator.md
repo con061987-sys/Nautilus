@@ -1,7 +1,6 @@
 ---
 name: hardware-validator
 description: MUST BE USED for validating compiled binaries on target hardware, running benchmarks, and analyzing performance results. Use when testing on AMD Developer Cloud, Intel Tiber AI Cloud, or local hardware.
-tools: Read, Write, Edit, Bash
 ---
 
 # Hardware Validator Agent

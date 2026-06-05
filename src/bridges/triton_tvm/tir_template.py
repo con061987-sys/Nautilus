@@ -1,20 +1,28 @@
-"""TIR template construction from kernel metadata.
+"""TIR template construction from kernel metadata and real captured IR.
 
-Constructs equivalent TVM TIR PrimFuncs from extracted Triton kernel
-metadata. These templates encode the same mathematical computation but
-in TVM's Tensor IR format, allowing MetaSchedule to search over
-schedule primitives (tiling, binding, vectorization, etc.) that map
-directly to Triton's tuning parameters.
+This module is the bridge between Triton IR and TVM TIR. It supports
+two paths:
 
-This module implements the 'construct_tir_template' step in the
-config bridge architecture.
+  1. Primary: real IR conversion via ConversionPipeline
+     Takes captured TTGIR text, runs the 4-pass conversion, produces
+     TVMScript text. This is the production path — it preserves the
+     actual semantics of the kernel (not generic templates).
+
+  2. Fallback: generic template construction from metadata bounds
+     When the real IR is not available (e.g. Python-level fallback),
+     builds a generic TIR template from the kernel's mathematical
+     bounds. This was the original design and is preserved as a
+     safety net.
+
+The philosophy is "fix or redesign, not remove": the template
+methods stay, but the primary path is now real IR conversion.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-# Attempt to import TVM; gracefully degrade if unavailable
 try:
     from tvm.script import tirx as T
     import tvm
@@ -23,19 +31,18 @@ try:
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
-    # Create placeholder types for when TVM isn't installed
     class T:  # type: ignore
         class prim_func: pass
         class Buffer: pass
 
+logger = logging.getLogger(__name__)
+
 
 class TIRTemplateBuilder:
-    """Constructs TVM TIR PrimFunc templates from kernel metadata.
+    """Constructs TVM TIR PrimFuncs from metadata OR real captured IR.
 
-    Each template represents a Triton kernel's computation in TIR
-    form, parameterized by the mathematical bounds (M, N, K, etc.)
-    extracted from the Triton JIT call. MetaSchedule then tunes these
-    templates to find optimal schedule parameters.
+    Primary path: real IR conversion via ConversionPipeline
+    Fallback path: generic templates from bounds (preserved)
     """
 
     def __init__(self) -> None:
@@ -44,6 +51,37 @@ class TIRTemplateBuilder:
                 "TVM is required to build TIR templates. "
                 "Install with: pip install apache-tvm"
             )
+        # Lazy import to avoid circular dependency
+        from .ir_to_tir import ConversionPipeline
+        self._pipeline = ConversionPipeline()
+
+    def build_from_captured_ir(
+        self,
+        ir_text: str,
+    ) -> tuple[Any, Any]:
+        """Build TIR from REAL captured IR (the production path).
+
+        Returns:
+            (tvm.IRModule, conversion_result) — the IRModule for TVM
+            and the ConversionResult for diagnostics.
+        """
+        result = self._pipeline.convert(ir_text)
+        if not result.is_usable:
+            logger.warning(
+                "Real IR conversion failed (%s); pipeline returned FALLBACK",
+                result.status.name,
+            )
+            return None, result
+
+        # Execute the TVMScript to get an IRModule
+        try:
+            ir_module = self._execute_tvmscript(result.tvmscript_text)
+        except Exception as exc:
+            logger.warning("TVMScript execution failed: %s", exc)
+            # Return None for IRModule but keep the result for diagnostics
+            return None, result
+
+        return ir_module, result
 
     def build_matmul(
         self,
@@ -52,17 +90,6 @@ class TIRTemplateBuilder:
         k: int,
         dtype: str = "float32",
     ) -> tvm.IRModule:
-        """Build a TIR PrimFunc template for matrix multiplication.
-
-        Args:
-            m: M dimension (rows of A, rows of C).
-            n: N dimension (cols of B, cols of C).
-            k: K dimension (reduction, cols of A, rows of B).
-            dtype: Data type string ('float32', 'float16', 'bfloat16').
-
-        Returns:
-            tvm.IRModule containing the PrimFunc, ready for MetaSchedule.
-        """
         @T.prim_func
         def matmul_kernel(
             A: T.Buffer((m, k), dtype),
@@ -85,18 +112,6 @@ class TIRTemplateBuilder:
         dtype: str = "float32",
         op: str = "sum",
     ) -> tvm.IRModule:
-        """Build a TIR PrimFunc template for reduction operations.
-
-        Args:
-            shape: Input tensor shape.
-            axis: Reduction axis.
-            dtype: Data type.
-            op: Reduction operation ('sum', 'max', 'min').
-
-        Returns:
-            tvm.IRModule containing the PrimFunc.
-        """
-        # Only 2D reductions are currently supported for simplicity
         assert len(shape) == 2, "Only 2D reduction templates supported"
         d0, d1 = shape
 
@@ -129,16 +144,6 @@ class TIRTemplateBuilder:
         dtype: str = "float32",
         op: str = "add",
     ) -> tvm.IRModule:
-        """Build a TIR PrimFunc template for element-wise operations.
-
-        Args:
-            shape: Input/output tensor shape.
-            dtype: Data type.
-            op: Operation ('add', 'mul', 'max').
-
-        Returns:
-            tvm.IRModule containing the PrimFunc.
-        """
         @T.prim_func
         def elem_kernel(
             A: T.Buffer(shape, dtype),
@@ -162,14 +167,8 @@ class TIRTemplateBuilder:
     def build_from_metadata(self, metadata: Any) -> tvm.IRModule:
         """Build a TIR template from extracted kernel metadata.
 
-        Automatically selects the correct template based on kernel
-        type classification in the metadata.
-
-        Args:
-            metadata: KernelMetadata from metadata_extractor.
-
-        Returns:
-            tvm.IRModule ready for MetaSchedule tuning.
+        This is the FALLBACK path. The primary path is
+        build_from_captured_ir which uses real IR conversion.
         """
         dtype = "float32"
         if metadata.arg_dtypes:
@@ -201,8 +200,42 @@ class TIRTemplateBuilder:
                 op="add",
             )
 
-        # Fallback: build matmul based on grid dimensions
         m = metadata.grid_0 * 128
         n = metadata.grid_1 * 128
         k = 128
         return self.build_matmul(m=m, n=n, k=k, dtype=dtype)
+
+    def _execute_tvmscript(self, tvmscript_text: str) -> Any:
+        """Execute TVMScript text to produce a TVM IRModule.
+
+        This wraps the TVMScript string in a namespace where
+        tvm.script.tirx is available, then evaluates it. The
+        resulting PrimFunc is wrapped in an IRModule.
+        """
+        import tvm
+        from tvm.script import tirx as T
+
+        # Build a namespace for the TVMScript to evaluate in
+        namespace: dict[str, Any] = {
+            "T": T,
+            "tvm": tvm,
+            "tirx": tirx if TVM_AVAILABLE else None,
+        }
+
+        # Execute the TVMScript in this namespace
+        exec(tvmscript_text, namespace)
+
+        # The TVMScript should have defined a function with the
+        # kernel's name; find it
+        func_names = [
+            name for name, obj in namespace.items()
+            if callable(obj) and not name.startswith("_") and name != "T"
+        ]
+        if not func_names:
+            raise RuntimeError("TVMScript did not define any function")
+
+        # Take the first function (there should be only one PrimFunc)
+        func = namespace[func_names[0]]
+
+        # Wrap in IRModule
+        return tvm.IRModule({func_names[0]: func})

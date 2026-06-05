@@ -1,0 +1,145 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel", "cmake>=3.18", "ninja"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triton-tvm-bridge"
+version = "0.1.0"
+description = "Bridge between OpenAI Triton and Apache TVM MetaSchedule for cross-vendor AI compilation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Nautilus Project", email = "dev@nautilus.ai" },
+]
+keywords = [
+    "triton", "tvm", "metaschedule", "gpu", "compiler",
+    "amd", "intel", "nvidia", "fat-binary", "ai-compilation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Core dependencies — Triton and TVM are required at runtime
+dependencies = [
+    "torch>=2.0",
+    "triton>=3.0",
+    "apache-tvm>=0.18",
+    "numpy>=1.20",
+    "pyyaml>=6.0",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+# XGBoost cost model in TVM MetaSchedule
+tuning = ["xgboost>=2.0"]
+# RPC support for remote hardware tuning
+rpc = ["apache-tvm[rpc]>=0.18"]
+# All optional features
+all = ["xgboost>=2.0", "apache-tvm[rpc]>=0.18"]
+# Development tools
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.5",
+    "ruff>=0.1",
+    "black>=23.0",
+]
+
+# ----------------------------------------------------------------------------
+# Triton backend plugin entry point
+# This is what makes the plugin discoverable to Triton via entry_points
+# or TRITON_PLUGIN_DIRS environment variable.
+# ----------------------------------------------------------------------------
+[project.entry-points."triton.backends"]
+tvm = "src.bridges.triton_tvm.backend:TVMBackend"
+
+# Expose the driver as well
+[project.entry-points."triton.drivers"]
+tvm = "src.bridges.triton_tvm.backend:TVMDriver"
+
+[project.urls]
+Homepage = "https://github.com/nvindia-cud/bridge"
+Documentation = "https://nvindia-cud.readthedocs.io"
+Repository = "https://github.com/nvindia-cud/bridge"
+Issues = "https://github.com/nvindia-cud/bridge/issues"
+
+[project.scripts]
+# CLI for tuning individual kernels
+nautilus-tune = "src.cli.commands.tune:cli"
+nautilus-build = "src.cli.commands.build:cli"
+nautilus-shard = "src.cli.commands.shard:cli"
+
+# ----------------------------------------------------------------------------
+# Setuptools configuration
+# ----------------------------------------------------------------------------
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+exclude = ["src.tests*", "tests*", "third_party*", "docs*", ".opencode*"]
+
+[tool.setuptools.package-data]
+"src.bridges.triton_tvm.lib" = ["*.so", "*.dylib", "*.dll", "CMakeLists.txt"]
+
+# ----------------------------------------------------------------------------
+# C++ build configuration (optional — only used if building the C++ plugin)
+# ----------------------------------------------------------------------------
+[tool.scikit-build]
+# scikit-build-core is used for the C++ shared library
+cmake.build-type = "Release"
+wheel.packages = ["src/bridges/triton_tvm/lib"]
+
+# ----------------------------------------------------------------------------
+# Development tool configuration
+# ----------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["src/tests", "src/bridges"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu: marks tests that require GPU hardware (deselect with '-m \"not gpu\"')",
+    "integration: marks integration tests requiring TVM/Triton installed",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["third_party", ".opencode", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT", "RUF"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.mypy]
+python_version = "3.10"
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+# Don't check files in third-party
+exclude = ["third_party/", ".opencode/", "build/"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]

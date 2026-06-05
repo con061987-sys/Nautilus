@@ -106,6 +106,24 @@ class TritonTVMBridge:
             timeout_seconds=600,
         ) if self.enable_tvm else None
 
+        # Real IR capture infrastructure (Step 1 of the production wiring)
+        # These are the components that hook into Triton's actual compile
+        # pipeline via the backend plugin and capture REAL TTGIR.
+        from .ir_capture import IRCapture
+        from .extern_bridge import ExternMatmulBuilder
+        from .circuit_breaker import get_default_breakers
+        from .timeout_manager import TimeoutManager, StageBudgets
+        from .structured_logging import (
+            span as span_context, configure_logging,
+        )
+
+        self.ir_capture = IRCapture()
+        self.extern_builder = ExternMatmulBuilder(
+            cache_dir=str(self.cache_dir / "extern_cache"),
+        )
+        self.breakers = get_default_breakers()
+        self.timeout_manager = TimeoutManager(StageBudgets())
+
         # In-memory LRU cache
         self._cache: dict[str, MappedTuningConfig] = {}
         self._lru_order: list[str] = []
@@ -216,6 +234,304 @@ class TritonTVMBridge:
             ),
         ]
         return variants
+
+    def tune_with_real_ir(
+        self,
+        source_hash: str,
+        target: str = "nvidia/nvidia-a100",
+        force_retune: bool = False,
+    ) -> TuningResult:
+        """End-to-end tuning using REAL IR captured from Triton's pipeline.
+
+        This is the production path. Unlike tune() which uses Python-level
+        metadata, this method:
+          1. Reads the actual TTGIR captured by the Triton backend plugin
+          2. Classifies the kernel (matmul/reduction/elementwise/attention)
+          3. Extracts mathematical bounds (M, N, K) from the REAL IR
+          4. For matmul: routes through the extern_bridge to keep Tensor
+             Core performance while MetaSchedule tunes the rest
+          5. For other kinds: builds exact TIR from extracted bounds
+          6. Runs TVM MetaSchedule on the constructed TIR
+          7. Maps results back to Triton Config
+          8. Returns the full result with observability metadata
+
+        Args:
+            source_hash: The kernel source hash from Triton's compile.
+                Must match the hash captured by the backend plugin.
+            target: TVM target string.
+            force_retune: If True, bypass cache and re-tune.
+
+        Returns:
+            TuningResult with optimal config and full pipeline metadata.
+        """
+        from .structured_logging import span as span_ctx, stage as stage_ctx
+        from .ir_capture import KernelKind
+
+        start = time.perf_counter()
+        self._stages = {}
+
+        with span_ctx(source_hash, target, metadata={"mode": "real_ir"}) as sp:
+            # Stage 1: Real IR capture
+            with stage_ctx(sp, "ir_capture") as st:
+                captured = self.ir_capture.capture_for_source(source_hash, target)
+                if captured is None:
+                    logger.warning(
+                        "No real IR captured for %s..%s; falling back to metadata path",
+                        source_hash[:12], target,
+                    )
+                    # Fall back to a synthetic metadata + chain
+                    metadata = self._synthesize_metadata(source_hash, target)
+                    return self._fallback_tune_chain(metadata, target, start)
+                st.metadata["kind"] = captured.kind.name
+                st.metadata["ops"] = len(captured.ops_seen)
+                self._stages["ir_capture"] = st.duration_ms
+
+            # Stage 2: Cache check
+            cache_key = captured.cache_key
+            if self.enable_cache and not force_retune:
+                with stage_ctx(sp, "cache_check") as st:
+                    cached = self._get_cached(cache_key, target)
+                    if cached is not None:
+                        elapsed = (time.perf_counter() - start) * 1000
+                        st.metadata["cache_hit"] = True
+                        return TuningResult(
+                            config=cached,
+                            fallback_tier=FallbackTier.L3_DISK_CACHE,
+                            total_duration_ms=elapsed,
+                            cache_hit=True,
+                            stages=self._stages,
+                        )
+                    st.metadata["cache_hit"] = False
+
+            # Stage 3: Build TIR template from REAL bounds
+            with stage_ctx(sp, "build_tir") as st:
+                tir_mod = self._build_tir_from_captured(captured, target)
+                st.metadata["built"] = tir_mod is not None
+                self._stages["build_tir"] = st.duration_ms
+
+            if tir_mod is None:
+                # Could not build a TIR from captured IR — fall back
+                logger.warning("Failed to build TIR from captured IR; using fallback")
+                return self._fallback_tune_chain(
+                    self._synthesize_metadata(source_hash, target),
+                    target, start,
+                )
+
+            # Stage 4: Run MetaSchedule (with circuit breaker)
+            with stage_ctx(sp, "tvm_tune") as st:
+                mapped = self._tune_with_breaker(
+                    tir_mod=tir_mod,
+                    target_str=target,
+                    cache_key=cache_key,
+                )
+                st.metadata["mapped"] = mapped != MappedTuningConfig.defaults()
+                self._stages["tvm_tune"] = st.duration_ms
+
+            # Stage 5: For matmul, route through extern_bridge to preserve
+            # Tensor Core performance (the hard part of the bridge)
+            if captured.kind in (KernelKind.MATMUL, KernelKind.ATTENTION):
+                with stage_ctx(sp, "extern_bridge") as st:
+                    self._handle_matmul_extern(captured, target, mapped)
+                    st.metadata["handled"] = True
+                    self._stages["extern_bridge"] = st.duration_ms
+
+            # Stage 6: Cache the result
+            if self.enable_cache:
+                self._set_cache(cache_key, target, mapped)
+
+            elapsed = (time.perf_counter() - start) * 1000
+            self.timeout_manager.check_total_budget()
+            return TuningResult(
+                config=mapped,
+                fallback_tier=FallbackTier.L0_TVM_DB_HIT,
+                total_duration_ms=elapsed,
+                stages=self._stages,
+            )
+
+    def _tune_with_breaker(
+        self,
+        tir_mod: Any,
+        target_str: str,
+        cache_key: str,
+    ) -> MappedTuningConfig:
+        """Run TVM MetaSchedule through the tvm_tune circuit breaker."""
+        if not (self.tvm_adapter and self.enable_tvm):
+            return MappedTuningConfig.defaults()
+
+        breaker = self.breakers["tvm_tune"]
+        try:
+            return breaker.call(
+                self.tvm_adapter.tune,
+                tir_mod=tir_mod,
+                target_str=target_str,
+                max_trials=self.max_trials,
+                cache_key=cache_key,
+            )
+        except Exception as exc:
+            # Circuit breaker tripped or other error — log and fall back
+            logger.warning(
+                "TVM tune failed (breaker=%s): %s",
+                breaker.state.name, exc,
+            )
+            return MappedTuningConfig.defaults()
+
+    def _build_tir_from_captured(
+        self,
+        captured: Any,
+        target: str,
+    ) -> Any:
+        """Build a TIR module from REAL captured IR.
+
+        Primary path: the new 4-pass conversion pipeline (preserves
+        actual kernel semantics from real TTGIR).
+
+        Fallback: template construction from extracted bounds
+        (preserved from the original config-bridge design).
+        """
+        from .ir_capture import KernelKind
+        from .tir_template import TIRTemplateBuilder
+
+        # Primary: real IR conversion via the 4-pass pipeline
+        if captured.ir_text and len(captured.ir_text) > 100:
+            try:
+                builder = TIRTemplateBuilder()
+                ir_module, conv_result = builder.build_from_captured_ir(
+                    captured.ir_text,
+                )
+                if ir_module is not None:
+                    logger.info(
+                        "Real IR conversion succeeded: status=%s, has_dot=%s",
+                        conv_result.status.name,
+                        conv_result.has_dot_split,
+                    )
+                    return ir_module
+                logger.warning(
+                    "Real IR conversion returned no IRModule; falling back to templates"
+                )
+            except Exception as exc:
+                logger.warning("Real IR conversion raised: %s", exc)
+
+        # Fallback: template construction from extracted bounds
+        try:
+            builder = TIRTemplateBuilder()
+            if captured.kind in (KernelKind.MATMUL, KernelKind.ATTENTION):
+                if captured.bounds.m and captured.bounds.n and captured.bounds.k:
+                    return builder.build_matmul(
+                        m=captured.bounds.m,
+                        n=captured.bounds.n,
+                        k=captured.bounds.k,
+                        dtype=captured.bounds.data_dtype,
+                    )
+            elif captured.kind == KernelKind.REDUCTION:
+                if captured.bounds.reduce_size:
+                    return builder.build_reduction(
+                        shape=(captured.bounds.keep_size or 1, captured.bounds.reduce_size),
+                        dtype=captured.bounds.data_dtype,
+                    )
+            elif captured.kind == KernelKind.ELEMENTWISE:
+                total = captured.bounds.total_elements or 1024
+                return builder.build_elementwise(
+                    shape=(total,),
+                    dtype=captured.bounds.data_dtype,
+                )
+        except Exception as exc:
+            logger.warning("TIR template fallback failed: %s", exc)
+        return None
+
+    def _handle_matmul_extern(
+        self,
+        captured: Any,
+        target: str,
+        mapped: MappedTuningConfig,
+    ) -> None:
+        """For matmul kernels, compile via extern_bridge to preserve Tensor Cores.
+
+        The extern_bridge:
+          1. Compiles the matmul portion separately with Triton's normal compiler
+             (which knows how to emit Tensor Core / MFMA / WGMMA instructions)
+          2. Produces a binary (cubin / hsaco / spv depending on target)
+          3. Wraps it as a tvm.extern call so the TIR can reference it
+        """
+        from .ir_capture import IRBounds
+
+        if not (captured.bounds.m and captured.bounds.n and captured.bounds.k):
+            logger.warning("Cannot build extern matmul: missing M/N/K bounds")
+            return
+
+        bounds = IRBounds(
+            m=captured.bounds.m,
+            n=captured.bounds.n,
+            k=captured.bounds.k,
+            data_dtype=captured.bounds.data_dtype,
+        )
+
+        # Map the target name to a backend string
+        backend = self._target_to_backend(target)
+
+        try:
+            self.extern_builder.build_matmul(
+                name=captured.source_hash[:12],
+                bounds=bounds,
+                target=backend,
+                source_hash=captured.source_hash,
+            )
+        except Exception as exc:
+            logger.warning("Extern matmul build failed: %s", exc)
+
+    def _target_to_backend(self, target: str) -> str:
+        """Map a TVM target string to a backend name for AOT compilation."""
+        if "cuda" in target or "nvidia" in target or "hopper" in target or "h100" in target:
+            return "cuda"
+        if "rocm" in target or "amd" in target or "mi" in target:
+            return "rocm"
+        if "metal" in target or "apple" in target:
+            return "metal"
+        if "intel" in target or "spirv" in target or "gaudi" in target:
+            return "intel"
+        return "cuda"
+
+    def _synthesize_metadata(
+        self,
+        source_hash: str,
+        target: str,
+    ) -> KernelMetadata:
+        """Create a minimal KernelMetadata when real IR isn't available."""
+        return KernelMetadata(
+            kernel_name=f"synthesized_{source_hash[:8]}",
+            source_hash=source_hash,
+            grid_0=1, grid_1=1, grid_2=1,
+            num_warps=4, num_stages=3, num_ctas=1,
+        )
+
+    def _fallback_tune_chain(
+        self,
+        metadata: KernelMetadata,
+        target: str,
+        start: float,
+    ) -> TuningResult:
+        """When real IR isn't available, fall back to the legacy metadata path."""
+        cached = None
+        if self.enable_cache:
+            cached = self._get_cached(metadata.cache_key, target)
+        if cached is not None:
+            elapsed = (time.perf_counter() - start) * 1000
+            return TuningResult(
+                config=cached,
+                fallback_tier=FallbackTier.L3_DISK_CACHE,
+                total_duration_ms=elapsed,
+                cache_hit=True,
+                stages=self._stages,
+            )
+        mapped = self._tuning_chain(metadata, target)
+        if self.enable_cache:
+            self._set_cache(metadata.cache_key, target, mapped)
+        elapsed = (time.perf_counter() - start) * 1000
+        return TuningResult(
+            config=mapped,
+            fallback_tier=FallbackTier.L0_TVM_DB_HIT,
+            total_duration_ms=elapsed,
+            stages=self._stages,
+        )
 
     # ------------------------------------------------------------------
     # Internal pipeline

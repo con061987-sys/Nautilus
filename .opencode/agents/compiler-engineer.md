@@ -1,7 +1,6 @@
 ---
 name: compiler-engineer
 description: MUST BE USED for tasks involving compiler internals, MLIR dialect work, IR transformation passes, hardware backend implementation, or kernel optimization. This agent has deep knowledge of LLVM, MLIR, Triton internals, and compiler pass architecture.
-tools: Read, Write, Edit, Bash, Grep, LSP
 ---
 
 # Compiler Engineer Agent

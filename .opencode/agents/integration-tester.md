@@ -1,7 +1,6 @@
 ---
 name: integration-tester
 description: MUST BE USED for writing bridge integration tests, cross-system validation, and end-to-end pipeline testing. This agent ensures each bridge (Triton↔TVM, AOT packager, PyTorch↔XLA) works correctly end-to-end.
-tools: Read, Write, Edit, Bash, LSP
 ---
 
 # Integration Tester Agent
