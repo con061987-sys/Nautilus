@@ -12,7 +12,6 @@ from src.bridges.aot_packager.linker import (
     LinkingResult,
 )
 
-
 SAMPLE_PTX = b""".version 7.0
 .target sm_90
 .address_size 64

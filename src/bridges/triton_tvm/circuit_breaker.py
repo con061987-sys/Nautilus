@@ -20,13 +20,14 @@ time, and provides explicit reset() for operators.
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Callable, TypeVar
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

@@ -21,7 +21,7 @@ Architecture (as of tree-sitter rewrite):
     [intrinsic_mapper.py] ──► [Mapping Table]
         │   Used as a *lookup table* by the translator,
         │   not for blind text-level replacement.
-        │   - __syncthreads → tl.debug_barrier
+        │   - __syncthreads → tl.barrier
         │   - atomicAdd → tl.atomic_add
         │   - threadIdx.x → tl.program_id(0)
         │
@@ -70,12 +70,12 @@ Modules:
   kernel_compiler.py    - End-to-end CUDA kernel compilation
 """
 
-from .parser import CudaParser, CudaKernel, CudaStatement, TreeSitterCudaParser
 from .intrinsic_mapper import IntrinsicMapper, IntrinsicMapping
-from .shared_memory import SharedMemoryAnalyzer, SharedMemPlan
+from .kernel_compiler import CompilationResult, CudaKernelCompiler
+from .parser import CudaKernel, CudaParser, CudaStatement, TreeSitterCudaParser
 from .pointer_analysis import PointerAnalyzer, PointerLayout
+from .shared_memory import SharedMemoryAnalyzer, SharedMemPlan
 from .translator import CudaToTritonTranslator, TranslationResult
-from .kernel_compiler import CudaKernelCompiler, CompilationResult
 
 __all__ = [
     "CudaParser",

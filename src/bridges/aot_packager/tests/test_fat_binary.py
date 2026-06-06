@@ -13,7 +13,6 @@ from src.bridges.aot_packager.fat_binary import (
     SectionFormat,
 )
 
-
 SAMPLE_PTX = b".version 7.0\n.target sm_90\n"
 SAMPLE_HSACO = b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 56
 SAMPLE_SPV = b"\x03\x02\x23\x07" + b"\x00" * 20

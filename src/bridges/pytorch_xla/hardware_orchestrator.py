@@ -16,13 +16,20 @@ Production features:
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .device_mesh import DeviceMesh, DeviceVendor
+from src.common.logging import get_logger
+
 from .comm_backend import CommBackend
+from .device_mesh import DeviceMesh, DeviceVendor
+from .stablehlo_to_triton import (
+    TritonSource,
+)
+from .stablehlo_to_triton import (
+    translate as stablehlo_to_triton_translate,
+)
 
 try:
     from src.bridges.aot_packager.builder import (
@@ -34,7 +41,7 @@ try:
 except ImportError:
     FAT_BINARY_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -117,13 +124,20 @@ class ShardExecutor:
 
         # Build a fat binary for this shard
         fat_binary_result = None
+        kernel_name = f"shard_{shard_id}_{device.device_id}"
         if self._fat_binary_builder is not None:
             try:
+                stablehlo_mlir_text = getattr(stablehlo_module, "mlir_text", "")
+                if not stablehlo_mlir_text:
+                    raise RuntimeError(
+                        "StableHLO module has no mlir_text; cannot translate to Triton"
+                    )
+                kernel_source = self._generate_shard_source(
+                    stablehlo_mlir_text, kernel_name=kernel_name,
+                )
                 config = FatBinaryConfig(
-                    kernel_name=f"shard_{shard_id}_{device.device_id}",
-                    kernel_source=self._generate_shard_source(
-                        shard_id, gspmd_result, stablehlo_module,
-                    ),
+                    kernel_name=kernel_name,
+                    kernel_source=kernel_source,
                     skip_amd=(vendor != DeviceVendor.AMD),
                     skip_intel=(vendor != DeviceVendor.INTEL),
                     skip_nvidia=(vendor != DeviceVendor.NVIDIA),
@@ -146,41 +160,19 @@ class ShardExecutor:
 
     def _generate_shard_source(
         self,
-        shard_id: int,
-        gspmd_result: Any,
-        stablehlo_module: Any,
+        stablehlo_mlir_text: str,
+        kernel_name: str,
     ) -> str:
-        """Generate Triton source for this shard.
+        """Translate per-shard StableHLO MLIR into a Triton kernel source.
 
-        The source is derived from the StableHLO module's operations
-        that belong to this shard (per the GSPMD sharding spec).
+        Delegates to ``stablehlo_to_triton.translate`` so the same
+        translator used by Wave 1.1 produces the kernel that gets
+        compiled into the per-shard fat binary in Stage 5. The
+        returned string is the Python source of a ``@triton.jit``
+        kernel ready for the fat binary builder.
         """
-        # In production, this would convert the per-shard StableHLO
-        # operations back to Triton source. For now, generate a
-        # minimal placeholder that the fat binary builder can
-        # compile.
-        return f'''
-import triton
-import triton.language as tl
-
-@triton.jit
-def shard_{shard_id}_kernel(
-    A_ptr, B_ptr, C_ptr,
-    M, N, K,
-    BLOCK_M: tl.constexpr,
-    BLOCK_N: tl.constexpr,
-    BLOCK_K: tl.constexpr,
-):
-    """Auto-generated kernel for shard {shard_id}."""
-    pid = tl.program_id(0)
-    grid_n = tl.cdiv(N, BLOCK_N)
-    pid_m = pid // grid_n
-    pid_n = pid % grid_n
-    rm = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-    rn = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
-    a = tl.load(A_ptr + rm[:, None] * K + tl.arange(0, BLOCK_K)[None, :])
-    b = tl.load(B_ptr + tl.arange(0, BLOCK_K)[:, None] * N + rn[None, :])
-    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
-    acc += tl.dot(a, b)
-    tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+        triton_source: TritonSource = stablehlo_to_triton_translate(
+            stablehlo_mlir_text,
+            kernel_name=kernel_name,
+        )
+        return triton_source.source

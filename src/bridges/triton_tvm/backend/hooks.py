@@ -16,11 +16,14 @@ stages_inspection_hook because it sees all stages at once.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any, Callable
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+from . import CAPTURE_KEY_FMT
+
+logger = get_logger(__name__)
 
 
 def install_stages_inspection_hook() -> bool:
@@ -89,7 +92,7 @@ def _make_stages_inspection_hook() -> Callable[..., Any] | None:
         if stages is None:
             return "tvm_bridge_hook", "v1"
 
-        if not os.environ.get("NVINDIACUD_CAPTURE_DISABLED", "0") == "0":
+        if os.environ.get("NVINDIACUD_CAPTURE_DISABLED", "0") == "1":
             return "tvm_bridge_hook", "v1"
 
         original_ttgir = stages.get("ttgir")
@@ -115,7 +118,10 @@ def _wrap_ttgir_for_capture(
             if isinstance(result, str):
                 # The TTGIR text is in result. Forward to capture buffer.
                 backend.clear_capture_buffer()
-                key = f"hook_ttgir:{metadata.get('name', 'unknown')}:{metadata.get('src', '')[:16]}"
+                key = CAPTURE_KEY_FMT.format(
+                    source_hash=metadata.get("src", "")[:16],
+                    kernel_name=metadata.get("name", "unknown"),
+                )
                 buf = backend.get_capture_buffer()
                 buf[key] = result
                 logger.debug("Hook captured TTGIR: %d chars", len(result))

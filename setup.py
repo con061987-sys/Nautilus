@@ -78,28 +78,35 @@ def build_cpp_plugin() -> None:
 
 
 # Hook into setuptools
+try:
+    from setuptools import setup as _setup
+    from setuptools.command.build_py import build_py as _build_py
+    from setuptools.command.develop import develop as _develop
+
+    class CustomBuildPy(_build_py):
+        def run(self) -> None:
+            build_cpp_plugin()
+            super().run()
+
+    class CustomDevelop(_develop):
+        def run(self) -> None:
+            build_cpp_plugin()
+            super().run()
+
+    # Re-export with custom commands
+    # Note: this is a simplified version; a real build would use
+    # scikit-build-core or py-build for proper C++ integration
+    setup_kwargs: dict = {}
+    setup_kwargs["name"] = "nautilus"
+    setup_kwargs["cmdclass"] = {
+        "build_py": CustomBuildPy,
+        "develop": CustomDevelop,
+    }
+    _setup(**setup_kwargs)
+except ImportError:
+    pass
+
+
 if __name__ == "__main__":
     # When run directly (not via pip), just build the C++ plugin
     build_cpp_plugin()
-else:
-    # When imported by setuptools, hook into the build process
-    try:
-        from setuptools import setup as _setup
-        from setuptools.command.build_py import build_py as _build_py
-        from setuptools.command.develop import develop as _develop
-
-        class CustomBuildPy(_build_py):
-            def run(self) -> None:
-                build_cpp_plugin()
-                super().run()
-
-        class CustomDevelop(_develop):
-            def run(self) -> None:
-                build_cpp_plugin()
-                super().run()
-
-        # Re-export with custom commands
-        # Note: this is a simplified version; a real build would use
-        # scikit-build-core or py-build for proper C++ integration
-    except ImportError:
-        pass

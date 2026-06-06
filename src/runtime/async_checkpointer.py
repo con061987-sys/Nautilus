@@ -44,16 +44,18 @@ from typing import Any
 from src.common.errors import (
     CheckpointError,
     DependencyMissingError,
+    ErrorCode,
     HardwareNotFoundError,
     NautilusError,
-    ErrorCode,
 )
-from src.common.logging import get_logger, span as span_context
+from src.common.logging import get_logger
+from src.common.logging import span as span_context
 from src.common.observability import (
     CircuitBreaker,
     CircuitBreakerConfig,
     get_default_breakers,
 )
+from src.common.result import Err, Ok, Result
 
 log = get_logger("nautilus.runtime.checkpoint")
 
@@ -78,6 +80,12 @@ class CheckpointConfig:
     save_optimizer_state: bool = True
     recovery_timeout_s: float = 3.0
     io_timeout_seconds: float = 30.0
+    # SECURITY: legacy Python-pickle deserialisation is RCE on
+    # untrusted bytes. Default is to refuse unpickled data and
+    # raise DependencyMissingError. Tests that need to round-trip
+    # legacy pickle data may opt in by setting this to True.
+    # Production configs MUST leave this at False.
+    unsafe_pickle_fallback: bool = False
 
 
 @dataclass
@@ -252,34 +260,80 @@ class AsyncCheckpointer:
             triggered = self._pending_event.wait(timeout=self.config.interval_seconds)
             if self._stop_event.is_set():
                 break
-            if triggered and self._pending_model is not None:
-                try:
-                    self._save_checkpoint_sync(
-                        self._pending_model, self._pending_optimizer,
-                    )
-                except CheckpointError as exc:
-                    log.warning("Async checkpoint failed",
-                                error=str(exc), error_type=type(exc).__name__)
-                finally:
-                    self._pending_model = None
-                    self._pending_optimizer = None
-                    self._pending_event.clear()
+            if not triggered:
+                continue
+
+            # Atomically claim and clear the pending request under
+            # the lock. Reading model/optimizer/event without the
+            # lock races with request_checkpoint(): the caller can
+            # overwrite _pending_model between our read and our
+            # clear, causing us to save a stale object and then
+            # drop the new request on the floor.
+            with self._lock:
+                model = self._pending_model
+                optimizer = self._pending_optimizer
+                self._pending_model = None
+                self._pending_optimizer = None
+                self._pending_event.clear()
+
+            if model is None:
+                # Spurious wakeup or event set with no payload
+                # (e.g., rebuild_topology). Nothing to do.
+                continue
+
+            result = self._save_checkpoint_sync(model, optimizer)
+            if result.is_err():
+                log.warning(
+                    "Async checkpoint failed",
+                    error=str(result.error),
+                    error_type=type(result.error).__name__,
+                )
 
     def request_checkpoint(self, model: Any, optimizer: Any | None = None) -> None:
-        """Request an asynchronous checkpoint. Non-blocking."""
-        self._pending_model = model
-        self._pending_optimizer = optimizer if self.config.save_optimizer_state else None
+        """Request an asynchronous checkpoint. Non-blocking.
+
+        The pending model/optimizer/event are written under the same
+        lock used by ``_checkpoint_loop`` to claim them, so a
+        concurrent request can never interleave with the loop's
+        read-and-clear and cause a request to be silently dropped.
+        """
+        with self._lock:
+            self._pending_model = model
+            self._pending_optimizer = optimizer if self.config.save_optimizer_state else None
         self._pending_event.set()
 
     def checkpoint_now(self, model: Any, optimizer: Any | None = None) -> CheckpointInfo:
-        """Synchronous checkpoint — blocks until done."""
-        return self._save_checkpoint_sync(
+        """Synchronous checkpoint — blocks until done.
+
+        Returns a :class:`CheckpointInfo` on success and raises
+        :class:`CheckpointError` on failure (preserved for backward
+        compatibility with the public API). Internally this delegates
+        to :meth:`_save_checkpoint_sync` and unwraps the
+        ``Result`` — callers that want explicit error handling should
+        use the underscored method directly.
+        """
+        result = self._save_checkpoint_sync(
             model,
             optimizer if self.config.save_optimizer_state else None,
         )
+        if result.is_ok():
+            return result.unwrap()
+        raise result.error
 
-    def _save_checkpoint_sync(self, model: Any, optimizer: Any | None) -> CheckpointInfo:
-        """Save a checkpoint synchronously with atomic write + checksum."""
+    def _save_checkpoint_sync(
+        self, model: Any, optimizer: Any | None,
+    ) -> Result[CheckpointInfo, CheckpointError]:
+        """Save a checkpoint synchronously with atomic write + checksum.
+
+        Returns a Rust-style :class:`Result`:
+
+          - ``Ok(CheckpointInfo)`` — checkpoint persisted, checksum
+            recorded, on-disk state verified.
+          - ``Err(CheckpointError)`` — typed failure (I/O, atomic
+            rename, breaker open, …). Callers MUST inspect both
+            arms; the loop path logs and continues, the public
+            :meth:`checkpoint_now` re-raises the inner exception.
+        """
         start = time.time()
         with span_context("checkpoint_save", backend=self.config.backend.value) as sp:
             try:
@@ -294,14 +348,20 @@ class AsyncCheckpointer:
                 optim_path = cp_dir / "optimizer.state"
 
                 # Save under circuit breaker
-                model_size, model_sha = self._io_breaker.call(
+                model_save: Result[tuple[int, str], CheckpointError] = self._io_breaker.call(
                     self._save_state_atomic, model, model_path,
                 )
+                if model_save.is_err():
+                    return Err(model_save.error)
+                model_size, model_sha = model_save.unwrap()
                 optim_size, optim_sha = 0, ""
                 if optimizer is not None:
-                    optim_size, optim_sha = self._io_breaker.call(
+                    optim_save: Result[tuple[int, str], CheckpointError] = self._io_breaker.call(
                         self._save_state_atomic, optimizer, optim_path,
                     )
+                    if optim_save.is_err():
+                        return Err(optim_save.error)
+                    optim_size, optim_sha = optim_save.unwrap()
 
                 # Write metadata last; if meta write fails, the
                 # checkpoint is considered failed and the directory
@@ -352,26 +412,32 @@ class AsyncCheckpointer:
                     optim_size_mb=optim_size / (1024 * 1024),
                     duration_ms=self._last_save_duration_ms,
                 )
-                return info
-            except CheckpointError:
+                return Ok(info)
+            except CheckpointError as exc:
                 self._total_save_failures += 1
-                raise
+                return Err(exc)
             except Exception as exc:
                 self._total_save_failures += 1
                 # Clean up partial directory
                 if cp_dir.exists():
                     shutil.rmtree(cp_dir, ignore_errors=True)
-                raise CheckpointError(
+                err = CheckpointError(
                     f"Checkpoint save failed: {exc}",
                     cause=exc,
                     context={"checkpoint_id": checkpoint_id, "duration_s": time.time() - start},
-                ) from exc
+                )
+                return Err(err)
 
-    def _save_state_atomic(self, state: Any, path: Path) -> tuple[int, str]:
+    def _save_state_atomic(
+        self, state: Any, path: Path,
+    ) -> Result[tuple[int, str], CheckpointError]:
         """Save state to a temp file, fsync, then atomic rename.
 
-        Returns (size_in_bytes, sha256_hex). Raises CheckpointError
-        on failure.
+        Returns ``Ok((size_in_bytes, sha256_hex))`` on success and
+        ``Err(CheckpointError)`` on any failure (serialization,
+        write, fsync, or atomic-rename error). Callers MUST inspect
+        both arms — the I/O breaker that wraps this method only
+        counts hard exceptions, not logical Err returns.
         """
         with tempfile.NamedTemporaryFile(
             dir=str(path.parent), prefix=f".{path.name}.", delete=False,
@@ -385,16 +451,16 @@ class AsyncCheckpointer:
                 os.fsync(f.fileno())
             sha = hashlib.sha256(data).hexdigest()
             os.replace(tmp_path, path)
-            return len(data), sha
-        except CheckpointError:
+            return Ok((len(data), sha))
+        except CheckpointError as exc:
             tmp_path.unlink(missing_ok=True)
-            raise
+            return Err(exc)
         except Exception as exc:
             tmp_path.unlink(missing_ok=True)
-            raise CheckpointError(
+            return Err(CheckpointError(
                 f"Atomic write to {path} failed: {exc}",
                 cause=exc,
-            ) from exc
+            ))
 
     def _serialize_state(self, state: Any) -> bytes:
         """Serialize a model/optimizer state to bytes.
@@ -403,8 +469,9 @@ class AsyncCheckpointer:
         then msgpack, then pickle as a last resort.
         """
         try:
-            import torch
             import io
+
+            import torch
             buf = io.BytesIO()
             torch.save(state, buf)
             return buf.getvalue()
@@ -531,28 +598,52 @@ class AsyncCheckpointer:
             return (model_state, optimizer_state)
 
     def _deserialize_state(self, data: bytes) -> Any:
-        """Deserialize state. Tries torch.load, msgpack, pickle in order."""
+        """Deserialize state. Tries torch.load (weights_only), then msgpack.
+
+        SECURITY: ``weights_only=True`` is mandatory for the
+        torch.load path. The default of False would let PyTorch
+        instantiate arbitrary objects from the checkpoint bytes
+        — any caller that can influence the checkpoint file
+        (shared storage, malicious recovery replay) gets RCE.
+        ``weights_only=True`` restricts the unpickler to a safe
+        allow-list of types.
+
+        SECURITY: The legacy Python pickle deserialiser is gated
+        behind ``CheckpointConfig.unsafe_pickle_fallback=True``.
+        If neither torch nor msgpack is available, and the
+        fallback is not enabled, we raise
+        :class:`DependencyMissingError` with a clear install
+        hint.
+        """
         try:
-            import torch
             import io
-            return torch.load(io.BytesIO(data), weights_only=False)
+
+            import torch
+            return torch.load(io.BytesIO(data), weights_only=True)
         except ImportError:
             pass
-        # Try msgpack first if available
         try:
             import msgpack
             return msgpack.unpackb(data, raw=False)
         except ImportError:
             pass
-        # Fallback to pickle
-        import pickle
-        try:
-            return pickle.loads(data)
-        except Exception as exc:
-            raise CheckpointError(
-                f"Failed to deserialize state: {exc}",
-                cause=exc,
-            ) from exc
+        if self.config.unsafe_pickle_fallback:
+            import pickle as _legacy
+            try:
+                return _legacy.loads(data)
+            except Exception as exc:
+                raise CheckpointError(
+                    f"Failed to deserialize state: {exc}",
+                    cause=exc,
+                ) from exc
+        raise DependencyMissingError(
+            "No safe deserializer available: torch and msgpack are both "
+            "missing. Install one of them (pip install torch or msgpack), "
+            "or set CheckpointConfig.unsafe_pickle_fallback=True "
+            "(UNSAFE — legacy Python-pickle deserialisation is RCE on "
+            "attacker-controlled bytes).",
+            context={"fallback": "pickle", "unsafe_flag": False},
+        )
 
     def on_node_failure(self, dead_node_id: str) -> bool:
         """Handle a node failure event. Triggers recovery."""
@@ -566,7 +657,9 @@ class AsyncCheckpointer:
 
     def rebuild_topology(self, alive_nodes: list[str]) -> None:
         """Rebuild the cluster topology after a node failure."""
-        if self._pending_model is not None:
+        with self._lock:
+            has_pending = self._pending_model is not None
+        if has_pending:
             self._pending_event.set()
         log.info("Topology rebuilt", alive_nodes=len(alive_nodes))
 

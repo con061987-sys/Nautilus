@@ -12,6 +12,7 @@ This module owns:
 from __future__ import annotations
 
 import enum
+import sys
 import threading
 import time
 import uuid
@@ -21,11 +22,13 @@ from typing import Any, Callable, Iterator, Literal, TypeVar
 
 from src.common.errors import (
     CircuitOpenError,
+    NautilusError,
     StageTimeoutError,
     TotalBudgetExceededError,
-    NautilusError,
 )
-from src.common.logging import get_logger, span as span_ctx, stage as stage_ctx
+from src.common.logging import get_logger
+from src.common.logging import span as span_ctx
+from src.common.logging import stage as stage_ctx
 
 T = TypeVar("T")
 log = get_logger("nautilus.observability")
@@ -184,7 +187,7 @@ class CircuitBreaker:
 
         try:
             result = fn(*args, **kwargs)
-        except BaseException as exc:
+        except (self._config.excluded_exceptions + (Exception,)) as exc:
             if isinstance(exc, self._config.excluded_exceptions):
                 # Don't count toward breaker
                 raise
@@ -220,8 +223,8 @@ class CircuitBreaker:
             log.info("circuit_breaker reset", name=self._config.name)
 
 
-def get_default_breakers() -> dict[str, CircuitBreaker]:
-    """Return the standard set of breakers used across the framework."""
+def _build_default_breakers() -> dict[str, CircuitBreaker]:
+    """Construct a fresh dict of framework-standard circuit breakers."""
     return {
         "tvm_tune": CircuitBreaker(CircuitBreakerConfig(
             name="tvm_tune", failure_threshold=3, reset_timeout_seconds=60.0,
@@ -239,6 +242,39 @@ def get_default_breakers() -> dict[str, CircuitBreaker]:
             name="lld_link", failure_threshold=5, reset_timeout_seconds=15.0,
         )),
     }
+
+
+_DEFAULT_BREAKERS: dict[str, CircuitBreaker] | None = None
+
+
+def get_default_breakers() -> dict[str, CircuitBreaker]:
+    """Return the framework's default circuit-breaker dict (singleton).
+
+    Subsequent calls return the SAME dict instance, so state
+    (open/half-open/closed, failure counts, last error) is shared
+    across all callers — exactly what production wiring needs.
+    Tests that need a clean slate should call
+    :func:`reset_default_breakers` first.
+    """
+    global _DEFAULT_BREAKERS
+    if _DEFAULT_BREAKERS is None:
+        _DEFAULT_BREAKERS = _build_default_breakers()
+    return _DEFAULT_BREAKERS
+
+
+def reset_default_breakers() -> dict[str, CircuitBreaker]:
+    """Replace the singleton with a fresh dict and return it.
+
+    Intended for tests. After calling this, the next
+    :func:`get_default_breakers` returns the new dict. Each breaker
+    is also ``reset()`` to CLOSED so any cross-test pollution is
+    eliminated.
+    """
+    global _DEFAULT_BREAKERS
+    _DEFAULT_BREAKERS = _build_default_breakers()
+    for breaker in _DEFAULT_BREAKERS.values():
+        breaker.reset()
+    return _DEFAULT_BREAKERS
 
 
 # --- Timeout Manager ---
@@ -297,7 +333,18 @@ class TimeoutManager:
 
     @contextmanager
     def stage(self, name: str) -> Iterator[None]:
-        """Context manager that enforces the per-stage budget."""
+        """Context manager that enforces the per-stage budget.
+
+        If the stage body raises, the original exception propagates.
+        If the budget is exceeded AND no other exception is in flight,
+        a :class:`StageTimeoutError` is raised. If the budget is
+        exceeded WHILE another exception is propagating, the original
+        exception wins — a ``raise`` in ``finally`` would otherwise
+        mask the real cause (Python only chains via
+        ``__context__``; the original traceback is buried). The
+        timeout is still logged so an operator can correlate the
+        slow stage with the failure.
+        """
         if self._start_time is None:
             self.start()
         budget = self._budgets.get(name)
@@ -307,7 +354,14 @@ class TimeoutManager:
             yield
         finally:
             elapsed = time.time() - stage_start
-            if elapsed > budget:
+            over_budget = elapsed > budget
+            # sys.exc_info() returns (None, None, None) when no
+            # exception is propagating. If something is in flight,
+            # do NOT raise a fresh StageTimeoutError — that would
+            # shadow the real cause.
+            in_flight_exc = sys.exc_info()[1]
+            propagating = in_flight_exc is not None
+            if over_budget and not propagating:
                 raise StageTimeoutError(
                     f"Stage {name!r} exceeded budget: {elapsed:.1f}s > {budget:.1f}s",
                     context={
@@ -316,8 +370,17 @@ class TimeoutManager:
                         "budget_seconds": budget,
                     },
                 )
+            if over_budget and propagating:
+                log.warning(
+                    "stage_exceeded_budget_with_propagating_exception",
+                    stage=name,
+                    elapsed_seconds=elapsed,
+                    budget_seconds=budget,
+                    propagating_exc_type=type(in_flight_exc).__name__,
+                )
             self._current_stage = None
-            self.check_total_budget()
+            if not propagating:
+                self.check_total_budget()
 
 
 # --- Public re-exports ---
@@ -328,6 +391,7 @@ __all__ = [
     "CircuitBreakerConfig",
     "CircuitBreaker",
     "get_default_breakers",
+    "reset_default_breakers",
     "StageBudgets",
     "TimeoutManager",
 ]

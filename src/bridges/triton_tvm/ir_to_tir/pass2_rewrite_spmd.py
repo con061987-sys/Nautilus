@@ -20,9 +20,10 @@ transformations (split, reorder, bind, etc.).
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Any
+
+from src.common.logging import get_logger
 
 from .ttgir_parser import (
     OpKind,
@@ -30,7 +31,7 @@ from .ttgir_parser import (
     TTGIROperation,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

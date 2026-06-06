@@ -1,12 +1,14 @@
 """`nautilus shard` — Shard a PyTorch model across a device mesh.
 
 Captures a PyTorch model as a TorchFX graph, converts to StableHLO,
-runs GSPMD to compute optimal sharding, and emits per-shard Triton
-source plus the fat binaries.
+runs GSPMD to compute optimal sharding, and emits per-shard fat
+binaries built from the per-shard StableHLO translated to Triton
+via ``stablehlo_to_triton``.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -14,14 +16,23 @@ from typing import Any
 
 import click
 
-from src.common.errors import (
-    DependencyMissingError,
-    GraphCaptureError,
-    GSPMDError,
-    NautilusError,
-    StableHLOExportError,
+from src.bridges.pytorch_xla import (
+    AutoShardingBridge,
+    DeviceMesh,
+    ShardingConfig,
 )
-from src.common.logging import get_logger, span as span_context
+from src.bridges.pytorch_xla.device_mesh import (
+    DeviceVendor,
+    InterconnectType,
+    MeshDevice,
+)
+from src.bridges.pytorch_xla.gspmd_runner import ShardingStrategy
+from src.common.errors import (
+    NautilusError,
+    ShardingError,
+)
+from src.common.logging import get_logger
+from src.common.logging import span as span_context
 from src.common.types import MeshShape
 
 log = get_logger("nautilus.cli.shard")
@@ -31,7 +42,8 @@ log = get_logger("nautilus.cli.shard")
     "shard",
     short_help="Shard a PyTorch model across a device mesh",
     help="""
-Capture a PyTorch model, convert to StableHLO, run GSPMD, and emit
+Capture a PyTorch model, convert to StableHLO, run GSPMD, translate
+the sharded StableHLO to Triton via stablehlo_to_triton, and emit
 per-shard fat binaries.
 
 Examples:
@@ -101,9 +113,21 @@ def _shard_impl(
     output_dir: Path,
     example_inputs: str | None,
 ) -> None:
+    """Run the auto-sharding pipeline via ``AutoShardingBridge.shard``.
+
+    The CLI is a thin wrapper: it loads the model + example inputs
+    from disk, builds a synthetic device mesh that matches the
+    requested ``--mesh`` shape, hands everything to the bridge, and
+    then writes per-shard artifacts (``stablehlo.mlir``, ``shard_spec.json``,
+    ``kernel.fat.o``) from the bridge's ``ShardingResult``.
+
+    The bridge owns the full 6-stage pipeline (graph capture → StableHLO
+    export → GSPMD → DTensor → fat-binary per shard → dispatch) — the
+    CLI does not re-implement any of those stages.
+    """
     axes = tuple(int(x) for x in mesh_str.split(","))
     try:
-        mesh = MeshShape(axes=axes)
+        mesh_shape = MeshShape(axes=axes)
     except Exception as exc:
         raise NautilusError(
             f"Invalid mesh {mesh_str!r}: {exc}",
@@ -112,57 +136,110 @@ def _shard_impl(
     log.info(
         "sharding started",
         model=str(model_file),
-        mesh=list(mesh.axes),
+        mesh=list(mesh_shape.axes),
         strategy=strategy,
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Capture the model
-    with span_context("graph_capture", model=str(model_file)) as sp:
-        captured = _capture_model(model_file, example_inputs)
-        sp.set(num_ops=captured.metadata.op_count if hasattr(captured.metadata, "op_count") else 0)
+    # Build the synthetic device mesh and load the model. Both are
+    # best-effort: a failure here produces a clear NautilusError
+    # before the bridge is called.
+    device_mesh = _build_device_mesh(mesh_shape)
+    model, resolved_example_inputs = _load_model_and_inputs(
+        model_file=model_file,
+        cli_example_inputs=example_inputs,
+    )
 
-    # 2. Export to StableHLO
-    with span_context("stablehlo_export") as sp:
-        stablehlo = _export_to_stablehlo(captured)
-        if not stablehlo.is_usable:
-            raise StableHLOExportError(
-                "StableHLO export produced no usable module",
-                context={"is_real_stablehlo": stablehlo.is_real_stablehlo},
-            )
-        sp.set(op_count=stablehlo.op_count, real_stablehlo=stablehlo.is_real_stablehlo)
+    strategy_map = {
+        "auto": ShardingStrategy.AUTO,
+        "replicated": ShardingStrategy.REPLICATED,
+        "data_parallel": ShardingStrategy.DATA_PARALLEL,
+        "model_parallel": ShardingStrategy.MODEL_PARALLEL,
+        "tensor_parallel": ShardingStrategy.TENSOR_PARALLEL,
+    }
 
-    # 3. Run GSPMD
-    with span_context("gspmd", mesh_axes=list(mesh.axes)) as sp:
-        spec = _run_gspmd(stablehlo, mesh, strategy)
+    config = ShardingConfig(
+        model=model,
+        example_inputs=resolved_example_inputs,
+        device_mesh=device_mesh,
+        sharding_strategy=strategy_map[strategy.lower()],
+    )
+
+    bridge = AutoShardingBridge()
+    with span_context("auto_shard", model=str(model_file), mesh=list(mesh_shape.axes)) as sp:
+        result = bridge.shard(
+            model=model,
+            example_inputs=resolved_example_inputs,
+            device_mesh=device_mesh,
+            config=config,
+        )
         sp.set(
-            num_tensor_shardings=len(spec.tensor_shardings),
-            comm_volume_bytes=spec.estimated_comm_volume_bytes,
+            success=result.success,
+            total_duration_ms=result.total_duration_ms,
+            error=result.error,
         )
 
-    # 4. Emit per-shard artifacts
+    if not result.success:
+        raise ShardingError(
+            f"Auto-sharding failed: {result.error or 'unknown error'}",
+            context={
+                "model": str(model_file),
+                "mesh": list(mesh_shape.axes),
+                "stage_durations": result.stage_durations,
+            },
+        )
+
+    # Per-shard artifacts — written from the bridge's output.
     shards_emitted = 0
-    for shard_idx in range(mesh.total_devices):
+    for shard_idx, shard_exec in enumerate(result.shard_executions):
         shard_dir = output_dir / f"shard_{shard_idx:04d}"
         shard_dir.mkdir(exist_ok=True)
-        # Per-shard StableHLO
-        (shard_dir / "stablehlo.mlir").write_text(stablehlo.mlir_text)
-        # Per-shard Triton source
-        shard_source = _generate_shard_source(stablehlo, spec, shard_idx, mesh)
-        (shard_dir / "kernel.py").write_text(shard_source)
-        # Per-shard sharding spec
-        (shard_dir / "shard_spec.json").write_text(json.dumps({
-            "shard_id": shard_idx,
-            "mesh": list(mesh.axes),
-            "tensor_shardings": {
-                n: {
-                    "axes": list(s.mesh_axes),
-                    "shape": list(s.partition_shape),
-                }
-                for n, s in spec.tensor_shardings.items()
-            },
-        }, indent=2))
+
+        # StableHLO + sharding spec are still useful for debugging,
+        # even though the actual compute now lives in the fat binary.
+        if result.stablehlo_module is not None and result.stablehlo_module.mlir_text:
+            (shard_dir / "stablehlo.mlir").write_text(
+                result.stablehlo_module.mlir_text,
+            )
+        if result.gspmd_result is not None and result.gspmd_result.sharding_spec is not None:
+            spec = result.gspmd_result.sharding_spec
+            (shard_dir / "shard_spec.json").write_text(json.dumps({
+                "shard_id": shard_idx,
+                "mesh": list(mesh_shape.axes),
+                "vendor": shard_exec.vendor,
+                "arch": shard_exec.arch,
+                "device_id": shard_exec.device_id,
+                "tensor_shardings": {
+                    n: {
+                        "axes": list(s.mesh_axes),
+                        "shape": list(s.partition_shape),
+                    }
+                    for n, s in spec.tensor_shardings.items()
+                },
+                "estimated_comm_volume_bytes": spec.estimated_comm_volume_bytes,
+            }, indent=2))
+
+        # The fat binary: per-shard product of StableHLO→Triton
+        # translation (Wave 1.1) + per-vendor AOT compilation (Phase 2).
+        fat = shard_exec.fat_binary_result
+        if fat is not None and fat.output_path is not None and fat.output_path.exists():
+            (shard_dir / "kernel.fat.o").write_bytes(
+                fat.output_path.read_bytes(),
+            )
+        elif fat is not None and fat.fat_binary is not None:
+            # Fallback: serialise the FatBinary in-memory container
+            # (used in tests / environments without a real linker).
+            (shard_dir / "kernel.fat.o").write_bytes(
+                fat.fat_binary.to_bytes(),
+            )
+        else:
+            log.warning(
+                "no fat binary for shard %d (vendor=%s arch=%s); "
+                "skipped kernel.fat.o",
+                shard_idx, shard_exec.vendor, shard_exec.arch,
+            )
+
         shards_emitted += 1
 
     log.info(
@@ -172,141 +249,175 @@ def _shard_impl(
     )
     click.echo(json.dumps({
         "model": str(model_file),
-        "mesh": list(mesh.axes),
+        "mesh": list(mesh_shape.axes),
         "strategy": strategy,
         "shards_emitted": shards_emitted,
-        "tensor_shardings": len(spec.tensor_shardings),
-        "comm_volume_bytes": spec.estimated_comm_volume_bytes,
+        "tensor_shardings": (
+            len(result.gspmd_result.sharding_spec.tensor_shardings)
+            if result.gspmd_result is not None
+            and result.gspmd_result.sharding_spec is not None
+            else 0
+        ),
+        "comm_volume_bytes": (
+            result.gspmd_result.sharding_spec.estimated_comm_volume_bytes
+            if result.gspmd_result is not None
+            and result.gspmd_result.sharding_spec is not None
+            else 0
+        ),
         "output_dir": str(output_dir),
+        "stage_durations_ms": result.stage_durations,
     }, indent=2))
 
 
-def _capture_model(model_file: Path, example_inputs: str | None) -> Any:
-    """Capture a PyTorch model. Requires torch + the model file to be importable."""
-    try:
-        from src.bridges.pytorch_xla.graph_capture import GraphCapture
-        from src.bridges.pytorch_xla.graph_capture import CapturedGraph
-    except ImportError as exc:
-        raise DependencyMissingError(
-            f"PyTorch/XLA bridge import failed: {exc}. "
-            "Install with: pip install -e .[sharding,nvidia]",
-        ) from exc
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    # Resolve EXAMPLE_INPUTS from the model file if not provided on CLI
-    inputs_shapes: list[tuple[int, ...]] | None = None
-    if example_inputs:
+
+def _build_device_mesh(mesh_shape: MeshShape) -> DeviceMesh:
+    """Build a synthetic device mesh that matches the requested shape.
+
+    Uses detected local devices (Nvidia / AMD / Intel) when available,
+    and falls back to a CPU mesh so the CLI works on dev machines
+    without GPU. The sharding decisions are independent of the actual
+    hardware topology — GSPMD treats the mesh shape as a logical
+    grid — so a synthetic mesh is a valid sharding target.
+    """
+    try:
+        mesh = DeviceMesh.detect_local()
+        # Override the detected shape with the user-requested shape.
+        mesh.mesh_shape = list(mesh_shape.axes)
+        return mesh
+    except Exception as exc:
+        log.debug("local detection failed: %s; using synthetic mesh", exc)
+
+    # Synthetic fallback: one NVIDIA device per requested slot.
+    total = mesh_shape.total_devices
+    return DeviceMesh(
+        devices=[
+            MeshDevice(
+                device_id=i,
+                vendor=DeviceVendor.NVIDIA,
+                arch="sm_90",
+                memory_gb=80.0,
+                compute_tflops=989.0,
+                interconnect=InterconnectType.NVLINK,
+            )
+            for i in range(total)
+        ],
+        mesh_shape=list(mesh_shape.axes),
+    )
+
+
+def _load_model_and_inputs(
+    model_file: Path,
+    cli_example_inputs: str | None,
+) -> tuple[Any, tuple[Any, ...]]:
+    """Import the model file and resolve its example inputs.
+
+    Recognised conventions in the model file (first match wins):
+      - ``Model``  class — instantiated with no arguments
+      - ``model``  module-level instance
+      - ``build_model()``  factory function
+      - ``EXAMPLE_INPUTS``  tuple of shapes — used for the example
+        inputs; tensors are constructed from CLI shapes when given,
+        else from ``EXAMPLE_INPUTS`` alone.
+
+    If the model file does not expose any of these, returns
+    ``(None, ())`` so the bridge reports a clear graph-capture error
+    rather than the CLI raising before the pipeline starts.
+    """
+    try:
+        module = _import_user_module(model_file)
+    except Exception as exc:
+        log.warning(
+            "could not import model file %s: %s; "
+            "proceeding with model=None (bridge will report a clean error)",
+            model_file, exc,
+        )
+        return None, ()
+
+    model: Any = None
+    if hasattr(module, "Model") and isinstance(module.Model, type):
         try:
-            inputs_shapes = [
-                tuple(int(x) for x in shape.split(","))
-                for shape in example_inputs.split(";")
-            ]
+            model = module.Model()
+        except Exception as exc:
+            log.warning("Model() raised: %s; falling back to model=None", exc)
+    elif hasattr(module, "model"):
+        model = module.model
+    elif hasattr(module, "build_model") and callable(module.build_model):
+        try:
+            model = module.build_model()
+        except Exception as exc:
+            log.warning("build_model() raised: %s; falling back to model=None", exc)
+
+    example_inputs_attr = vars(module).get("EXAMPLE_INPUTS")
+    inputs = _resolve_example_inputs(
+        cli_value=cli_example_inputs,
+        module=example_inputs_attr,
+    )
+    return model, inputs
+
+
+def _import_user_module(model_file: Path) -> Any:
+    """Import a user-supplied model file as a Python module."""
+    spec = importlib.util.spec_from_file_location(
+        f"nautilus_shard_model_{model_file.stem}",
+        str(model_file),
+    )
+    if spec is None or spec.loader is None:
+        raise NautilusError(
+            f"Could not load {model_file} as a Python module",
+            context={"path": str(model_file)},
+        )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        # Don't keep user modules alive in sys.modules across runs
+        sys.modules.pop(spec.name, None)
+    return module
+
+
+def _resolve_example_inputs(
+    cli_value: str | None,
+    module: Any,
+) -> tuple[Any, ...]:
+    """Build example input tensors from the CLI value or module attribute.
+
+    The CLI value is a single shape (e.g. ``1,3,224,224``). When a
+    module exposes ``EXAMPLE_INPUTS`` as a tuple of shapes, the CLI
+    value is used for the first input and the module attribute fills
+    the remaining slots.
+    """
+    try:
+        import torch
+    except ImportError:
+        # No torch → no tensors can be built; the bridge will produce
+        # a clear graph-capture error in that case.
+        return ()
+
+    shapes: list[tuple[int, ...]] = []
+    if cli_value is not None:
+        try:
+            shapes.append(tuple(int(x) for x in cli_value.split(",")))
         except ValueError as exc:
             raise NautilusError(
-                f"Invalid --example-inputs {example_inputs!r}",
-                context={"value": example_inputs},
+                f"Invalid --example-inputs {cli_value!r}",
+                context={"value": cli_value},
             ) from exc
+    if isinstance(module, (tuple, list)) and module:
+        for s in module:
+            if isinstance(s, (tuple, list)) and all(
+                isinstance(d, int) for d in s
+            ):
+                shapes.append(tuple(s))
 
-    capture = GraphCapture()
-    try:
-        captured = capture.capture(
-            model_file=str(model_file),
-            example_input_shapes=inputs_shapes,
-        )
-    except GraphCaptureError:
-        raise
-    except Exception as exc:
-        raise GraphCaptureError(
-            f"Failed to capture graph from {model_file}: {exc}",
-            cause=exc,
-        ) from exc
-    return captured
+    if not shapes:
+        return ()
 
-
-def _export_to_stablehlo(captured: Any) -> Any:
-    try:
-        from src.bridges.pytorch_xla.stablehlo_export import StableHLOExporter
-    except ImportError as exc:
-        raise DependencyMissingError(
-            f"StableHLO exporter import failed: {exc}",
-        ) from exc
-    exporter = StableHLOExporter()
-    return exporter.export_from_captured(captured)
-
-
-def _run_gspmd(stablehlo: Any, mesh: Any, strategy: str) -> Any:
-    try:
-        from src.bridges.pytorch_xla.gspmd_runner import GSPMDRunner, ShardingStrategy
-    except ImportError as exc:
-        raise DependencyMissingError(
-            f"GSPMD runner import failed: {exc}",
-        ) from exc
-    strategy_map = {
-        "auto": ShardingStrategy.AUTO,
-        "replicated": ShardingStrategy.REPLICATED,
-        "data_parallel": ShardingStrategy.DATA_PARALLEL,
-        "model_parallel": ShardingStrategy.MODEL_PARALLEL,
-        "tensor_parallel": ShardingStrategy.TENSOR_PARALLEL,
-    }
-    runner = GSPMDRunner()
-    result = runner.run(
-        stablehlo_module=stablehlo,
-        device_mesh=mesh,
-        strategy=strategy_map[strategy.lower()],
-    )
-    if not result.is_usable:
-        raise GSPMDError(
-            f"GSPMD failed: {result.error}",
-            context={"strategy": strategy},
-        )
-    return result.sharding_spec
-
-
-def _generate_shard_source(
-    stablehlo: Any,
-    spec: Any,
-    shard_idx: int,
-    mesh: Any,
-) -> str:
-    """Generate Triton source for a single shard.
-
-    This is a stub of the eventual StableHLO→Triton translator. It
-    emits a Triton kernel that acknowledges the shard's position in
-    the mesh and the partitioning of its tensors, ready to be filled
-    in by the bridge_orchestrator's tuning step.
-    """
-    return f'''"""Auto-generated Triton source for shard {shard_idx} of {mesh.total_devices}.
-
-Mesh axes: {list(mesh.axes)}
-Total devices: {mesh.total_devices}
-Sharding spec hash: {spec.cache_key}
-"""
-import triton
-import triton.language as tl
-
-# Mesh-aware constants
-_MESH_AXES = {list(mesh.axes)!r}
-_SHARD_ID = {shard_idx}
-_TOTAL_DEVICES = {mesh.total_devices}
-
-@triton.jit
-def shard_kernel(
-    A_ptr, B_ptr, C_ptr,
-    M, N, K,
-    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
-):
-    """Sharded matmul kernel. The actual computation is per-shard."""
-    pid = tl.program_id(0)
-    grid_n = tl.cdiv(N, BLOCK_N)
-    pid_m = pid // grid_n
-    pid_n = pid % grid_n
-    rm = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-    rn = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
-    a = tl.load(A_ptr + rm[:, None] * K + tl.arange(0, BLOCK_K)[None, :])
-    b = tl.load(B_ptr + tl.arange(0, BLOCK_K)[:, None] * N + rn[None, :])
-    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
-    acc += tl.dot(a, b)
-    tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+    return tuple(torch.randn(*s) for s in shapes)
 
 
 if __name__ == "__main__":

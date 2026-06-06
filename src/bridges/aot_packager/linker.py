@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 import shutil
 import struct
@@ -48,8 +47,24 @@ from pathlib import Path
 from typing import Any
 
 from src.common.errors import LinkingError
+from src.common.logging import get_logger
+from src.common.result import Err, Ok, Result
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+# ELF64 ABI constants from <elf.h>. Module-level so they don't
+# trip the N806 linter rule that fires on UPPER_CASE locals.
+_ELFCLASS64 = 2
+_ELFDATA2LSB = 1
+_EV_CURRENT = 1
+_ELFOSABI_NONE = 0
+_ET_REL = 1
+_EM_X86_64 = 62
+_SHT_PROGBITS = 1
+_SHT_STRTAB = 3
+_SHT_NOBITS = 8
+_SHF_ALLOC = 0x2
 
 
 @dataclass
@@ -160,11 +175,11 @@ class FatBinaryLinker:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        if not link_result:
+        if link_result.is_err():
             elapsed = time.perf_counter() - start
             return LinkingResult(
                 success=False,
-                error="lld invocation returned False (should have raised)",
+                error=str(link_result.error),
                 linking_time_s=elapsed,
             )
 
@@ -249,70 +264,107 @@ class FatBinaryLinker:
         return section_files
 
     def _wrap_section_data(self, data: bytes, section_name: str, section_type: str) -> bytes:
-        """Wrap raw bytes as a minimal ELF relocatable object with one section.
+        """Wrap raw bytes as a minimal ELF64 relocatable object with one section.
 
-        This produces a minimal but valid ELF object that lld can
-        consume. It's a simplified version — production code would
-        use the LLVMObject library for proper object construction.
+        Produces a layout that ``readelf -h`` and ``readelf -S`` parse cleanly:
+
+            [ELF64 header]            64 bytes
+            [section data]            len(data) bytes
+            [shstrtab data]           M bytes
+            [8-byte pad]              0-7 bytes (align SHT)
+            [section header table]    3 * 64 = 192 bytes
+
+        SHT entries:
+            [0] NULL                   (required by ELF spec)
+            [1] data section (PROGBITS or NOBITS) with SHF_ALLOC
+            [2] .shstrtab (SHT_STRTAB) — e_shstrndx points here
+
+        ``sh_name`` of the data section is the byte offset of
+        ``section_name`` in the string table; ``.shstrtab`` is
+        named via the same string table to keep the output
+        self-describing.
         """
-        # Minimal ELF64 relocatable object
-        # Layout:
-        #   ELF header (64 bytes)
-        #   Section data
-        #   Section header table
-        elf_magic = b"\x7fELF"
-        ei_class = b"\x02"      # 64-bit
-        ei_data = b"\x01"       # little-endian
-        ei_version = b"\x01"    # current
-        ei_osabi = b"\x00"      # System V
-        ei_pad = b"\x00" * 8    # padding
-        e_ident = elf_magic + ei_class + ei_data + ei_version + ei_osabi + ei_pad
+        # Build the section-header string table: leading NUL,
+        # section_name\0, ".shstrtab"\0. sh_name is the offset
+        # of the name within this table.
+        shstrtab = b"\0" + section_name.encode("utf-8") + b"\0" + b".shstrtab\0"
+        sh_name_offset = 1
+        shstrtab_name_offset = 1 + len(section_name.encode("utf-8")) + 1
 
-        e_type = b"\x01\x00"    # ET_REL (relocatable)
-        e_machine = b"\x3e\x00"  # EM_X86_64
-        e_version = b"\x01\x00\x00\x00"
-        e_entry = b"\x00" * 8
-        e_phoff = b"\x00" * 8
-        # Section header offset = right after the ELF header
-        e_shoff = struct.pack("<Q", 64)
-        e_flags = b"\x00" * 4
-        e_ehsize = struct.pack("<H", 64)
-        e_phentsize = struct.pack("<H", 0)
-        e_phnum = struct.pack("<H", 0)
-        e_shentsize = struct.pack("<H", 64)  # 64 bytes per section header
-        e_shnum = struct.pack("<H", 2)       # null + 1 section
-        e_shstrndx = struct.pack("<H", 0)
+        sht_type = _SHT_PROGBITS if section_type == "PROGBITS" else _SHT_NOBITS
 
+        e_ehsize = 64
+        e_shentsize = 64
+        e_shnum = 3  # NULL + data + shstrtab
+
+        # Compute the SHT offset. ELF64 requires the SHT to start
+        # on an 8-byte boundary, so pad with up to 7 NUL bytes.
+        sht_offset = e_ehsize + len(data) + len(shstrtab)
+        pad = (-sht_offset) % 8
+        sht_offset += pad
+
+        e_ident = (
+            b"\x7fELF"
+            + bytes([_ELFCLASS64, _ELFDATA2LSB, _EV_CURRENT, _ELFOSABI_NONE])
+            + b"\x00" * 8
+        )
         header = (
-            e_ident + e_type + e_machine + e_version + e_entry + e_phoff
-            + e_shoff + e_flags + e_ehsize + e_phentsize + e_phnum
-            + e_shentsize + e_shnum + e_shstrndx
+            e_ident
+            + struct.pack("<H", _ET_REL)              # e_type
+            + struct.pack("<H", _EM_X86_64)           # e_machine
+            + struct.pack("<I", _EV_CURRENT)          # e_version
+            + struct.pack("<Q", 0)                    # e_entry
+            + struct.pack("<Q", 0)                    # e_phoff
+            + struct.pack("<Q", sht_offset)           # e_shoff
+            + struct.pack("<I", 0)                    # e_flags
+            + struct.pack("<H", e_ehsize)             # e_ehsize
+            + struct.pack("<H", 0)                    # e_phentsize
+            + struct.pack("<H", 0)                    # e_phnum
+            + struct.pack("<H", e_shentsize)          # e_shentsize
+            + struct.pack("<H", e_shnum)              # e_shnum
+            + struct.pack("<H", 2)                    # e_shstrndx (index of .shstrtab)
         )
-        assert len(header) == 64
+        assert len(header) == 64, f"ELF header is {len(header)} bytes, expected 64"
 
-        # Section data (the actual bytes we want to embed)
-        section_data = data
-
-        # Section header (null)
+        # SHT entry 0: NULL (required by spec, all fields zero).
         null_sh = b"\x00" * 64
-        # Section header (our data section)
-        sh_name = struct.pack("<I", 1)  # offset into string table (placeholder)
-        sh_type = struct.pack("<I", 1 if section_type == "PROGBITS" else 8)  # SHT_PROGBITS or SHT_NOBITS
-        sh_flags = struct.pack("<Q", 0)
-        sh_addr = struct.pack("<Q", 0)
-        sh_offset = struct.pack("<Q", 64)  # right after header
-        sh_size = struct.pack("<Q", len(section_data))
-        sh_link = struct.pack("<I", 0)
-        sh_info = struct.pack("<I", 0)
-        sh_addralign = struct.pack("<Q", 1)
-        sh_entsize = struct.pack("<Q", 0)
-        data_sh = (
-            sh_name + sh_type + sh_flags + sh_addr + sh_offset
-            + sh_size + sh_link + sh_info + sh_addralign + sh_entsize
-        )
-        assert len(data_sh) == 64
 
-        return header + section_data + null_sh + data_sh
+        # SHT entry 1: the data section. PROGBITS + SHF_ALLOC so the
+        # runtime loader mmaps it into the process image.
+        sh1 = struct.pack(
+            "<IIQQQQIIQQ",
+            sh_name_offset,   # sh_name (offset into shstrtab)
+            sht_type,         # sh_type
+            _SHF_ALLOC,       # sh_flags
+            0,                # sh_addr (relocatable — addresses fixed at link)
+            e_ehsize,         # sh_offset
+            len(data),        # sh_size
+            0,                # sh_link
+            0,                # sh_info
+            1,                # sh_addralign
+            0,                # sh_entsize
+        )
+
+        # SHT entry 2: .shstrtab. SHT_STRTAB sections do not carry
+        # SHF_ALLOC (the string table is consumed by the loader,
+        # not mapped into the process).
+        sh2 = struct.pack(
+            "<IIQQQQIIQQ",
+            shstrtab_name_offset,  # sh_name
+            _SHT_STRTAB,           # sh_type
+            0,                     # sh_flags
+            0,                     # sh_addr
+            e_ehsize + len(data),  # sh_offset
+            len(shstrtab),         # sh_size
+            0,                     # sh_link
+            0,                     # sh_info
+            1,                     # sh_addralign
+            0,                     # sh_entsize
+        )
+        sht = null_sh + sh1 + sh2
+        assert len(sht) == 3 * 64, f"SHT is {len(sht)} bytes, expected 192"
+
+        return header + data + shstrtab + (b"\x00" * pad) + sht
 
     def _run_lld(
         self,
@@ -320,18 +372,20 @@ class FatBinaryLinker:
         section_files: dict[str, Path],
         output_path: Path,
         kernel_name: str,
-    ) -> bool:
+    ) -> Result[Path, LinkingError]:
         """Invoke the LLVM linker to combine the section files.
 
-        Raises LinkingError on any failure. NEVER falls back to a
-        non-functional manual fat binary.
+        Returns ``Ok(output_path)`` on success and
+        ``Err(LinkingError)`` on any failure (lld missing, subprocess
+        timeout, non-zero exit, missing output file). NEVER falls
+        back to a non-functional manual fat binary.
         """
         if not self._lld_path:
-            raise LinkingError(
+            return Err(LinkingError(
                 "lld not found in PATH. Install LLVM (apt install lld / "
                 "brew install llvm). The fat binary cannot be linked "
                 "without lld.",
-            )
+            ))
 
         cmd = [
             self._lld_path, "-r",  # relocatable link
@@ -344,67 +398,20 @@ class FatBinaryLinker:
                 timeout=self.timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
-            raise LinkingError(
+            return Err(LinkingError(
                 f"lld timed out after {self.timeout_seconds}s",
                 cause=exc,
-            ) from exc
+            ))
         if result.returncode != 0 or not output_path.exists():
-            raise LinkingError(
+            return Err(LinkingError(
                 f"lld failed: {result.stderr or '(no stderr)'}",
                 context={
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "cmd": cmd,
                 },
-            )
-        return True
-
-    def _write_minimal_fat_binary(
-        self,
-        temp_dir: Path,
-        section_files: dict[str, Path],
-        output_path: Path,
-    ) -> bool:
-        """Write a minimal fat binary manually when lld is unavailable.
-
-        Concatenates all section files with metadata, producing a
-        single file that the runtime can parse.
-        """
-        try:
-            # Build a manifest of all sections
-            manifest = {
-                "magic": "NAUTILUS_FAT_BINARY",
-                "version": 1,
-                "sections": {},
-            }
-            for name, path in section_files.items():
-                data = path.read_bytes()
-                manifest["sections"][name] = {
-                    "size": len(data),
-                    "offset": None,  # will be filled in
-                    "sha256": hashlib.sha256(data).hexdigest(),
-                }
-            # Concatenate the files
-            with open(output_path, "wb") as out:
-                # Write the manifest
-                manifest_bytes = json.dumps(manifest, indent=2).encode()
-                out.write(struct.pack("<I", len(manifest_bytes)))
-                out.write(manifest_bytes)
-                # Write each section with a length prefix
-                offset = 4 + len(manifest_bytes)
-                for name in manifest["sections"]:
-                    data = section_files[name].read_bytes()
-                    manifest["sections"][name]["offset"] = offset
-                    out.write(struct.pack("<I", len(data)))
-                    out.write(data)
-                    offset += 4 + len(data)
-                # Rewrite the manifest with offsets
-                out.seek(4)
-                out.write(json.dumps(manifest, indent=2).encode())
-            return output_path.exists()
-        except Exception as exc:
-            logger.error("Manual fat binary construction failed: %s", exc)
-            return False
+            ))
+        return Ok(output_path)
 
     def _count_sections(self, path: Path) -> dict[str, int]:
         """Count sections in the output (best-effort)."""

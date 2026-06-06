@@ -14,8 +14,8 @@ from typing import Any
 
 import click
 
-from src.common.logging import get_logger
 from src.common.errors import NautilusError
+from src.common.logging import get_logger
 
 log = get_logger("nautilus.cli.verify")
 

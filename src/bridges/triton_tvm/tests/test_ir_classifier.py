@@ -7,7 +7,6 @@ import pytest
 from src.bridges.triton_tvm.ir_capture import KernelKind
 from src.bridges.triton_tvm.ir_classifier import IRClassifier
 
-
 # Sample IR texts for testing
 MATMUL_IR = """
 module {

@@ -16,7 +16,7 @@ the context needed to fix it.
 from __future__ import annotations
 
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Any, Mapping
 
@@ -95,10 +95,15 @@ class ErrorCode(str, Enum):
     CHECKPOINT_CORRUPT = "E_CHECKPOINT_CORRUPT"
     CHECKPOINT_IO = "E_CHECKPOINT_IO"
 
+    # Stage / budget timeouts
+    STAGE_TIMEOUT = "E_STAGE_TIMEOUT"
+    TOTAL_BUDGET_EXCEEDED = "E_TOTAL_BUDGET_EXCEEDED"
+
     # Generic
     BRIDGE_ERROR = "E_BRIDGE_ERROR"
     INTERNAL_ERROR = "E_INTERNAL_ERROR"
     NOT_IMPLEMENTED = "E_NOT_IMPLEMENTED"
+    CALLBACK_FAILED = "E_CALLBACK_FAILED"
 
 
 @dataclass
@@ -122,11 +127,18 @@ class NautilusError(Exception):
             self.__cause__ = self.cause
 
     def to_dict(self) -> dict[str, Any]:
+        if self.cause is None:
+            cause_repr = None
+        else:
+            try:
+                cause_repr = repr(self.cause)
+            except Exception:
+                cause_repr = "<unprintable>"
         return {
             "type": type(self).__name__,
             "code": self.code.value,
             "message": self.message,
-            "cause": repr(self.cause) if self.cause else None,
+            "cause": cause_repr,
             "context": dict(self.context),
             "traceback": self._traceback,
         }
@@ -135,13 +147,7 @@ class NautilusError(Exception):
         """Return a copy with additional context. Chainable."""
         new_ctx = dict(self.context)
         new_ctx.update(kwargs)
-        new = type(self)(
-            message=self.message,
-            code=self.code,
-            cause=self.cause,
-            context=new_ctx,
-        )
-        return new
+        return replace(self, context=new_ctx)
 
 
 # --- Compilation errors ---
@@ -363,14 +369,14 @@ class CircuitOpenError(NautilusError):
 
 @dataclass
 class StageTimeoutError(NautilusError):
-    code: ErrorCode = ErrorCode.COMPILATION_TIMEOUT
+    code: ErrorCode = ErrorCode.STAGE_TIMEOUT
     stage_name: str = ""
     budget_seconds: float = 0.0
 
 
 @dataclass
 class TotalBudgetExceededError(NautilusError):
-    code: ErrorCode = ErrorCode.COMPILATION_TIMEOUT
+    code: ErrorCode = ErrorCode.TOTAL_BUDGET_EXCEEDED
     elapsed_seconds: float = 0.0
     budget_seconds: float = 0.0
 
@@ -382,6 +388,17 @@ class TotalBudgetExceededError(NautilusError):
 class BridgeError(NautilusError):
     """Generic bridge error for unspecified failures."""
     code: ErrorCode = ErrorCode.BRIDGE_ERROR
+
+
+@dataclass
+class CallbackError(NautilusError):
+    """Raised when a user-supplied callback (e.g. custom reclaim
+    callback) raised an exception during execution.
+
+    Distinct from BridgeError so callers can pattern-match on the
+    callback failure mode without inspecting messages.
+    """
+    code: ErrorCode = ErrorCode.CALLBACK_FAILED
 
 
 # --- Public re-exports for type narrowing ---
@@ -427,4 +444,5 @@ __all__ = [
     "StageTimeoutError",
     "TotalBudgetExceededError",
     "BridgeError",
+    "CallbackError",
 ]

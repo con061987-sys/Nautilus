@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from src.bridges.cuda_ingest.intrinsic_mapper import (
+    IntrinsicCategory,
     IntrinsicMapper,
     IntrinsicMapping,
-    IntrinsicCategory,
 )
 
 
@@ -86,6 +86,38 @@ __global__ void test(int* x) {
         result = mapper.transform_text(cuda_code)
         assert "int x = 5" in result
         assert "int y = x + 3" in result
+
+    def test_transform_text_handles_block_linearization(self) -> None:
+        """The CPU (fallback) path must rewrite the canonical
+        ``blockIdx.x * blockDim.x + threadIdx.x`` pattern in one pass.
+        """
+        mapper = IntrinsicMapper()
+        text = "int i = blockIdx.x * blockDim.x + threadIdx.x;"
+        result = mapper.transform_text(text)
+        assert (
+            "tl.program_id(0) * tl.num_programs(0) + tl.program_id(0)"
+            in result
+        )
+
+    def test_transform_text_handles_block_linearization_yz(self) -> None:
+        """CPU path block linearization works for .y and .z dims too."""
+        mapper = IntrinsicMapper()
+        for dim_letter, dim_idx in [("y", 1), ("z", 2)]:
+            text = f"int i = blockIdx.{dim_letter} * blockDim.{dim_letter} + threadIdx.{dim_letter};"
+            result = mapper.transform_text(text)
+            expected = (
+                f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx})"
+                f" + tl.program_id({dim_idx})"
+            )
+            assert expected in result
+
+    def test_transform_text_unwraps_std_move(self) -> None:
+        """The CPU (fallback) path must unwrap ``std::move(x)``."""
+        mapper = IntrinsicMapper()
+        text = "float* p = std::move(x);"
+        result = mapper.transform_text(text)
+        assert "std::move" not in result
+        assert "p = x" in result
 
     def test_mappings_by_category(self) -> None:
         """mappings_by_category should return mappings in a category."""

@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from src.bridges.cuda_ingest.shared_memory import (
-    SharedMemoryAnalyzer,
-    SharedMemPlan,
-    SharedMemAllocation,
-)
 from src.bridges.cuda_ingest.parser import (
-    CudaParser,
     CudaKernel,
+    CudaParser,
     CudaStatement,
 )
-
+from src.bridges.cuda_ingest.shared_memory import (
+    SharedMemAllocation,
+    SharedMemoryAnalyzer,
+    SharedMemPlan,
+)
 
 SAMPLE_KERNEL_WITH_SHMEM = '''
 __global__ void matmul_with_shmem(
@@ -136,3 +135,60 @@ __global__ void no_shmem(float* x) {
         plan = analyzer.analyze(kernels[0])
         assert plan.num_allocations == 0
         assert plan.total_static_bytes == 0
+
+    # ------------------------------------------------------------------
+    # Wave 2.7 — multi-dimensional __shared__ regression tests.
+    # Verifies the M-39 fix: total size is the product of all dims.
+    # ------------------------------------------------------------------
+
+    def test_2d_shared_memory_size_is_product(self) -> None:
+        """__shared__ float data[128][64] should size 128*64=8192 elements."""
+        analyzer = SharedMemoryAnalyzer()
+        decl = {
+            "type": "float",
+            "name": "data",
+            "raw": "__shared__ float data[128][64];",
+        }
+        alloc = analyzer._parse_declaration(decl)
+        assert alloc is not None
+        assert alloc.array_size == 128 * 64
+        assert alloc.is_static is True
+
+    def test_3d_shared_memory_size_is_product(self) -> None:
+        """__shared__ float cube[4][8][16] should size 4*8*16=512 elements."""
+        analyzer = SharedMemoryAnalyzer()
+        decl = {
+            "type": "float",
+            "name": "cube",
+            "raw": "__shared__ float cube[4][8][16];",
+        }
+        alloc = analyzer._parse_declaration(decl)
+        assert alloc is not None
+        assert alloc.array_size == 4 * 8 * 16
+        assert alloc.is_static is True
+
+    def test_4d_shared_memory_size_is_product(self) -> None:
+        """__shared__ float q[2][4][8][16] should size 1024 elements."""
+        analyzer = SharedMemoryAnalyzer()
+        decl = {
+            "type": "float",
+            "name": "q",
+            "raw": "__shared__ float q[2][4][8][16];",
+        }
+        alloc = analyzer._parse_declaration(decl)
+        assert alloc is not None
+        assert alloc.array_size == 1024
+        assert alloc.is_static is True
+
+    def test_mixed_static_dynamic_is_dynamic(self) -> None:
+        """__shared__ float data[16][N] should be dynamic (any non-digit → 0)."""
+        analyzer = SharedMemoryAnalyzer()
+        decl = {
+            "type": "float",
+            "name": "data",
+            "raw": "__shared__ float data[16][N];",
+        }
+        alloc = analyzer._parse_declaration(decl)
+        assert alloc is not None
+        assert alloc.array_size == 0
+        assert alloc.is_static is False

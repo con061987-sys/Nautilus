@@ -35,6 +35,8 @@ from src.common.errors import (
 )
 from src.common.logging import get_logger
 
+from ._signature_inference import build_signature
+
 log = get_logger("nautilus.aot.amd")
 
 
@@ -297,9 +299,10 @@ class AMDBackend:
                 "unavailable). Install ROCm or AOTriton.",
             )
         try:
+            import importlib.util
+
             import triton
             from triton.compiler import ASTSource  # type: ignore[attr-defined]
-            import importlib.util
         except ImportError as exc:
             raise DependencyMissingError(
                 "Triton not installed; cannot do AMD fallback",
@@ -317,13 +320,14 @@ class AMDBackend:
                 if fn is None:
                     raise CompilationError(f"Function {kernel_name!r} not found")
 
-                sig_args = ["*fp32"] * 3 + ["i32"] * 3 + ["constexpr"] * 3
-                signature = {i: a for i, a in enumerate(sig_args)}
-                constexprs = {
-                    len(sig_args) - 3: block_m,
-                    len(sig_args) - 2: block_n,
-                    len(sig_args) - 1: block_k,
-                }
+                signature, constexprs = build_signature(
+                    fn,
+                    block_size_values={
+                        "BLOCK_M": block_m,
+                        "BLOCK_N": block_n,
+                        "BLOCK_K": block_k,
+                    },
+                )
                 source = ASTSource(
                     fn=fn, constants={}, signature=signature, constexprs=constexprs,
                     attrs={"num_warps": num_warps, "num_stages": num_stages},

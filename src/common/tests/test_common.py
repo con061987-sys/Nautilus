@@ -35,7 +35,7 @@ def test_result_err_unwrap_raises():
 
 
 def test_result_map():
-    from src.common.result import Ok, Err
+    from src.common.result import Err, Ok
     result_ok = Ok(2).map(lambda x: x * 3)  # type: ignore[misc]
     result_err = Err(ValueError("x")).map(lambda x: x * 3)  # type: ignore[misc]
     assert isinstance(result_ok, Ok)
@@ -44,7 +44,7 @@ def test_result_map():
 
 
 def test_result_and_then():
-    from src.common.result import Ok, Err
+    from src.common.result import Err, Ok
     def add_one(x: int) -> Ok: return Ok(x + 1)  # type: ignore[misc]
     result_ok = Ok(2).and_then(add_one)
     result_err = Err(ValueError("x")).and_then(add_one)
@@ -86,7 +86,7 @@ def test_vendor_from_arch():
 
 
 def test_hardware_target_to_tvm():
-    from src.common.types import HardwareTarget, Vendor, Arch
+    from src.common.types import Arch, HardwareTarget, Vendor
     t = HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)
     assert t.to_tvm_target() == "nvidia/nvidia-h100"
     t2 = HardwareTarget(vendor=Vendor.AMD, arch=Arch.GFX942)
@@ -94,15 +94,15 @@ def test_hardware_target_to_tvm():
 
 
 def test_mesh_shape_rejects_zero():
-    from src.common.types import MeshShape
     from src.common.errors import ConfigError
+    from src.common.types import MeshShape
     with pytest.raises(ConfigError):
         MeshShape(axes=(2, 0, 2))
 
 
 def test_tensor_sharding_validates_length_match():
-    from src.common.types import TensorShardingLite
     from src.common.errors import ConfigError
+    from src.common.types import TensorShardingLite
     with pytest.raises(ConfigError):
         TensorShardingLite(
             tensor_name="x",
@@ -112,8 +112,8 @@ def test_tensor_sharding_validates_length_match():
 
 
 def test_sharding_spec_validates_axis_range():
-    from src.common.types import MeshShape, TensorShardingLite, ShardingSpecLite
     from src.common.errors import ConfigError
+    from src.common.types import MeshShape, ShardingSpecLite, TensorShardingLite
     mesh = MeshShape(axes=(2, 2))
     bad = TensorShardingLite(
         tensor_name="x",
@@ -125,7 +125,7 @@ def test_sharding_spec_validates_axis_range():
 
 
 def test_fat_binary_dedup_vendors():
-    from src.common.types import FatBinary, KernelSection, SectionFormat, Vendor, Arch
+    from src.common.types import Arch, FatBinary, KernelSection, SectionFormat, Vendor
     fb = FatBinary(kernel_name="k")
     fb.add_section(KernelSection(vendor=Vendor.NVIDIA, arch=Arch.SM_90, format=SectionFormat.PTX, data=b"x"))
     fb.add_section(KernelSection(vendor=Vendor.AMD, arch=Arch.GFX942, format=SectionFormat.HSACO, data=b"y"))
@@ -135,8 +135,8 @@ def test_fat_binary_dedup_vendors():
 
 
 def test_circuit_breaker_opens_after_threshold():
-    from src.common.observability import CircuitBreaker, CircuitBreakerConfig, CircuitState
     from src.common.errors import CircuitOpenError
+    from src.common.observability import CircuitBreaker, CircuitBreakerConfig, CircuitState
     cb = CircuitBreaker(CircuitBreakerConfig(name="test", failure_threshold=2, reset_timeout_seconds=0.1))
     def boom():
         raise RuntimeError("nope")
@@ -177,8 +177,8 @@ def test_stage_budget_unknown_stage_raises():
 
 
 def test_timeout_manager_stage_budget():
-    from src.common.observability import TimeoutManager, StageBudgets
     from src.common.errors import StageTimeoutError
+    from src.common.observability import StageBudgets, TimeoutManager
     tm = TimeoutManager(StageBudgets(
         ir_capture_seconds=0.05,
     ))
@@ -189,7 +189,7 @@ def test_timeout_manager_stage_budget():
 
 
 def test_logging_structured_json(tmp_path):
-    from src.common.logging import configure_logging, get_logger, JsonLogSink
+    from src.common.logging import JsonLogSink, configure_logging, get_logger
     log_path = str(tmp_path / "test.log")
     sink = JsonLogSink(log_path)
     configure_logging(level="debug", sinks=[sink])
@@ -207,11 +207,19 @@ def test_logging_structured_json(tmp_path):
 
 
 def test_logging_span_records_stages():
-    from src.common.logging import (
-        configure_logging, get_logger, span as span_context, stage as stage_context,
-        LogSink,
-    )
     import io
+
+    from src.common.logging import (
+        LogSink,
+        configure_logging,
+        get_logger,
+    )
+    from src.common.logging import (
+        span as span_context,
+    )
+    from src.common.logging import (
+        stage as stage_context,
+    )
     buf = io.StringIO()
 
     class _BufSink(LogSink):

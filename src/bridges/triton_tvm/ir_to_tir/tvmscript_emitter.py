@@ -15,9 +15,10 @@ matches what TVM's example kernels do.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+from src.common.logging import get_logger
 
 from .ttgir_parser import (
     OpKind,
@@ -26,7 +27,7 @@ from .ttgir_parser import (
     TTGIRType,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

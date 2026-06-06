@@ -7,7 +7,7 @@ changes.
 ## Setup
 
 ```bash
-git clone https://github.com/nvindia-cud/nautilus
+git clone https://github.com/nvindia-cud/NVINDIA_CUD
 cd nautilus
 ./scripts/setup-cuda.sh   # or setup-rocm.sh / setup-intel.sh
 pip install -e .[dev]

@@ -37,7 +37,6 @@ from src.common.types import (
     StageRecord,
 )
 
-
 # --- Log sink protocol ---
 
 
@@ -206,6 +205,19 @@ def get_logger(name: str) -> "_NautilusLogger":
     if not name.startswith(_LOGGER_NAME_PREFIX):
         name = f"{_LOGGER_NAME_PREFIX}.{name}"
     return _NautilusLogger(name)
+
+
+def get_stdlib_logger(name: str) -> logging.Logger:
+    """Return the underlying stdlib ``logging.Logger`` for advanced configuration.
+
+    Use this only when you need to set handler-level or formatter-level
+    configuration on the stdlib logger (e.g. installing a custom
+    ``StreamHandler``). For ordinary structured logging, prefer
+    :func:`get_logger`.
+    """
+    if not name.startswith(_LOGGER_NAME_PREFIX):
+        name = f"{_LOGGER_NAME_PREFIX}.{name}"
+    return logging.getLogger(name)
 
 
 # --- Span / stage contexts ---

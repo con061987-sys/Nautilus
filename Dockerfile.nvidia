@@ -1,0 +1,106 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dockerfile.nvidia — Nvidia CUDA 12.4 build & runtime environment for Nautilus.
+#
+# Provides: CUDA 12.4 toolkit, NVCC, Triton, PyTorch (CUDA), TVM MetaSchedule,
+#           XLA, dev tooling, and the full nautilus install via `pip install -e`.
+#
+# Build:   docker build -f Dockerfile.nvidia -t nautilus:nvidia .
+# Run:     docker run --rm --gpus all nautilus:nvidia nautilus verify
+#
+
+ARG UBUNTU_VERSION=22.04
+FROM nvidia/cuda:12.4.0-devel-ubuntu${UBUNTU_VERSION} AS base
+
+# ---------------------------------------------------------------------------
+# System layer
+# ---------------------------------------------------------------------------
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+
+# System deps: build tools, git, curl, ca-certs, libGL (torchvision), etc.
+# Keep this list minimal but enough to build Triton / TVM wheels from source
+# when prebuilt wheels are unavailable.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        gnupg \
+        wget \
+        build-essential \
+        cmake \
+        ninja-build \
+        pkg-config \
+        libssl-dev \
+        zlib1g-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libncursesw5-dev \
+        xz-utils \
+        tk-dev \
+        libxml2-dev \
+        libxmlsec1-dev \
+        libffi-dev \
+        liblzma-dev \
+        libgl1 \
+        libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Python (use the Python that ships with the CUDA base image; fall back to
+# deadsnakes for the exact version Nautilus requires).
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-dev \
+        python3.10-venv \
+        python3.10-distutils \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 100 \
+    && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.10 100
+
+# Bootstrap pip for the just-installed Python (distutils removal workaround).
+RUN curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py \
+    && python3 /tmp/get-pip.py \
+    && rm -f /tmp/get-pip.py
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
+WORKDIR /app
+
+# Copy the project tree. .dockerignore should keep .git, third_party/*, etc.
+# out of the build context to speed up builds and avoid leaking secrets.
+COPY . .
+
+# Install Nautilus with every optional extra + dev tooling. This includes
+# torch/triton (CUDA wheels are picked up automatically), apache-tvm,
+# torch_xla, aotriton, tree-sitter, pytest/mypy/ruff, etc.
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install -e ".[all,dev]"
+
+# Verify CUDA toolchain is visible to the installed Triton / PyTorch.
+RUN nvcc --version \
+    && python -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'avail', torch.cuda.is_available())" \
+    && python -c "import triton; print('triton', triton.__version__)"
+
+# ---------------------------------------------------------------------------
+# Healthcheck — uses the project-native `nautilus verify` command, which
+# the pyproject.toml exposes as an entry point. A failure here will mark
+# the container unhealthy in `docker ps`.
+# ---------------------------------------------------------------------------
+HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
+    CMD nautilus verify || exit 1
+
+# Default command: drop into a shell so devs can `docker run --gpus all -it ...`
+CMD ["bash"]

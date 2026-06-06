@@ -8,6 +8,7 @@ restoration of a real type system.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import time
 from dataclasses import dataclass, field
@@ -20,12 +21,8 @@ from src.common.errors import (
     NautilusError,
 )
 
-
 # --- Re-export Result from result module ---
-
-
-from src.common.result import Result, Ok, Err  # noqa: E402
-
+from src.common.result import Err, Ok, Result  # noqa: E402
 
 # --- Vendors and architectures ---
 
@@ -39,10 +36,25 @@ class Vendor(str, Enum):
     UNKNOWN = "unknown"
 
     @classmethod
-    def from_string(cls, s: str) -> "Vendor":
+    def from_string(cls, s: str, strict: bool = True) -> "Vendor":
+        """Parse a vendor name into a Vendor.
+
+        Args:
+            s: Input string. Case-insensitive.
+            strict: If True, raise ConfigError on unknown input.
+                If False, return Vendor.UNKNOWN (legacy behavior).
+
+        Defaults to strict=True so that typos surface at config-load
+        time rather than as silent Vendor.UNKNOWN at runtime.
+        """
         try:
             return cls(s.lower())
         except ValueError:
+            if strict:
+                raise ConfigError(
+                    f"Unknown vendor: {s!r}",
+                    context={"input": s, "valid": [v.value for v in cls]},
+                ) from None
             return cls.UNKNOWN
 
 
@@ -97,6 +109,22 @@ class Arch(str, Enum):
 # --- Targets ---
 
 
+# (vendor, arch) → TVM target alias. Entries here override the
+# default "<prefix>/<arch>" rule in HardwareTarget.to_tvm_target.
+TVM_TARGET_ALIASES: dict[tuple[Vendor, Arch], str] = {
+    (Vendor.NVIDIA, Arch.SM_90): "nvidia/nvidia-h100",
+    (Vendor.NVIDIA, Arch.SM_80): "nvidia/nvidia-a100",
+    (Vendor.AMD, Arch.GFX942): "rocm/gfx942",
+    (Vendor.INTEL, Arch.GAUDI2): "intel/gaudi-2",
+}
+
+_TVM_VENDOR_PREFIX: dict[Vendor, str] = {
+    Vendor.NVIDIA: "nvidia",
+    Vendor.AMD: "rocm",
+    Vendor.INTEL: "intel",
+}
+
+
 @dataclass(frozen=True)
 class HardwareTarget:
     """A (vendor, arch) pair, possibly with an alias for downstream tools."""
@@ -107,21 +135,13 @@ class HardwareTarget:
     def to_tvm_target(self) -> str:
         if self.alias:
             return self.alias
-        if self.vendor == Vendor.NVIDIA:
-            if self.arch == Arch.SM_90:
-                return "nvidia/nvidia-h100"
-            if self.arch == Arch.SM_80:
-                return "nvidia/nvidia-a100"
-            return f"nvidia/{self.arch.value}"
-        if self.vendor == Vendor.AMD:
-            if self.arch == Arch.GFX942:
-                return "rocm/gfx942"
-            return f"rocm/{self.arch.value}"
-        if self.vendor == Vendor.INTEL:
-            if self.arch == Arch.GAUDI2:
-                return "intel/gaudi-2"
-            return f"intel/{self.arch.value}"
-        return "cuda"
+        aliased = TVM_TARGET_ALIASES.get((self.vendor, self.arch))
+        if aliased is not None:
+            return aliased
+        prefix = _TVM_VENDOR_PREFIX.get(self.vendor)
+        if prefix is None:
+            return "cuda"
+        return f"{prefix}/{self.arch.value}"
 
     def to_triton_target(self) -> str:
         if self.vendor == Vendor.NVIDIA:
@@ -166,7 +186,7 @@ class KernelSection:
     def size(self) -> int:
         return len(self.data)
 
-    @property
+    @functools.cached_property
     def sha256(self) -> str:
         return hashlib.sha256(self.data).hexdigest()
 
@@ -329,21 +349,13 @@ class TuningConfig:
 
     def to_triton_config(self) -> "object":
         """Lazily build a triton.Config without importing triton at module load."""
-        try:
-            import triton
-        except ImportError as exc:
-            raise DependencyMissingError(
-                "Triton is not installed; cannot build triton.Config",
-            ) from exc
-        return triton.Config(
-            {
-                "BLOCK_M": self.block_m,
-                "BLOCK_N": self.block_n,
-                "BLOCK_K": self.block_k,
-            },
-            num_warps=self.num_warps,
-            num_stages=self.num_stages,
-            num_ctas=self.num_ctas,
+        return _build_triton_config(
+            self.block_m,
+            self.block_n,
+            self.block_k,
+            self.num_warps,
+            self.num_stages,
+            self.num_ctas,
         )
 
     def overrides_for(self, vendor: Vendor) -> dict[str, int]:
@@ -352,6 +364,33 @@ class TuningConfig:
     @classmethod
     def defaults(cls) -> "TuningConfig":
         return cls()
+
+
+@functools.lru_cache(maxsize=128)
+def _build_triton_config(
+    block_m: int,
+    block_n: int,
+    block_k: int,
+    num_warps: int,
+    num_stages: int,
+    num_ctas: int,
+) -> "object":
+    try:
+        import triton
+    except ImportError as exc:
+        raise DependencyMissingError(
+            "Triton is not installed; cannot build triton.Config",
+        ) from exc
+    return triton.Config(
+        {
+            "BLOCK_M": block_m,
+            "BLOCK_N": block_n,
+            "BLOCK_K": block_k,
+        },
+        num_warps=num_warps,
+        num_stages=num_stages,
+        num_ctas=num_ctas,
+    )
 
 
 # --- Mesh / sharding ---
@@ -484,8 +523,8 @@ class StableHLOModule:
     def __post_init__(self) -> None:
         if self.is_usable and not self.is_real_stablehlo:
             # Soft-warn: fallback is allowed in tests but should be loud in prod
-            import logging
-            logging.getLogger(__name__).warning(
+            from src.common.logging import get_logger
+            get_logger(__name__).warning(
                 "StableHLOModule is_usable=True but is_real_stablehlo=False; "
                 "this is a fallback representation, not actual StableHLO. "
                 "GSPMD will not produce real sharding."

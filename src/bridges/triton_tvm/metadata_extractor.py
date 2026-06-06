@@ -14,8 +14,6 @@ import types
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-import torch
-
 
 @dataclass(frozen=True)
 class KernelMetadata:
@@ -117,6 +115,8 @@ class MetadataExtractor:
         Returns:
             KernelMetadata with shapes, strides, dtypes from real tensors.
         """
+        import torch  # local import: triton_tvm bridge must load without torch installed
+
         kwargs = kwargs or {}
 
         # Extract tensor shapes/strides/dtypes from arguments
@@ -228,6 +228,7 @@ class MetadataExtractor:
 
 def _torch_dtype_to_str(dtype: torch.dtype) -> str:
     """Map torch.dtype to string representation."""
+    import torch  # local import: helper must work independently of extract_from_call
     mapping = {
         torch.float32: "float32",
         torch.float16: "float16",

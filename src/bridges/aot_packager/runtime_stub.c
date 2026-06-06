@@ -1,5 +1,5 @@
 /*
- * Nautilus C runtime stub for fat binaries — REAL vendor detection.
+ * Nautilus C runtime stub for fat binaries — portable vendor detection.
  *
  * The previous version of this file hard-coded every GPU detector to
  * return 0 with a comment "Stub: always returns false". That made
@@ -8,15 +8,16 @@
  * startup with an undefined-symbol linker error.
  *
  * This rewrite:
- *   1. Probes /dev/nvidia*, /dev/kfd, /dev/dri/renderD* for real
- *   2. Falls back to /proc/cpuinfo for host CPU vendor
- *   3. Returns 0 (not detected) or 1 (detected) with EVIDENCE
- *   4. Provides a real `nautilus_dispatch()` that aborts with a
- *      clear error if no vendor is found
- *   5. Thread-safe via atomic operations
+ *   1. Probes /dev/nvidia*, /dev/kfd, /dev/dri/renderD* via access()
+ *   2. Returns 0 (not detected) or 1 (detected)
+ *   3. Provides a real `nautilus_dispatch()` that falls back to
+ *      nautilus_kernel_default if no vendor is found
+ *   4. Portable: no inline asm, no raw syscalls; compiles and runs
+ *      on x86_64, ARM64, and other Linux architectures
  *
  * Build:
  *   gcc -c -nostdlib -fPIC -o runtime_stub.o runtime_stub.c
+ *   aarch64-linux-gnu-gcc -c -o runtime_stub.o runtime_stub.c
  *
  * Linking into a fat binary:
  *   lld -r -o fat_binary.o runtime_stub.o kernel_nvidia.o kernel_amd.o ...
@@ -66,75 +67,53 @@ static int nautilus_file_exists(const char* path) {
     return access(path, F_OK) == 0;
 }
 
-static int nautilus_dir_has_entry(const char* dir, const char* prefix) {
-    /* Tiny globber: scan dir entries that start with `prefix`. */
-    int dir_fd = open(dir, O_RDONLY | O_DIRECTORY);
-    if (dir_fd < 0) return 0;
-    /* Use getdents64 if available; fall back to a minimal fdopendir. */
-    /* For nostdlib we use the raw syscall. */
-    #if defined(__x86_64__)
-        long ret;
-        char buf[4096] __attribute__((aligned(8)));
-        long count = 0;
-        /* getdents64 syscall: __NR_getdents64 = 217 on x86_64 */
-        __asm__ volatile (
-            "syscall"
-            : "=a"(ret)
-            : "0"(217), "D"(dir_fd), "S"(buf), "d"(sizeof(buf))
-            : "rcx", "r11", "memory"
-        );
-        count = ret;
-        if (count <= 0) { close(dir_fd); return 0; }
-        /* Walk dirent64 records. */
-        int prefix_len = 0;
-        while (prefix[prefix_len]) prefix_len++;
-        for (long pos = 0; pos < count; ) {
-            /* struct linux_dirent64 { ino64_t d_ino; off64_t d_off;
-             * unsigned short d_reclen; unsigned char d_type; char d_name[]; } */
-            unsigned short reclen = *(unsigned short*)(buf + pos + 16);
-            const char* name = buf + pos + 19;
-            int match = 1;
-            for (int i = 0; i < prefix_len; i++) {
-                if (name[i] != prefix[i]) { match = 0; break; }
-                if (name[i] == 0) { match = 0; break; }
-            }
-            if (match) { close(dir_fd); return 1; }
-            pos += reclen;
-        }
-        close(dir_fd);
-        return 0;
-    #else
-        close(dir_fd);
-        return 0;
-    #endif
+static int nautilus_any_path_exists(const char* const* paths) {
+    for (int i = 0; paths[i] != NULL; i++) {
+        if (nautilus_file_exists(paths[i])) return 1;
+    }
+    return 0;
 }
 
+static const char* const nautilus_nvidia_devs[] = {
+    "/dev/nvidia0",  "/dev/nvidia1",  "/dev/nvidia2",  "/dev/nvidia3",
+    "/dev/nvidia4",  "/dev/nvidia5",  "/dev/nvidia6",  "/dev/nvidia7",
+    "/dev/nvidiactl",
+    "/dev/nvidia-uvm",
+    "/dev/nvidia-uvm-tools",
+    "/dev/nvidia-modeset",
+    NULL
+};
+
+static const char* const nautilus_dri_render_devs[] = {
+    "/dev/dri/renderD128",
+    "/dev/dri/renderD129",
+    "/dev/dri/renderD130",
+    "/dev/dri/renderD131",
+    "/dev/dri/renderD132",
+    "/dev/dri/renderD133",
+    "/dev/dri/renderD134",
+    "/dev/dri/renderD135",
+    NULL
+};
+
 static int nautilus_check_nvidia(void) {
-    /* /dev/nvidia0 (or any /dev/nvidia* entry) */
-    if (nautilus_file_exists("/dev/nvidia0")) return 1;
-    if (nautilus_file_exists("/dev/nvidiactl")) return 1;
-    if (nautilus_dir_has_entry("/dev", "nvidia")) return 1;
-    return 0;
+    return nautilus_any_path_exists(nautilus_nvidia_devs);
 }
 
 static int nautilus_check_amd(void) {
     /* /dev/kfd is the AMD Kernel Fusion Driver device. */
     if (nautilus_file_exists("/dev/kfd")) return 1;
-    if (nautilus_dir_has_entry("/dev/dri", "renderD")) {
-        /* Combined with checking the kernel driver name; we just say AMD
-         * is possible if a renderD node exists. Production would also
-         * readmodinfo /sys/class/drm/. */
-        return 1;
-    }
+    /* AMD GPUs also expose a renderD node via the amdgpu DRM driver. */
+    if (nautilus_any_path_exists(nautilus_dri_render_devs)) return 1;
     return 0;
 }
 
 static int nautilus_check_intel(void) {
-    /* Intel GPU: /dev/dri/renderD* (Level Zero or Intel i915). We
-     * accept any renderD node as a hint; production would check
+    /* Intel GPU: /dev/dri/renderD* (Level Zero or Intel i915).
+     * If a renderD node exists and neither AMD KFD nor Nvidia is
+     * present, assume Intel. Production would also check
      * /sys/class/drm/card*-device/vendor == 0x8086. */
-    if (nautilus_dir_has_entry("/dev/dri", "renderD")) {
-        /* If no AMD KFD and no Nvidia, Intel is the only option. */
+    if (nautilus_any_path_exists(nautilus_dri_render_devs)) {
         if (!nautilus_check_amd() && !nautilus_check_nvidia()) return 1;
     }
     return 0;
@@ -156,48 +135,6 @@ static int nautilus_check_nvidia(void) { return 0; }
 static int nautilus_check_amd(void) { return 0; }
 static int nautilus_check_intel(void) { return 0; }
 static int nautilus_check_apple(void) { return 0; }
-#endif
-
-/* ------------------------------------------------------------------ *
- * CPU vendor detection (CPUID on x86, sysctl on macOS)                *
- * ------------------------------------------------------------------ */
-
-#if defined(__x86_64__) || defined(__i386__)
-static inline void nautilus_cpuid(int info[4], int leaf) {
-    __asm__ volatile (
-        "cpuid"
-        : "=a"(info[0]), "=b"(info[1]), "=c"(info[2]), "=d"(info[3])
-        : "a"(leaf), "c"(0)
-    );
-}
-
-static int nautilus_host_vendor_intel(void) __attribute__((unused));
-static int nautilus_host_vendor_intel(void) {
-    int info[4];
-    nautilus_cpuid(info, 0);
-    /* GenuineIntel: EBX="Genu", EDX="ineI" */
-    if (info[1] == 0x756e6547 && info[3] == 0x49656e69) return 1;
-    return 0;
-}
-
-static int nautilus_host_vendor_amd(void) __attribute__((unused));
-static int nautilus_host_vendor_amd(void) {
-    int info[4];
-    nautilus_cpuid(info, 0);
-    /* AuthenticAMD: EBX="Auth", EDX="enti" */
-    if (info[1] == 0x68747541 && info[3] == 0x69746e65) return 1;
-    return 0;
-}
-#elif defined(__APPLE__)
-static int nautilus_host_vendor_intel(void) __attribute__((unused));
-static int nautilus_host_vendor_amd(void) __attribute__((unused));
-static int nautilus_host_vendor_intel(void) { return 0; }
-static int nautilus_host_vendor_amd(void) { return 0; }
-#else
-static int nautilus_host_vendor_intel(void) __attribute__((unused));
-static int nautilus_host_vendor_amd(void) __attribute__((unused));
-static int nautilus_host_vendor_intel(void) { return 0; }
-static int nautilus_host_vendor_amd(void) { return 0; }
 #endif
 
 /* ------------------------------------------------------------------ *
@@ -265,5 +202,5 @@ const char* nautilus_version(void) {
 
 const char* nautilus_build_info(void) {
     return "Built with Nautilus cross-vendor AI compiler; "
-           "real /dev probing and CPUID vendor detection.";
+           "portable /dev probing via access().";
 }

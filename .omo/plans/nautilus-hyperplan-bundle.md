@@ -10,7 +10,7 @@
 
 ## Goal Restatement
 
-Per `docs/PRD.md` and the user's user-request: Build **Nautilus** — an independent, cross-vendor AI compilation framework. A unified pipeline that takes **standard PyTorch model code**, optimizes it via **an advanced AI cost model** (TVM MetaSchedule), bundles it into a **single "Fat Binary"** (per-vendor ELF sections + C runtime stub), and **automatically splits** (GSPMD auto-sharding) to run at maximum speed across a **mixed cluster of AMD and Intel GPUs**. The user demands **REAL WORLD READY** — not MVP, not fake showcasing, not subset implementation.
+Per `docs/PRD.md` and the user's user-request: Build **Nautilus** — an independent, cross-vendor AI compilation framework. A unified pipeline that takes **standard PyTorch model code**, optimizes it via **an advanced AI cost model** (TVM MetaSchedule), bundles it into a **single "Fat Binary"** (per-vendor ELF sections + C runtime ), and **automatically splits** (GSPMD auto-sharding) to run at maximum speed across a **mixed cluster of AMD and Intel GPUs**. The user demands **REAL WORLD READY** — not MVP, not fake showcasing, not subset implementation.
 
 ---
 

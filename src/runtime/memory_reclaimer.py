@@ -1,5 +1,5 @@
 """
-Deterministic memory reclaimer — REAL vendor-specific reclaim, not `return 0`.
+Deterministic memory reclaimer — REAL vendor-specific reclaim, no more `return 0`.
 
 The previous implementation:
   1. Called torch.cuda.empty_cache() (good)
@@ -11,13 +11,20 @@ This rewrite uses vendor-specific APIs to return real byte counts:
   - ROCm: torch.cuda.memory_stats() (PyTorch unifies these)
   - Level Zero / Intel: ze_api.free_unused() if available, else
     fall back to introspecting the device
-  - Apple Metal: MTLDevice currentAllocatedSize
+  - Apple Metal: torch.mps.current_allocated_memory() deltas around
+    torch.mps.empty_cache()
 
-For devices we can't introspect, we now RAISE a clear
-DependencyMissingError instead of silently returning 0.
+For devices we can't introspect, we now return
+``Err(DependencyMissingError(...))`` instead of silently returning
+0. Every reclaim returns ``Result[int, NautilusError]`` so the
+caller MUST inspect both arms:
+
+  - ``Ok(n)`` — n bytes were actually freed (n may be 0 when the
+    device is below watermark or the call was throttled)
+  - ``Err(exc)`` — typed NautilusError describing what went wrong
 
 Every reclaim records:
-  - Bytes reclaimed (real number, not 0)
+  - Bytes reclaimed (real number)
   - Timestamp
   - Watermark at time of reclaim
   - Vendor-specific allocator state
@@ -32,22 +39,21 @@ Production features:
 from __future__ import annotations
 
 import logging
-import os
 import platform
-import shutil
-import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from src.common.errors import (
+    CallbackError,
     DependencyMissingError,
     HardwareNotFoundError,
     HardwareProbeError,
     NautilusError,
 )
 from src.common.logging import get_logger
+from src.common.result import Err, Ok, Result
 
 log = get_logger("nautilus.runtime.memory")
 
@@ -92,11 +98,18 @@ class MemoryReclaimer:
     """Production-grade memory reclaimer with REAL byte accounting.
 
     Usage:
+        from src.runtime.memory_reclaimer import MemoryReclaimer, ReclaimConfig
+        from src.common.result import Ok, Err
+
         reclaimer = MemoryReclaimer(ReclaimConfig(watermark_fraction=0.85))
         reclaimer.register_device("cuda:0", total_bytes=80 * 1024**3)
         ...
-        reclaimed = reclaimer.reclaim("cuda:0")
-        assert isinstance(reclaimed, int)
+        result = reclaimer.reclaim("cuda:0")
+        match result:
+            case Ok(n):
+                log.info("reclaimed %d bytes", n)
+            case Err(exc):
+                log.error("reclaim failed: %s", exc)
     """
     def __init__(self, config: ReclaimConfig | None = None) -> None:
         self.config = config or ReclaimConfig()
@@ -123,42 +136,81 @@ class MemoryReclaimer:
             if device_id in self._devices:
                 self._devices[device_id].allocated_bytes = allocated_bytes
 
-    def reclaim(self, device_id: str) -> int:
-        """Force a memory reclaim. Returns the number of bytes freed.
+    def reclaim(self, device_id: str) -> Result[int, NautilusError]:
+        """Force a memory reclaim.
 
-        Returns 0 only if the device is below the watermark or the
-        reclaim was throttled by min_interval. Never returns 0 as a
-        proxy for "I don't know" — that was the previous bug.
+        Returns ``Ok(reclaimed_bytes)`` on success, where
+        ``reclaimed_bytes`` is the number of bytes actually freed by
+        the vendor allocator. Returns ``Err(NautilusError)`` on any
+        failure: throttling is reported as ``Ok(0)``, every other
+        failure mode (missing dependency, callback exception, unknown
+        vendor, device not registered, etc.) is reported as ``Err``.
+
+        This replaces the previous "return 0 on failure" anti-pattern
+        that silently masked errors. Callers MUST inspect the
+        ``Result`` and handle both arms.
         """
         with self._lock:
             if device_id not in self._devices:
-                raise HardwareNotFoundError(
+                return Err(HardwareNotFoundError(
                     f"Device {device_id!r} not registered with this reclaimer",
-                    context={"device_id": device_id, "registered": list(self._devices)},
-                )
+                    context={
+                        "device_id": device_id,
+                        "registered": list(self._devices),
+                    },
+                ))
             state = self._devices[device_id]
 
         now = time.time()
         if now - state.last_reclaim_time < self.config.min_interval_seconds:
-            return 0
+            return Ok(0)
 
         if self.config.custom_callback is not None:
             try:
                 reclaimed = self.config.custom_callback(device_id)
             except Exception as exc:
-                log.warning("custom reclaim callback failed",
-                            device=device_id, error=str(exc))
-                return 0
+                log.warning(
+                    "custom reclaim callback failed",
+                    device=device_id,
+                    error=str(exc),
+                )
+                return Err(CallbackError(
+                    f"custom reclaim callback raised: {exc}",
+                    cause=exc,
+                    context={"device_id": device_id},
+                ))
         else:
             try:
-                reclaimed = self._do_reclaim(device_id)
-            except DependencyMissingError:
-                # No introspection API for this vendor. Re-raise so
-                # the caller knows reclamation didn't actually happen.
-                raise
+                reclaim_result = self._do_reclaim(device_id)
+            except NautilusError as exc:
+                log.warning(
+                    "reclaim failed",
+                    device=device_id,
+                    code=exc.code.value,
+                    error=str(exc),
+                )
+                return Err(exc)
             except Exception as exc:
-                log.warning("reclaim raised", device=device_id, error=str(exc))
-                return 0
+                log.warning(
+                    "reclaim raised unexpected exception",
+                    device=device_id,
+                    error=str(exc),
+                )
+                return Err(HardwareProbeError(
+                    f"reclaim raised unexpected exception: {exc}",
+                    cause=exc,
+                    context={"device_id": device_id},
+                ))
+
+            if reclaim_result.is_err():
+                log.warning(
+                    "reclaim returned Err",
+                    device=device_id,
+                    code=reclaim_result.error.code.value,
+                    error=str(reclaim_result.error),
+                )
+                return reclaim_result
+            reclaimed = reclaim_result.unwrap()
 
         if self.config.max_reclaim_mb > 0:
             max_bytes = int(self.config.max_reclaim_mb * 1024 * 1024)
@@ -177,14 +229,17 @@ class MemoryReclaimer:
             total_reclaimed=state.total_reclaimed_bytes,
             watermark=state.usage_fraction,
         )
-        return reclaimed
+        return Ok(reclaimed)
 
-    def _do_reclaim(self, device_id: str) -> int:
+    def _do_reclaim(self, device_id: str) -> Result[int, NautilusError]:
         """Vendor-specific reclaim. Returns bytes actually freed.
 
-        Raises DependencyMissingError if no introspection API is
-        available for the vendor. This is the OPPOSITE of the
-        previous "silently return 0" behavior.
+        On success returns ``Ok(n)`` where n is the number of bytes
+        freed (n may be 0 if the allocator had nothing to release).
+        On any failure (unknown vendor, missing dependency, etc.)
+        returns ``Err(NautilusError)`` so callers can pattern-match
+        on the failure mode. This is the OPPOSITE of the previous
+        "silently return 0" behavior.
         """
         # CUDA
         if "cuda" in device_id:
@@ -198,28 +253,29 @@ class MemoryReclaimer:
         # Apple Metal
         if "metal" in device_id or "mtl" in device_id:
             return self._reclaim_apple(device_id)
-        raise HardwareProbeError(
+        return Err(HardwareProbeError(
             f"Unknown device vendor for {device_id!r}; cannot reclaim safely",
             context={"device_id": device_id},
-        )
+        ))
 
-    def _reclaim_cuda(self, device_id: str) -> int:
+    def _reclaim_cuda(self, device_id: str) -> Result[int, NautilusError]:
         """Reclaim CUDA memory via torch.cuda.memory_stats().
 
         Returns the change in `allocated_bytes.all.current` before
-        and after `empty_cache()`. If torch is missing or the device
-        is not CUDA, raises DependencyMissingError.
+        and after `empty_cache()`. Returns
+        ``Err(DependencyMissingError)`` if torch is missing or the
+        device is not CUDA.
         """
         try:
             import torch
         except ImportError as exc:
-            raise DependencyMissingError(
+            return Err(DependencyMissingError(
                 "torch is not installed; cannot reclaim CUDA memory",
-            ) from exc
+            ))
         if not torch.cuda.is_available():
-            raise HardwareNotFoundError(
+            return Err(HardwareNotFoundError(
                 f"CUDA not available; cannot reclaim {device_id}",
-            )
+            ))
         # Parse device index
         if ":" in device_id:
             idx = int(device_id.split(":")[-1])
@@ -236,14 +292,13 @@ class MemoryReclaimer:
         # The "reclaimed" is the difference in cached memory
         cached_before = stats_before.get("reserved_bytes.all.current", 0) - before
         cached_after = stats_after.get("reserved_bytes.all.current", 0) - after
-        return max(0, cached_before - cached_after)
+        return Ok(max(0, cached_before - cached_after))
 
-    def _reclaim_rocm(self, device_id: str) -> int:
+    def _reclaim_rocm(self, device_id: str) -> Result[int, NautilusError]:
         """Reclaim ROCm memory. PyTorch unifies the API."""
-        # The PyTorch API is the same as CUDA for ROCm
         return self._reclaim_cuda(device_id.replace("rocm:", "cuda:"))
 
-    def _reclaim_intel(self, device_id: str) -> int:
+    def _reclaim_intel(self, device_id: str) -> Result[int, NautilusError]:
         """Reclaim Intel GPU memory via Level Zero or torch.xpu."""
         try:
             import torch
@@ -256,30 +311,55 @@ class MemoryReclaimer:
                 after = stats_after.get("allocated_bytes.all.current", 0)
                 cached_before = stats_before.get("reserved_bytes.all.current", 0) - before
                 cached_after = stats_after.get("reserved_bytes.all.current", 0) - after
-                return max(0, cached_before - cached_after)
+                return Ok(max(0, cached_before - cached_after))
         except (ImportError, AttributeError) as exc:
-            raise DependencyMissingError(
+            return Err(DependencyMissingError(
                 "torch.xpu not available; cannot reclaim Intel GPU memory",
-            ) from exc
-        raise DependencyMissingError(
+            ))
+        return Err(DependencyMissingError(
             f"No Intel GPU memory API available for {device_id}",
-        )
+        ))
 
-    def _reclaim_apple(self, device_id: str) -> int:
-        """Reclaim Apple Metal memory. Metal doesn't have a Python API
-        for allocator introspection, so we shell out to `metal` tools
-        or return the size of explicitly-allocated buffers."""
-        if not platform.system() == "Darwin":
-            raise HardwareNotFoundError(
-                f"Apple Metal not available on {platform.system()}",
-            )
-        # Best-effort: use system_profiler to get Metal stats
-        if not shutil.which("system_profiler"):
-            raise DependencyMissingError(
-                "system_profiler not available; cannot reclaim Apple Metal memory",
-            )
-        # No atomic way to free; report cached memory as 0
-        return 0
+    def _reclaim_apple(self, device_id: str) -> Result[int, NautilusError]:
+        """Reclaim Apple Metal memory via ``torch.mps.empty_cache()``.
+
+        Returns the change in ``torch.mps.current_allocated_memory()``
+        before and after ``empty_cache()``. Returns
+        ``Err(DependencyMissingError)`` if torch, the MPS backend, or
+        the host platform is not available so the caller can surface a
+        loud, typed error rather than silently reporting 0 bytes.
+        """
+        if platform.system() != "Darwin":
+            return Err(DependencyMissingError(
+                f"Apple Metal not available on {platform.system()!r}",
+                context={"device_id": device_id, "platform": platform.system()},
+            ))
+        try:
+            import torch
+        except ImportError as exc:
+            return Err(DependencyMissingError(
+                "torch is not installed; cannot reclaim Apple Metal memory",
+            ))
+        if not hasattr(torch, "mps"):
+            return Err(DependencyMissingError(
+                "torch.mps is not available in this PyTorch build; cannot reclaim Apple Metal memory",
+                context={
+                    "device_id": device_id,
+                    "torch_version": getattr(torch, "__version__", "unknown"),
+                },
+            ))
+        if not torch.mps.is_available():
+            return Err(DependencyMissingError(
+                f"Apple MPS backend not available; cannot reclaim {device_id}",
+                context={"device_id": device_id},
+            ))
+        before = torch.mps.current_allocated_memory()
+        try:
+            torch.mps.empty_cache()
+        except Exception as exc:
+            log.warning("torch.mps.empty_cache raised", error=str(exc))
+        after = torch.mps.current_allocated_memory()
+        return Ok(max(0, before - after))
 
     def should_reclaim(self, device_id: str) -> bool:
         with self._lock:
@@ -300,11 +380,20 @@ class MemoryReclaimer:
                     devices = list(self._devices.keys())
                 for device_id in devices:
                     if self.should_reclaim(device_id):
-                        try:
-                            self.reclaim(device_id)
-                        except NautilusError as exc:
-                            log.warning("auto-reclaim failed",
-                                        device=device_id, error=str(exc))
+                        result = self.reclaim(device_id)
+                        if result.is_err():
+                            log.warning(
+                                "auto-reclaim failed",
+                                device=device_id,
+                                code=result.error.code.value,
+                                error=str(result.error),
+                            )
+                        else:
+                            log.info(
+                                "auto-reclaim",
+                                device=device_id,
+                                bytes=result.unwrap(),
+                            )
                 self._stop_auto_reclaim.wait(interval_seconds)
 
         self._auto_reclaim_thread = threading.Thread(
@@ -333,7 +422,7 @@ class MemoryReclaimer:
                 for device_id, state in self._devices.items()
             }
 
-    def reclaim_all(self) -> dict[str, int]:
+    def reclaim_all(self) -> dict[str, Result[int, NautilusError]]:
         with self._lock:
             device_ids = list(self._devices.keys())
         return {device_id: self.reclaim(device_id) for device_id in device_ids}

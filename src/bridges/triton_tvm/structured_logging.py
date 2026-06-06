@@ -24,7 +24,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger, get_stdlib_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -212,7 +214,7 @@ def configure_logging(
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
 
     # Get the bridge logger
-    bridge_logger = logging.getLogger("nvindia_cud")
+    bridge_logger = get_stdlib_logger("nvindia_cud")
     bridge_logger.setLevel(numeric_level)
     bridge_logger.handlers.clear()
 

@@ -138,6 +138,6 @@ The pattern is:
 
 ## Getting help
 
-- File an issue: https://github.com/nvindia-cud/nautilus/issues
+- File an issue: https://github.com/nvindia-cud/NVINDIA_CUD/issues
 - Check the docs: [docs/](.)
 - Run `nautilus verify` for environment diagnostics

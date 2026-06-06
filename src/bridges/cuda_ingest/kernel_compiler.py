@@ -18,15 +18,16 @@ Production features:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .parser import CudaParser, CudaKernel
+from src.common.logging import get_logger
+
+from .parser import CudaKernel, CudaParser
 from .translator import CudaToTritonTranslator, TranslationResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

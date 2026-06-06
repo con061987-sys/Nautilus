@@ -1,0 +1,103 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dockerfile.intel — Intel oneAPI 2025 build & runtime environment for Nautilus.
+#
+# Provides: oneAPI HPCKit (DPC++, SYCL, MKL, oneAPI Level Zero, OpenCL),
+#           PyTorch (XPU/SYCL wheels via pip extras), Triton, TVM MetaSchedule,
+#           XLA, dev tooling, and the full nautilus install.
+#
+# Build:   docker build -f Dockerfile.intel -t nautilus:intel .
+# Run:     docker run --rm --device=/dev/dri nautilus:intel nautilus verify
+#
+
+ARG UBUNTU_VERSION=22.04
+FROM intel/oneapi-hpckit:2025.0-devel-ubuntu${UBUNTU_VERSION} AS base
+
+# ---------------------------------------------------------------------------
+# System layer
+# ---------------------------------------------------------------------------
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# oneAPI base image already provides the Intel compiler toolchain at
+# /opt/intel/oneapi. Set it up via the official setvars.sh and add its
+# tools to PATH for subsequent RUN/CMD layers.
+SHELL ["/bin/bash", "-lc"]
+RUN echo 'source /opt/intel/oneapi/setvars.sh > /dev/null' >> /etc/profile.d/oneapi.sh
+
+ENV PATH=/opt/intel/oneapi/compiler/latest/bin:/opt/intel/oneapi/mkl/latest/bin:/opt/intel/oneapi/tbb/latest/bin:/opt/intel/oneapi/ipp/latest/bin:/opt/intel/oneapi/dpl/latest/bin:${PATH} \
+    LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/mkl/latest/lib/intel64:/opt/intel/oneapi/tbb/latest/lib/intel64/gcc4.8:/opt/intel/oneapi/ipp/latest/lib/intel64:${LD_LIBRARY_PATH}
+
+# System deps. The base image has the Intel toolchain; we still need
+# generic build tooling, git, and Python 3.10+ for Nautilus.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        gnupg \
+        wget \
+        build-essential \
+        cmake \
+        ninja-build \
+        pkg-config \
+        libssl-dev \
+        zlib1g-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libncursesw5-dev \
+        xz-utils \
+        tk-dev \
+        libxml2-dev \
+        libxmlsec1-dev \
+        libffi-dev \
+        liblzma-dev \
+        libgl1 \
+        libglib2.0-0 \
+        software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-dev \
+        python3.10-venv \
+        python3.10-distutils \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 100 \
+    && update-alternatives --install /usr/bin/python  python  /usr/bin/python3.10 100
+
+# Bootstrap pip.
+RUN curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py \
+    && python3 /tmp/get-pip.py \
+    && rm -f /tmp/get-pip.py
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
+WORKDIR /app
+
+COPY . .
+
+# Install Nautilus with every optional extra + dev tooling. The `intel` and
+# `all` extras pull in torch+triton; SYCL/XPU acceleration requires the
+# Intel-patched pip wheels to be installed in a separate step (kept out of
+# the generic `[all]` extra to avoid breaking non-Intel installs). For
+# Intel GPUs, follow the official intel-extension-for-pytorch install matrix.
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install -e ".[all,dev]"
+
+# Verify the oneAPI toolchain is visible.
+RUN source /opt/intel/oneapi/setvars.sh > /dev/null 2>&1 \
+    && (which icx || which icpx || which clang++ || echo 'no Intel C++ compiler in PATH') \
+    && python -c "import torch; print('torch', torch.__version__)" \
+    && python -c "import triton; print('triton', triton.__version__)" || true
+
+# ---------------------------------------------------------------------------
+# Healthcheck
+# ---------------------------------------------------------------------------
+HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
+    CMD bash -lc 'source /etc/profile.d/oneapi.sh >/dev/null 2>&1; nautilus verify' || exit 1
+
+CMD ["bash", "-lc", "source /etc/profile.d/oneapi.sh >/dev/null 2>&1; exec \"$@\"", "--"]

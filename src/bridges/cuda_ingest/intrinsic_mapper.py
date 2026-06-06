@@ -15,7 +15,7 @@ ed CUDA intrinsics supported:
   Synchronization:
     - __syncthreads() → tl.barrier()
     - __syncwarp() → no-op (Triton manages warp scheduling)
-    - __threadfence() → tl.debug_barrier()
+    - __threadfence() → tl.barrier()
 
   Atomics:
     - atomicAdd → tl.atomic_add
@@ -46,13 +46,14 @@ Production features:
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Callable
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class IntrinsicCategory(Enum):
@@ -147,14 +148,14 @@ class IntrinsicMapper:
         ))
         self._register(IntrinsicMapping(
             cuda_name="__syncwarp()",
-            triton_name="# tl.syncwarp not directly supported; using tl.debug_barrier()",
+            triton_name="# tl.syncwarp not directly supported; using tl.barrier()",
             category=IntrinsicCategory.SYNCHRONIZATION,
             is_exact=False,
             notes="Triton manages warp scheduling internally; no explicit sync needed",
         ))
         self._register(IntrinsicMapping(
             cuda_name="__threadfence()",
-            triton_name="tl.debug_barrier()",
+            triton_name="tl.barrier()",
             category=IntrinsicCategory.SYNCHRONIZATION,
             is_exact=False,
         ))
@@ -251,13 +252,39 @@ class IntrinsicMapper:
         This is a best-effort text transformation. For complex
         intrinsics that need AST-level handling, the translator
         calls the specific transform methods.
+
+        The block-linearization pass runs FIRST so the canonical
+        `blockIdx.d * blockDim.d + threadIdx.d` pattern is rewritten
+        in one step, before the per-field replacements run.  This
+        matches the AST-level pass in `translator._apply_block_linearization`
+        and ensures the CPU (fallback) path produces identical output
+        to the AST (GPU) path.
         """
         result = cuda_source
+
+        # Block linearization. The backreference \1 forces all three dim
+        # letters to match; mixed-dim expressions fall through to the
+        # per-field pass below. This mirrors translator._apply_block_linearization.
+        def _block_repl(match: "re.Match[str]") -> str:
+            dim = match.group(1)
+            dim_idx = {"x": 0, "y": 1, "z": 2}[dim]
+            return (
+                f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx})"
+                f" + tl.program_id({dim_idx})"
+            )
+        result = re.sub(
+            r'blockIdx\.([xyz])\s*\*\s*blockDim\.\1\s*\+\s*threadIdx\.\1',
+            _block_repl, result,
+        )
 
         # Replace __syncthreads()
         result = result.replace("__syncthreads()", "tl.barrier()")
         result = result.replace("__syncwarp()", "# tl.syncwarp removed (Triton manages warps)")
-        result = result.replace("__threadfence()", "tl.debug_barrier()")
+        result = result.replace("__threadfence()", "tl.barrier()")
+
+        # C++11 rvalue cast: `std::move(x)` → `x`. The \b anchor prevents
+        # matching names like `mystd::move`.
+        result = re.sub(r'\bstd::move\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)', lambda m: m.group(1).strip(), result)
 
         # Replace math functions (order matters: longer names first)
         for cuda_fn in ["exp2f", "log2f", "sqrtf", "rsqrtf", "sinf", "cosf",

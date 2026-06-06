@@ -29,12 +29,13 @@ Production features:
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -80,9 +81,9 @@ class SharedMemoryAnalyzer:
         # Use plan.allocations, plan.total_static_bytes, etc.
     """
 
-    # Pattern for __shared__ declarations
+    # Pattern for __shared__ declarations (supports multi-dimensional arrays)
     SHARED_DECL_RE = re.compile(
-        r'__shared__\s+(\w+(?:\s*\*)?)\s+(\w+)\s*\[([^\]]*)\]\s*;',
+        r'__shared__\s+(\w+(?:\s*\*)?)\s+(\w+)((?:\s*\[[^\]]*\])+)\s*;',
     )
 
     def analyze(self, kernel: Any) -> SharedMemPlan:
@@ -121,10 +122,13 @@ class SharedMemoryAnalyzer:
         if not type_str or not name:
             return None
 
-        # Extract the array size from the raw declaration
-        # Pattern: __shared__ TYPE NAME[SIZE];
-        match = re.search(rf'{re.escape(name)}\s*\[([^\]]*)\]', raw)
-        if not match:
+        # Extract ALL [SIZE] dimensions for multi-dimensional arrays.
+        # Pattern: __shared__ TYPE NAME[D1][D2]...[DN];
+        # Total size is the product of all dimensions.
+        head_match = re.search(
+            rf'{re.escape(name)}((?:\s*\[[^\]]*\])+)', raw,
+        )
+        if not head_match:
             return SharedMemAllocation(
                 name=name,
                 element_type=type_str,
@@ -133,12 +137,17 @@ class SharedMemoryAnalyzer:
                 raw_declaration=raw,
             )
 
-        size_str = match.group(1).strip()
-        if size_str.isdigit():
+        size_strs = [
+            s.strip() for s in re.findall(r'\[([^\]]*)\]', head_match.group(1))
+        ]
+        if all(s.isdigit() for s in size_strs):
+            total_size = 1
+            for s in size_strs:
+                total_size *= int(s)
             return SharedMemAllocation(
                 name=name,
                 element_type=type_str,
-                array_size=int(size_str),
+                array_size=total_size,
                 is_static=True,
                 raw_declaration=raw,
             )

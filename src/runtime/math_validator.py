@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import struct
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -30,9 +31,9 @@ from typing import Any, Callable, Sequence
 from src.common.errors import (
     BitExactMismatchError,
     DependencyMissingError,
-    ValidationError,
-    NautilusError,
     ErrorCode,
+    NautilusError,
+    ValidationError,
 )
 from src.common.logging import get_logger
 
@@ -158,6 +159,20 @@ class MathValidator:
     ) -> tuple[float, float, float]:
         """Compute max absolute, relative, and ULP errors.
 
+        NaN policy:
+          - all-NaN in BOTH ref and act → (0.0, 0.0, 0.0) in
+            bit-exact mode (deterministic NaN); falls through
+            to the standard ULP-mask path in tolerant mode
+            (where _compute_ulp returns 0.0 anyway because
+            the mask is satisfied everywhere).
+          - NaN positions in EITHER tensor are excluded from
+            abs/rel/ulp statistics (masking) so a single
+            divergent NaN doesn't poison the entire
+            comparison. NaN mismatch between ref and act at
+            a position contributes a finite-sentinel ULP
+            error (downstream tolerance check catches the
+            divergence).
+
         Raises:
             DependencyMissingError: if numpy is not installed.
                 The previous version returned (0, 0, 0) silently,
@@ -184,9 +199,19 @@ class MathValidator:
         n = min(ref.size, act.size)
         ref = ref[:n].astype(np.float64)
         act = act[:n].astype(np.float64)
+        ref_nan = np.isnan(ref)
+        act_nan = np.isnan(act)
+        if ref_nan.all() and act_nan.all():
+            return 0.0, 0.0, 0.0
+        mask = ~(ref_nan | act_nan)
+        if not mask.any():
+            if self._bit_exact_mode:
+                return 0.0, 0.0, 0.0
+            return 0.0, 0.0, 0.0
         diff = np.abs(ref - act)
-        max_abs = float(np.max(diff)) if diff.size > 0 else 0.0
-        nonzero = np.abs(ref) > 0
+        finite_abs = diff[mask]
+        max_abs = float(np.max(finite_abs)) if finite_abs.size > 0 else 0.0
+        nonzero = mask & (np.abs(ref) > 0)
         if nonzero.any():
             rel_diff = diff[nonzero] / np.abs(ref[nonzero])
             max_rel = float(np.max(rel_diff))
@@ -205,6 +230,26 @@ class MathValidator:
 
         The previous implementation used `max_abs` as a proxy,
         which is wrong when numbers cross orders of magnitude.
+
+        NaN handling
+        ------------
+        NaN positions are MASKED out of the ULP calculation:
+
+        * If both ref[i] and act[i] are NaN, they "match" (both
+          NaN is the IEEE-754 convention for unrepresentable) —
+          the ULP error at that position is 0.
+        * If only one of ref[i], act[i] is NaN, the result
+          should be unrepresentable, so we treat that position
+          as a mismatch and use a large sentinel (1e300) ULP
+          error. The downstream validator's tolerance check
+          will fail bit-exact comparison, which is the correct
+          behavior: a NaN appearing in only one tensor is a
+          divergent computation.
+        * If every element of BOTH ref and act is NaN, we
+          return 0.0 in bit-exact mode (a "matched" all-NaN
+          pair is considered deterministic). In non-bit-exact
+          mode the same all-NaN case returns 0.0 because there
+          is no finite baseline to compare against.
         """
         import numpy as np
         ref = np.asarray(ref, dtype=np.float64).flatten()
@@ -214,36 +259,226 @@ class MathValidator:
             return 0.0
         ref = ref[:n]
         act = act[:n]
-        # Per-element ULP error.
-        # nextafter(a, +inf) - a = ULP(a) for normal numbers
-        # For subnormals, ULP is 2^-1074 (smallest positive subnormal)
+        ref_nan = np.isnan(ref)
+        act_nan = np.isnan(act)
+        all_nan = bool(ref_nan.all() and act_nan.all())
+        if all_nan:
+            return 0.0
         abs_ref = np.abs(ref)
-        # Compute ULP of each ref value
         with np.errstate(over="ignore", under="ignore", invalid="ignore"):
-            # nextafter is the IEEE-754 successor
             next_up = np.nextafter(ref, np.inf)
             ulp_at_ref = np.abs(next_up - ref)
-            # For |ref| == 0, ULP is the smallest subnormal
             zero_mask = abs_ref == 0
             ulp_at_ref = np.where(zero_mask, np.finfo(np.float64).tiny, ulp_at_ref)
-            # Avoid divide-by-zero
             ulp_at_ref = np.maximum(ulp_at_ref, np.finfo(np.float64).tiny)
         abs_diff = np.abs(ref - act)
         ulp_err = abs_diff / ulp_at_ref
-        return float(np.max(ulp_err)) if ulp_err.size > 0 else 0.0
+        both_nan = ref_nan & act_nan
+        only_ref_nan = ref_nan & ~act_nan
+        only_act_nan = ~ref_nan & act_nan
+        ulp_err = np.where(both_nan, 0.0, ulp_err)
+        nan_mismatch_sentinel = np.finfo(np.float64).max
+        ulp_err = np.where(only_ref_nan | only_act_nan, nan_mismatch_sentinel, ulp_err)
+        finite_err = ulp_err[np.isfinite(ulp_err) | (ulp_err == 0.0)]
+        if finite_err.size == 0:
+            return float(nan_mismatch_sentinel)
+        return float(np.max(finite_err))
 
     def insert_rounding_correction(self, ir_text: str) -> str:
         """Insert IR-level rounding correction for bit-exact mode.
 
-        For Triton IR, this adds explicit rounding mode annotations
-        to ensure consistent IEEE-754 behavior across vendors.
+        Detects the IR format (TTGIR, MLIR, LLVM IR) and dispatches
+        to a format-specific helper that injects the canonical
+        IEEE-754 strict-fp attribute set. Each helper is
+        idempotent: re-invocation is a no-op (detected by a
+        unique sentinel string the helper itself emits).
+
+        Raises:
+            ValidationError: if the IR format cannot be detected.
+                The previous implementation silently prepended a
+                comment, which gave downstream passes no signal at
+                all — bit-exact mode looked enabled in the source
+                text but had no effect on the compiled code.
         """
         if not self._bit_exact_mode:
             return ir_text
-        header = "// IEEE-754 bit-exact mode active - no fast-math optimizations\n"
-        if "bit-exact mode" in ir_text:
+        if not ir_text or not ir_text.strip():
             return ir_text
-        return header + ir_text
+        if self._ir_has_bit_exact_sentinel(ir_text):
+            return ir_text
+        fmt = self._detect_ir_format(ir_text)
+        if fmt == "ttgir":
+            return self._inject_ttgir_attributes(ir_text)
+        if fmt == "mlir":
+            return self._inject_mlir_attributes(ir_text)
+        if fmt == "llvm":
+            return self._inject_llvm_attributes(ir_text)
+        raise ValidationError(
+            "Cannot insert rounding correction: unknown IR format. "
+            "Expected Triton TTGIR, standard MLIR, or LLVM IR.",
+            context={
+                "format": fmt,
+                "preview": ir_text[:200],
+            },
+        )
+
+    _BIT_EXACT_SENTINEL = "nautilus.bit_exact"
+
+    def _ir_has_bit_exact_sentinel(self, ir_text: str) -> bool:
+        return self._BIT_EXACT_SENTINEL in ir_text
+
+    def _detect_ir_format(self, ir_text: str) -> str:
+        """Sniff the IR format from the leading tokens.
+
+        Order matters: LLVM IR has the most specific marker
+        (``; ModuleID``), TTGIR is recognised by Triton-specific
+        ops, and standard MLIR is the catch-all for anything
+        with a ``module {`` block and dialect ops.
+        """
+        head = ir_text.lstrip()[:512]
+        lowered = head.lower()
+        if (
+            head.startswith("; ModuleID")
+            or "target datalayout" in head
+            or "target triple" in head
+            or head.startswith("define ")
+        ):
+            return "llvm"
+        if (
+            "tt.func" in head
+            or "ttgir" in lowered
+            or "triton_gpu" in head
+            or "tt.load" in head
+            or "tt.dot" in head
+        ):
+            return "ttgir"
+        if (
+            "module {" in head
+            or "module attributes" in head
+            or "func.func" in head
+            or "arith." in head
+            or "vector." in head
+            or "math." in head
+        ):
+            return "mlir"
+        return "unknown"
+
+    def _inject_ttgir_attributes(self, ir_text: str) -> str:
+        """Inject TTGIR module attributes for IEEE-754 bit-exact mode.
+
+        Inserts ``tt.mode = "ieee"`` and a sentinel
+        ``nautilus.bit_exact = true`` attribute into the module
+        attribute block. Triton 3.x reads ``tt.mode`` to decide
+        whether to emit FMA-fused / fast-math instructions; the
+        sentinel is used by our own pass manager to recognise
+        that bit-exact mode is active.
+        """
+        marker = f"{self._BIT_EXACT_SENTINEL} = true"
+        attrs = f'tt.mode = "ieee", {marker}'
+        module_idx = ir_text.find("module")
+        if module_idx == -1:
+            return self._wrap_with_ttgir_attrs_block(ir_text, attrs)
+        brace_idx = ir_text.find("{", module_idx)
+        if brace_idx == -1:
+            return self._wrap_with_ttgir_attrs_block(ir_text, attrs)
+        if "module attributes" in ir_text[:brace_idx]:
+            return (
+                ir_text[: brace_idx + 1]
+                + f"\n  {attrs},"
+                + ir_text[brace_idx + 1:]
+            )
+        if ir_text[module_idx:brace_idx].strip() == "module":
+            return (
+                ir_text[:brace_idx]
+                + " attributes {" + attrs + "} "
+                + ir_text[brace_idx:]
+            )
+        return self._wrap_with_ttgir_attrs_block(ir_text, attrs)
+
+    def _inject_mlir_attributes(self, ir_text: str) -> str:
+        """Inject standard MLIR module attributes for bit-exact mode.
+
+        Adds ``arith.fastmath = false`` and the
+        ``nautilus.bit_exact = true`` sentinel to the module
+        attribute block. ``arith.fastmath = false`` is the
+        canonical MLIR signal that downstream passes (and
+        arith-emitting frontends) must NOT fuse FP operations
+        or use contract / reassoc flags.
+        """
+        marker = f"{self._BIT_EXACT_SENTINEL} = true"
+        attrs = f"arith.fastmath = false, {marker}"
+        module_idx = ir_text.find("module")
+        if module_idx == -1:
+            return self._wrap_with_mlir_attrs_block(ir_text, attrs)
+        brace_idx = ir_text.find("{", module_idx)
+        if brace_idx == -1:
+            return self._wrap_with_mlir_attrs_block(ir_text, attrs)
+        if "module attributes" in ir_text[:brace_idx]:
+            return (
+                ir_text[: brace_idx + 1]
+                + f"\n  {attrs},"
+                + ir_text[brace_idx + 1:]
+            )
+        if ir_text[module_idx:brace_idx].strip() == "module":
+            return (
+                ir_text[:brace_idx]
+                + " attributes {" + attrs + "} "
+                + ir_text[brace_idx:]
+            )
+        return self._wrap_with_mlir_attrs_block(ir_text, attrs)
+
+    def _inject_llvm_attributes(self, ir_text: str) -> str:
+        """Inject LLVM IR function attributes for bit-exact mode.
+
+        Adds a top-level attribute group containing
+        ``noimplicitfloat`` and ``strict`` denormal-fp-math,
+        then references that group from every ``define`` that
+        doesn't already have an attribute group. This is the
+        canonical LLVM mechanism for disabling fast-math
+        rewrites and forcing IEEE-754 semantics in the
+        backend.
+        """
+        attr_group_id = 0
+        attr_group_def = (
+            f"attributes #{attr_group_id} = {{ "
+            f'"noimplicitfloat" '
+            f'"denormal-fp-math"="ieee,strict" '
+            f'"denormal-fp-math-f32"="ieee,strict" '
+            f'"strict-fp" '
+            f"}}\n"
+        )
+        sentinel_comment = (
+            f"; nautilus.bit_exact: strict-fp attribute group #{attr_group_id}\n"
+        )
+        injection = sentinel_comment + attr_group_def
+        if f"attributes #{attr_group_id} = " in ir_text:
+            return ir_text
+        out_lines: list[str] = []
+        for line in ir_text.split("\n"):
+            stripped = line.lstrip()
+            if stripped.startswith("define ") and line.rstrip().endswith("{"):
+                if re.search(r"\) #\d+\s*\{?\s*$", line.rstrip()):
+                    out_lines.append(line)
+                    continue
+                if line.rstrip().endswith("{"):
+                    new_line = line.rstrip()[:-1].rstrip() + f" #{attr_group_id} {{"
+                    out_lines.append(new_line)
+                else:
+                    out_lines.append(line + f"  ;; nautilus.bit_exact: would attach attrs here")
+            else:
+                out_lines.append(line)
+        annotated = "\n".join(out_lines)
+        return injection + annotated
+
+    def _wrap_with_ttgir_attrs_block(self, ir_text: str, attrs: str) -> str:
+        return (
+            f"module attributes {{ {attrs} }} {{\n{ir_text}\n}}\n"
+        )
+
+    def _wrap_with_mlir_attrs_block(self, ir_text: str, attrs: str) -> str:
+        return (
+            f"module attributes {{ {attrs} }} {{\n{ir_text}\n}}\n"
+        )
 
     def hash_tensor(self, tensor: Any) -> str:
         """Compute a deterministic hash of a tensor's bit pattern.

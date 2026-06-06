@@ -12,8 +12,9 @@ TVMBackend; together they form the full out-of-tree backend.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+from src.common.logging import get_logger
 
 try:
     from triton.runtime.driver import DriverBase
@@ -23,7 +24,7 @@ except ImportError:
     class DriverBase:  # type: ignore
         def __init__(self, *a: Any, **kw: Any) -> None: ...
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TVMDriver(DriverBase):
@@ -126,8 +127,8 @@ class TVMDriver(DriverBase):
         Used by Triton to determine the backend for compilation.
         """
         try:
-            from triton.backends.compiler import GPUTarget
             import torch
+            from triton.backends.compiler import GPUTarget
             if torch.cuda.is_available():
                 cap = torch.cuda.get_device_capability()
                 arch = cap[0] * 10 + cap[1]

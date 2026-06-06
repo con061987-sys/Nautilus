@@ -16,13 +16,14 @@ a real TVM IRModule that MetaSchedule can consume".
 
 from __future__ import annotations
 
-import logging
 import sys
 import traceback
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 try:
     import tvm

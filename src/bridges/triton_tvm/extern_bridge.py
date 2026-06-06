@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 import subprocess
 import tempfile
@@ -31,17 +30,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.common.logging import get_logger
+
 try:
+    import tvm
     from tvm.script import tirx as T
     from tvm.tirx import PrimFunc
-    import tvm
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
 
+from src.common.errors import DependencyMissingError
+
 from .ir_capture import IRBounds, KernelKind
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -302,26 +305,36 @@ def {name}(A, B):
             source_file = Path(f.name)
 
         try:
-            # Use Triton's AOT compile to produce the target binary
+            # Use Triton's AOT compile to produce the target binary.
             # This requires Triton with the relevant backend installed
+            # (AOTriton for AMD, Triton CPU/cuda hooks, etc.). If the
+            # backend is missing or the compile fails we surface a
+            # typed DependencyMissingError — never silently fall back
+            # to a non-existent touch-file (the previous behaviour
+            # produced confusing downstream errors when downstream
+            # code tried to load the empty placeholder).
             self._run_triton_aot(
                 source_file=source_file,
                 output_path=output_path,
                 target=target,
             )
             return output_path
+        except DependencyMissingError:
+            raise
         except Exception as exc:
-            logger.warning(
-                "Triton AOT compile failed (%s); falling back to JIT cache path",
-                exc,
-            )
-            # Fall back: point to the JIT cache location where the
-            # binary will be produced on first run
-            jit_cache = Path.home() / ".triton" / "cache"
-            jit_cache.mkdir(parents=True, exist_ok=True)
-            fallback = jit_cache / f"{name}_{source_hash}.{target_ext}"
-            fallback.touch()
-            return fallback
+            raise DependencyMissingError(
+                message=(
+                    f"Triton AOT compile failed for target={target!r} "
+                    f"(name={name!r}): {exc}. Install the matching "
+                    "Triton backend / AOTriton and retry."
+                ),
+                cause=exc,
+                context={
+                    "target": target,
+                    "name": name,
+                    "source_hash": source_hash,
+                },
+            ) from exc
         finally:
             source_file.unlink(missing_ok=True)
 
@@ -356,9 +369,10 @@ def {name}(A, B):
 
         # Fallback: use triton.compile via Python
         try:
+            import importlib.util
+
             import triton
             import triton.language as tl
-            import importlib.util
             spec = importlib.util.spec_from_file_location("kernel_mod", source_file)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
@@ -383,18 +397,25 @@ def {name}(A, B):
             grid = (1,)
             kernel_fn[grid](A, B, A, 128, 128, 128, 128, 1, 128, 1, 128, 1)
 
-            # Triton will have cached the binary
-            # Locate and copy
-            import shutil
-            triton_cache = Path.home() / ".triton" / "cache"
-            if triton_cache.exists():
-                # Find the most recent binary
-                for ext in ("cubin", "hsaco", "spv", "bin"):
-                    for binary in triton_cache.rglob(f"*.{ext}"):
-                        shutil.copy(binary, output_path)
-                        return
+            # Do NOT rglob-copy from ~/.triton/cache/ — filenames are
+            # hash-derived and shared with other kernels in the same
+            # process, so a glob would silently pick a stale/unrelated
+            # binary. Fail loudly instead.
+            raise RuntimeError(
+                "Triton JIT cached the binary but its filename is not "
+                "predictable; AOT compile paths are required for the "
+                "extern bridge."
+            )
         except Exception as exc:
-            raise RuntimeError(f"All AOT compile paths failed: {exc}")
+            raise DependencyMissingError(
+                message=(
+                    f"All AOT compile paths failed: {exc}. "
+                    "Install the matching Triton backend / AOTriton "
+                    "and retry."
+                ),
+                cause=exc,
+                context={"source_file": str(source_file), "target": target},
+            ) from exc
 
 
 def _triton_dtype(dtype: str) -> str:

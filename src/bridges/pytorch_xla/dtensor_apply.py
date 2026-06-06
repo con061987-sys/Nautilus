@@ -16,24 +16,25 @@ This module bridges GSPMD's sharding output to DTensor's API.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+from src.common.logging import get_logger
 
 try:
     import torch
     import torch.distributed as dist
     from torch.distributed._tensor import (
-        DTensor,
         DeviceMesh,
-        Shard,
+        DTensor,
         Replicate,
+        Shard,
     )
     DTENSOR_AVAILABLE = True
 except ImportError:
     DTENSOR_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -128,7 +129,7 @@ class DTensorApplier:
         Returns a tuple of placements (one per mesh dim) or None
         if the tensor isn't in the sharding spec.
         """
-        from .gspmd_runner import TensorSharding, ShardingSpec
+        from .gspmd_runner import ShardingSpec, TensorSharding
 
         # Find the tensor in the sharding spec
         tensor_sharding: TensorSharding | None = None
@@ -180,8 +181,7 @@ class DTensorApplier:
                     list(placement),
                     run_check=False,
                 )
-                # Replace the parameter
-                param.data = dtensor.to_local()  # For now, keep local
+                param.data = dtensor
         except Exception as exc:
             logger.warning("apply_to_model failed: %s", exc)
         return model

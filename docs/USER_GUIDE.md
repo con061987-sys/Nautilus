@@ -23,7 +23,7 @@ Nautilus takes standard PyTorch model code and:
 ### Option 1: One-command install (recommended)
 
 ```bash
-git clone https://github.com/nvindia-cud/nautilus
+git clone https://github.com/nvindia-cud/NVINDIA_CUD
 cd nautilus
 ./scripts/setup-cuda.sh    # or setup-rocm.sh for AMD dev
 ```

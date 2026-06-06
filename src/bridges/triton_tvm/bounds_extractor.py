@@ -11,13 +11,14 @@ relying on Python-level metadata.
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any
 
+from src.common.logging import get_logger
+
 from .ir_capture import IRBounds, KernelKind
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BoundsExtractor:

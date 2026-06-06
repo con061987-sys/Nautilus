@@ -6,16 +6,15 @@ from pathlib import Path
 
 import pytest
 
+from src.bridges.aot_packager.amd_backend import AMDArch
 from src.bridges.aot_packager.builder import (
     FatBinaryBuilder,
     FatBinaryConfig,
     FatBinaryResult,
 )
-from src.bridges.aot_packager.amd_backend import AMDArch
+from src.bridges.aot_packager.hardware_validator import ValidationMode
 from src.bridges.aot_packager.intel_backend import IntelTarget
 from src.bridges.aot_packager.nvidia_backend import NvidiaArch
-from src.bridges.aot_packager.hardware_validator import ValidationMode
-
 
 SAMPLE_KERNEL = '''
 import triton

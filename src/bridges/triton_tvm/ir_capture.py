@@ -16,14 +16,17 @@ Architecture:
 from __future__ import annotations
 
 import hashlib
-import logging
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+from .backend import CAPTURE_KEY_FMT
+
+logger = get_logger(__name__)
 
 
 class KernelKind(Enum):
@@ -114,8 +117,8 @@ class IRCapture:
 
     def __init__(self) -> None:
         # Lazy import to avoid circular dependency
-        from .ir_classifier import IRClassifier
         from .bounds_extractor import BoundsExtractor
+        from .ir_classifier import IRClassifier
         self.classifier = IRClassifier()
         self.extractor = BoundsExtractor()
         self._last_processed: dict[str, CapturedKernelIR] = {}
@@ -134,25 +137,24 @@ class IRCapture:
         start = time.perf_counter()
         buffer = TVMBackend.get_capture_buffer()
 
-        # Find the latest ttgir capture for this source/target
-        prefix = f"hook_ttgir:{source_hash[:16]}:{source_hash[:16]}"
-        # Or look up by metadata-derived key
+        # Build the exact lookup prefix from the shared format. Writers
+        # (hooks.py, compiler.py) store entries as
+        #   nautilus:ttgir:{source_hash[:16]}:{kernel_name}
+        # We match on the hash portion, since the kernel name is not
+        # passed in by the caller. Using the same format string
+        # guarantees writers and readers stay in lockstep.
+        key_prefix = CAPTURE_KEY_FMT.format(
+            source_hash=source_hash[:16],
+            kernel_name="",
+        )
+
         ir_text: str | None = None
         stage_name = "ttgir"
 
         for key, value in buffer.items():
-            if source_hash[:16] in key and "ttgir" in key:
+            if key.startswith(key_prefix):
                 ir_text = value
-                stage_name = "ttgir"
                 break
-
-        if ir_text is None:
-            # Try the wrapped-stage key format
-            for key, value in buffer.items():
-                if source_hash in key and "ttgir" in key:
-                    ir_text = value
-                    stage_name = "ttgir"
-                    break
 
         if ir_text is None:
             return None

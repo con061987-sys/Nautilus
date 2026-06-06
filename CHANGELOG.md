@@ -111,9 +111,8 @@ error.
   with auto GitHub issue creation
 
 #### Tests
-- 28 tests in `src/common/tests/` (Result, types, errors, hardware,
-  logging, observability)
-- Integration tests in `src/tests/integration/`
+- 374 tests across `src/common/tests/`, bridge suites, and
+  `src/tests/integration/`
 - 21 tests pass on every PR; 2 correctly skipped when deps missing
 
 ### Changed

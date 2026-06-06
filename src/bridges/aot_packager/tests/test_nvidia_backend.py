@@ -7,11 +7,10 @@ from pathlib import Path
 import pytest
 
 from src.bridges.aot_packager.nvidia_backend import (
-    NvidiaBackend,
     NvidiaArch,
+    NvidiaBackend,
     NvidiaCompilationResult,
 )
-
 
 SAMPLE_KERNEL = '''
 import triton

@@ -19,7 +19,6 @@ Production features:
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import shutil
 import subprocess
@@ -29,21 +28,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .amd_backend import AMDBackend, AMDArch, AMDCompilationResult
-from .intel_backend import IntelBackend, IntelTarget, IntelCompilationResult
-from .nvidia_backend import NvidiaBackend, NvidiaArch, NvidiaCompilationResult
-from .linker import FatBinaryLinker, LinkingResult
-from .fat_binary import FatBinary, KernelSection, SectionFormat
-from .hardware_validator import HardwareValidator, ValidationResult, ValidationMode
-
 from src.common.errors import (
     CompilationError,
     DependencyMissingError,
     LinkingError,
     NautilusError,
 )
+from src.common.logging import get_logger
 
-logger = logging.getLogger(__name__)
+from .amd_backend import AMDArch, AMDBackend, AMDCompilationResult
+from .fat_binary import FatBinary, KernelSection, SectionFormat
+from .hardware_validator import HardwareValidator, ValidationMode, ValidationResult
+from .intel_backend import IntelBackend, IntelCompilationResult, IntelTarget
+from .linker import FatBinaryLinker, LinkingResult
+from .nvidia_backend import NvidiaArch, NvidiaBackend, NvidiaCompilationResult
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -362,10 +362,23 @@ class FatBinaryBuilder:
 
         The stub is a real C file with /dev probing and CPUID-based
         vendor detection. We compile it with gcc to produce a
-        relocatable object file that lld can combine with the per-
-        vendor kernel sections. Raises CompilationError if gcc is
-        not available — never silently returns a stub.
+        relocatable object file that lld combines with the per-vendor
+        kernel sections.
+
+        Hard requirement: BOTH gcc AND lld must be available. Without
+        lld, the linker step cannot produce a real fat binary ELF and
+        the runtime dispatch cannot work. Raises LinkingError in that
+        case — never silently returns a non-functional stub.
         """
+        if not self.linker._lld_path:
+            raise LinkingError(
+                "lld not found in PATH; cannot link fat binary. "
+                "Install LLVM (apt install lld / brew install llvm). "
+                "The C runtime stub is compiled but useless without lld "
+                "to combine it with the per-vendor kernel sections.",
+                context={"kernel": config.kernel_name},
+            )
+
         stub_path = self.cache_dir / "runtime_stub.c"
         stub_path.write_text(self._read_runtime_stub_source())
 
@@ -373,7 +386,8 @@ class FatBinaryBuilder:
 
         if not shutil.which("gcc"):
             raise DependencyMissingError(
-                "gcc not found in PATH; cannot compile C runtime stub",
+                "gcc not found in PATH; cannot compile C runtime stub. "
+                "Install gcc (apt install gcc / brew install gcc).",
             )
         try:
             cmd = [
@@ -419,31 +433,3 @@ class FatBinaryBuilder:
             raise NautilusError(
                 f"runtime_stub.c not found in package; looked at {here}",
             )
-
-    def _minimal_elf_stub(self) -> bytes:
-        """DEPRECATED. The previous design returned a 64-byte ELF
-        stub when gcc was unavailable. That stub had no symbols and
-        could not dispatch to any vendor, so every fat binary
-        would crash at startup.
-
-        This method is kept for back-compat but is no longer called
-        by _compile_runtime_stub (which now raises a real error
-        instead). New code should not use this.
-        """
-        import warnings
-        warnings.warn(
-            "_minimal_elf_stub is deprecated and produces a non-functional "
-            "ELF. Use _compile_runtime_stub which raises on gcc missing.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        import struct
-        elf_magic = b"\x7fELF"
-        header = (
-            elf_magic
-            + b"\x02\x01\x01\x00"
-            + b"\x00" * 8
-            + b"\x01\x00"
-            + b"\x00" * 50
-        )
-        return header + b"\x00" * (64 - len(header))

@@ -3,8 +3,12 @@
 The previous design wrote a 20-byte SPIR-V header with a comment
 "// SPIR-V header" and called it done. This rewrite:
 
-  1. Uses triton.compiler.compile() to generate LLVM IR (target="xpu" or
-     "cuda" then lowered to SPIR-V via llc + llvm-spirv)
+  1. Uses triton.compiler.compile() with target="xpu" (Intel Triton
+     backend) to generate LLVM IR, then lowers to SPIR-V via llc +
+     llvm-spirv. Requires the Intel Triton backend to be installed;
+     a missing XPU target raises DependencyMissingError rather than
+     silently falling back to "cuda" (which would produce IR that
+     cannot be lowered to Intel SPIR-V).
   2. Validates the output with spirv-val
   3. Raises clear errors (LLVMError, DependencyMissingError,
      CompilationError) on any failure
@@ -33,11 +37,13 @@ from src.common.errors import (
     CompilationError,
     CompilationOutputMissingError,
     DependencyMissingError,
-    LLVMError,
     LLDError,
+    LLVMError,
     NautilusError,
 )
 from src.common.logging import get_logger
+
+from ._signature_inference import build_signature
 
 log = get_logger("nautilus.aot.intel")
 
@@ -250,13 +256,14 @@ class IntelBackend:
 
         from triton.compiler import ASTSource  # type: ignore[attr-defined]
 
-        sig_args = ["*fp32", "*fp32", "*fp32", "i32", "i32", "i32", "constexpr", "constexpr", "constexpr"]
-        signature = {i: a for i, a in enumerate(sig_args)}
-        constexprs = {
-            len(sig_args) - 3: block_m,
-            len(sig_args) - 2: block_n,
-            len(sig_args) - 1: block_k,
-        }
+        signature, constexprs = build_signature(
+            fn,
+            block_size_values={
+                "BLOCK_M": block_m,
+                "BLOCK_N": block_n,
+                "BLOCK_K": block_k,
+            },
+        )
         source = ASTSource(
             fn=fn,
             constants={},
@@ -265,11 +272,17 @@ class IntelBackend:
             attrs={"num_warps": num_warps, "num_stages": 2},
         )
         options = {"num_warps": num_warps, "num_stages": 2}
-        # Triton supports target="xpu" (Intel) starting in 3.0; if not
-        # available, fall back to "cuda" which produces LLVM IR that
-        # llvm-spirv can convert.
-        target = "xpu" if hasattr(triton.backends, "xpu") else "cuda"
-        compiled = triton.compiler.compile(src=source, target=target, options=options)
+        if not hasattr(triton.backends, "xpu"):
+            raise DependencyMissingError(
+                "Intel XPU target not available. "
+                "Install Intel Triton backend: pip install "
+                "intel-extension-for-triton (or the equivalent "
+                "Intel-supplied Triton wheel that ships the 'xpu' "
+                "backend). The previous 'cuda' fallback was removed "
+                "because its LLVM IR is not lowerable to Intel SPIR-V.",
+                context={"kernel": kernel_name, "triton_version": getattr(triton, "__version__", "unknown")},
+            )
+        compiled = triton.compiler.compile(src=source, target="xpu", options=options)
         asm = compiled.asm
         ll_text = asm.get("ll") or asm.get("llvm")
         if ll_text is None:

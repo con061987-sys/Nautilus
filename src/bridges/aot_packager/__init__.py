@@ -38,13 +38,13 @@ Modules:
     builder.py           - Main orchestrator (FatBinaryBuilder)
 """
 
-from .builder import FatBinaryBuilder, FatBinaryConfig, FatBinaryResult
 from .amd_backend import AMDBackend, AMDCompilationResult
-from .intel_backend import IntelBackend, IntelCompilationResult
-from .nvidia_backend import NvidiaBackend, NvidiaCompilationResult
-from .linker import FatBinaryLinker, LinkingResult
+from .builder import FatBinaryBuilder, FatBinaryConfig, FatBinaryResult
 from .fat_binary import FatBinary, KernelSection
 from .hardware_validator import HardwareValidator, ValidationResult
+from .intel_backend import IntelBackend, IntelCompilationResult
+from .linker import FatBinaryLinker, LinkingResult
+from .nvidia_backend import NvidiaBackend, NvidiaCompilationResult
 
 __all__ = [
     # Main builder

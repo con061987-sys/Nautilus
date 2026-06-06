@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[2]))
@@ -59,7 +60,7 @@ class TestCommonInvariants:
     )
     @settings(max_examples=20)
     def test_fat_binary_dedupes_by_vendor_arch(self, n: int) -> None:
-        from src.common.types import FatBinary, KernelSection, SectionFormat, Vendor, Arch
+        from src.common.types import Arch, FatBinary, KernelSection, SectionFormat, Vendor
         fb = FatBinary(kernel_name="k")
         for i in range(n):
             fb.add_section(KernelSection(
@@ -80,9 +81,8 @@ class TestCommonInvariants:
     @settings(max_examples=10)
     def test_arch_vendor_mapping_injective(self, v: int) -> None:
         """Each arch's vendor should be deterministic."""
-        from src.common.types import Vendor
         # Check all arches
-        from src.common.types import Arch
+        from src.common.types import Arch, Vendor
         for arch in Arch:
             assert isinstance(arch.vendor, Vendor)
             # Same arch always maps to same vendor
@@ -95,8 +95,8 @@ class TestCommonInvariants:
     @settings(max_examples=20)
     def test_sharding_spec_rejects_oob_axes(self, n_axes: int, axis_size: int) -> None:
         """Mesh axes must be < len(mesh.axes)."""
-        from src.common.types import MeshShape, TensorShardingLite, ShardingSpecLite
         from src.common.errors import ConfigError
+        from src.common.types import MeshShape, ShardingSpecLite, TensorShardingLite
         axes = tuple([axis_size] * n_axes)
         m = MeshShape(axes=axes)
         bad = TensorShardingLite(

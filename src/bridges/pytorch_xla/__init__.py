@@ -45,14 +45,15 @@ Modules:
   hardware_orchestrator.py - Per-shard kernel dispatch
 """
 
-from .graph_capture import GraphCapture, CapturedGraph, GraphMetadata
-from .stablehlo_export import StableHLOExporter, StableHLOModule
-from .gspmd_runner import GSPMDRunner, GSPMDResult, ShardingSpec
-from .dtensor_apply import DTensorApplier, DTensorPlan
+from .comm_backend import CollectiveOp, CommBackend, CommGroup
 from .device_mesh import DeviceMesh, MeshDevice, MeshTopology
-from .comm_backend import CommBackend, CommGroup, CollectiveOp
+from .device_mesh_utils import infer_target_from_mesh
+from .dtensor_apply import DTensorApplier, DTensorPlan
+from .graph_capture import CapturedGraph, GraphCapture, GraphMetadata
+from .gspmd_runner import GSPMDResult, GSPMDRunner, ShardingSpec
+from .hardware_orchestrator import ShardExecutionResult, ShardExecutor
 from .pipeline_orchestrator import AutoShardingBridge, ShardingConfig, ShardingResult
-from .hardware_orchestrator import ShardExecutor, ShardExecutionResult
+from .stablehlo_export import StableHLOExporter, StableHLOModule
 
 __all__ = [
     "GraphCapture",
@@ -68,6 +69,7 @@ __all__ = [
     "DeviceMesh",
     "MeshDevice",
     "MeshTopology",
+    "infer_target_from_mesh",
     "CommBackend",
     "CommGroup",
     "CollectiveOp",

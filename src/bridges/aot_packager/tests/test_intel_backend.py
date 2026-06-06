@@ -8,10 +8,9 @@ import pytest
 
 from src.bridges.aot_packager.intel_backend import (
     IntelBackend,
-    IntelTarget,
     IntelCompilationResult,
+    IntelTarget,
 )
-
 
 SAMPLE_KERNEL = '''
 import triton

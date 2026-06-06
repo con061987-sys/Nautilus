@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-
 _COLLECTION_IMPORT_ERRORS: list[tuple[str, str]] = []
 
 
@@ -64,16 +63,13 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.skip(reason="ROCm not installed at /opt/rocm"))
         if "intel" in markers and not has_intel:
             item.add_marker(pytest.mark.skip(reason="Intel oneAPI / SPIRV-Tools not installed"))
-        if "requires_deps" in markers:
-            needed = []
-            if "triton" not in markers and not has_triton:
-                needed.append("triton")
-            if "tvm" not in markers and not has_tvm:
-                needed.append("tvm")
-            if "torch_xla" not in markers and not has_torch_xla:
-                needed.append("torch_xla")
-            if needed:
-                item.add_marker(pytest.mark.skip(reason=f"Missing deps: {','.join(needed)}"))
+        requires_deps = item.get_closest_marker("requires_deps")
+        if requires_deps:
+            for dep in requires_deps.args:
+                try:
+                    __import__(dep)
+                except ImportError:
+                    item.add_marker(pytest.mark.skip(reason=f"requires {dep}"))
 
 
 @pytest.fixture(scope="session")

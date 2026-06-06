@@ -23,8 +23,9 @@ from src.common.errors import (
     KernelNotFoundError,
     NautilusError,
 )
-from src.common.logging import get_logger, span as span_context, configure_logging
-from src.common.types import HardwareTarget, Vendor, Arch, TuningConfig, Result, Ok, Err
+from src.common.logging import configure_logging, get_logger
+from src.common.logging import span as span_context
+from src.common.types import Arch, Err, HardwareTarget, Ok, Result, TuningConfig, Vendor
 
 log = get_logger("nautilus.cli.tune")
 
@@ -226,7 +227,8 @@ def _tune_impl(
         # accept a callable but we wrap the source in a no-op kernel
         # registration.
         from src.bridges.triton_tvm.metadata_extractor import (
-            MetadataExtractor, KernelMetadata,
+            KernelMetadata,
+            MetadataExtractor,
         )
         extractor = MetadataExtractor()
         # Synthesize a metadata record. We use the source's signature

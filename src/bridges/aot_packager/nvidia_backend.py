@@ -12,7 +12,9 @@ comment "for now". This rewrite:
 
 The wiring flow:
   Triton Python source -> triton.JITFunction -> triton.ASTSource
-    -> triton.compiler.compile(target="cuda", options=...)
+    -> triton.compiler.compile(target=GPUTarget("cuda", arch, 32) or
+                               self.target_arch.value,
+                               options=...)
     -> CompiledKernel with .asm["ptx"] and .asm["cubin"]
     -> written to cache_dir
 """
@@ -40,10 +42,12 @@ from src.common.errors import (
     CompilationOutputMissingError,
     DependencyMissingError,
     HardwareNotFoundError,
-    TritonMissingError,
     NautilusError,
+    TritonMissingError,
 )
 from src.common.logging import get_logger
+
+from ._signature_inference import build_signature
 
 log = get_logger("nautilus.aot.nvidia")
 
@@ -226,8 +230,9 @@ class NvidiaBackend:
           1. Write the kernel source to a temp file
           2. Dynamically import the file as a module
           3. Find the @triton.jit function by name
-          4. Build a triton.ASTSource
-          5. Call triton.compiler.compile() with target="cuda"
+          4. Build a triton.ASTSource (signature inferred dynamically)
+          5. Call triton.compiler.compile() with target=self.target_arch
+             (as a GPUTarget when Triton exposes one, else the arch string)
           6. Extract .asm["ptx"] (always) and .asm["cubin"] (if available)
         """
         try:
@@ -268,36 +273,16 @@ class NvidiaBackend:
                         context={"kernel_name": kernel_name},
                     )
 
-                # Make signature types via example tensors
-                # We need at least BLOCK_M, BLOCK_N, BLOCK_K as constexprs
-                # Most kernels take ptrs + M/N/K. The user provides source;
-                # we don't have a real signature. Use a sensible default.
-                from triton.runtime.jit import KernelInterface  # type: ignore[attr-defined]
-
                 from triton.compiler import ASTSource  # type: ignore[attr-defined]
 
-                # Build a minimal signature from the kernel's pre-binding.
-                # Triton expects: constexprs dict, signature, etc.
-                # For an AOT compile, we need concrete dtypes for the args.
-                # We use a heuristic: 4 pointer args + 3 int args (M, N, K) +
-                # 3 constexpr block sizes.
-                sig_args = [
-                    "*fp32",  # A_ptr
-                    "*fp32",  # B_ptr
-                    "*fp32",  # C_ptr
-                    "i32",    # M
-                    "i32",    # N
-                    "i32",    # K
-                    "constexpr",
-                    "constexpr",
-                    "constexpr",
-                ]
-                signature = {i: a for i, a in enumerate(sig_args)}
-                constexprs = {
-                    len(sig_args) - 3: block_m,
-                    len(sig_args) - 2: block_n,
-                    len(sig_args) - 1: block_k,
-                }
+                signature, constexprs = build_signature(
+                    fn,
+                    block_size_values={
+                        "BLOCK_M": block_m,
+                        "BLOCK_N": block_n,
+                        "BLOCK_K": block_k,
+                    },
+                )
                 source = ASTSource(
                     fn=fn,
                     constants={},
@@ -312,9 +297,10 @@ class NvidiaBackend:
                     "num_warps": num_warps,
                     "num_stages": num_stages,
                 }
+                target_arg = self._resolve_nvidia_target()
                 compiled = triton.compiler.compile(
                     src=source,
-                    target="cuda",
+                    target=target_arg,
                     options=options,
                 )
                 asm = compiled.asm
@@ -328,6 +314,34 @@ class NvidiaBackend:
                 return ptx_text or "", cubin_bytes
             finally:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def _resolve_nvidia_target(self) -> Any:
+        """Build the ``target`` argument for ``triton.compiler.compile``.
+
+        Prefers a ``GPUTarget(backend="cuda", arch=(major, minor),
+        warp_size=32)`` instance (Triton 3.0+) so the emitted PTX/SASS
+        matches the configured ``self.target_arch``. Falls back to the
+        arch string (e.g. ``"sm_90"``) and ultimately to ``"cuda"`` for
+        older Triton versions that only accept backend-name strings.
+        """
+        arch_str = self.target_arch.value
+        try:
+            from triton.compiler import GPUTarget  # type: ignore[attr-defined]
+        except ImportError:
+            return arch_str if arch_str else "cuda"
+        try:
+            if arch_str.startswith("sm_"):
+                parts = arch_str[3:].split("_")
+                if len(parts) == 2:
+                    major, minor = int(parts[0]), int(parts[1])
+                    return GPUTarget(
+                        backend="cuda",
+                        arch=(major, minor),
+                        warp_size=32,
+                    )
+        except (ValueError, TypeError):
+            pass
+        return arch_str if arch_str else "cuda"
 
     def _validate_ptx(self, ptx_text: str, kernel_name: str) -> bool:
         """Validate that the PTX is real and not a stub.

@@ -18,10 +18,12 @@ proceed with a phantom device.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -31,11 +33,11 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from src.common.errors import (
+    ConfigError,
     HardwareNotFoundError,
     HardwareProbeError,
-    ConfigError,
 )
-from src.common.types import Vendor, Arch
+from src.common.types import Arch, Vendor
 
 
 class CpuVendor(str, Enum):
@@ -269,10 +271,12 @@ def _lspci_gpu_entries() -> list[dict[str, str]]:
     for line in out.stdout.splitlines():
         if not any(kw in line.lower() for kw in ("vga", "3d controller", "display controller")):
             continue
-        parts = [p.strip('"') for p in line.split('"')]
+        try:
+            parts = shlex.split(line)
+        except ValueError:
+            continue
         if len(parts) < 4:
             continue
-        # Class, vendor, device, subsys, slot
         entry = {
             "class": parts[0],
             "vendor": parts[1],
@@ -281,7 +285,6 @@ def _lspci_gpu_entries() -> list[dict[str, str]]:
             "slot": parts[-1] if len(parts) > 4 else "",
             "raw": line,
         }
-        # Pull vendor_id / device_id from the bracketed [xxxx:yyyy]
         m = re.search(r"\[([0-9a-f]{4}):([0-9a-f]{4})\]", parts[1] if len(parts) > 1 else "")
         if m:
             entry["vendor_id"] = m.group(1)
@@ -395,6 +398,7 @@ def _macos_gpu_info() -> list[DeviceInfo]:
 # --- Top-level GPU enumeration ---
 
 
+@functools.lru_cache(maxsize=1)
 def enumerate_devices() -> list[DeviceInfo]:
     """Enumerate every GPU/accelerator device on this system.
 
@@ -405,22 +409,38 @@ def enumerate_devices() -> list[DeviceInfo]:
 
     Always returns a (possibly empty) list. Never raises on missing
     tools — the per-vendor high-level helpers below do raise.
+
+    Cached (maxsize=1) since the answer is process-stable.
     """
     devices: list[DeviceInfo] = []
 
     if _is_linux():
-        # 1. /dev node probing
-        nv_paths = _linux_nvidia_paths()
-        amd_paths = _linux_amd_paths()
-        intel_paths = _linux_intel_paths()
-
-        # 2. lspci for richer device info
         try:
             lspci_entries = _lspci_gpu_entries()
         except HardwareProbeError:
             lspci_entries = []
 
-        # Nvidia
+        present_vendor_ids = {e.get("vendor_id", "") for e in lspci_entries}
+        has_amd_pci = "1002" in present_vendor_ids
+        has_intel_pci = "8086" in present_vendor_ids
+
+        nv_paths = _linux_nvidia_paths()
+
+        kfd = Path("/dev/kfd")
+        amd_render_paths = sorted(
+            str(p) for p in Path("/dev/dri").glob("renderD*")
+            if p.exists() and has_amd_pci
+        )
+        intel_render_paths = sorted(
+            str(p) for p in Path("/dev/dri").glob("renderD*")
+            if p.exists() and has_intel_pci
+        )
+        amd_paths: list[str] = []
+        if kfd.exists():
+            amd_paths.append(str(kfd))
+        amd_paths.extend(amd_render_paths)
+        intel_paths = intel_render_paths
+
         nv_driver = _nvidia_driver_version_linux()
         nv_pci_devices = [
             e for e in lspci_entries
@@ -441,7 +461,6 @@ def enumerate_devices() -> list[DeviceInfo]:
                     raw={"lspci": nv_pci_devices[i] if i < len(nv_pci_devices) else {}},
                 ))
 
-        # AMD
         amd_driver = _amd_driver_version_linux()
         amd_pci_devices = [
             e for e in lspci_entries
@@ -462,7 +481,6 @@ def enumerate_devices() -> list[DeviceInfo]:
                     raw={"lspci": amd_pci_devices[i] if i < len(amd_pci_devices) else {}},
                 ))
 
-        # Intel
         intel_driver = _intel_driver_version_linux()
         intel_pci_devices = [
             e for e in lspci_entries
@@ -487,7 +505,6 @@ def enumerate_devices() -> list[DeviceInfo]:
         devices.extend(_macos_gpu_info())
 
     elif _is_windows():
-        # Best-effort via wmic; raise HardwareProbeError if wmic missing
         if shutil.which("wmic"):
             try:
                 out = subprocess.run(

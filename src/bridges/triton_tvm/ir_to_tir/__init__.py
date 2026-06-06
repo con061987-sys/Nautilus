@@ -44,13 +44,13 @@ from .conversion_pipeline import (
     ConversionResult,
     ConversionStatus,
 )
-from .ttgir_parser import TTGIRParser, TTGIRFunction, TTGIROperation, TTGIRType
 from .pass1_lower_tensor_idioms import LowerTensorIdioms
 from .pass2_rewrite_spmd import RewriteSPMDToLoops
 from .pass3_replace_pointers import ReplacePointersWithMemRefs
 from .pass4_materialize_tvm import MaterializeTensorsToTVM
+from .tt_dot_split import SplitResult, TTDotSplitter
+from .ttgir_parser import TTGIRFunction, TTGIROperation, TTGIRParser, TTGIRType
 from .tvmscript_emitter import TVMScriptEmitter
-from .tt_dot_split import TTDotSplitter, SplitResult
 
 __all__ = [
     # Main pipeline

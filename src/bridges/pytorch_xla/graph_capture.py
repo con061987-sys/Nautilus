@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
+
+from src.common.logging import get_logger
 
 try:
     import torch
@@ -27,7 +28,7 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CaptureMode(Enum):
@@ -191,7 +192,12 @@ class GraphCapture:
         model: Any,
         example_inputs: tuple[Any, ...],
     ) -> tuple[Any, list[tuple[int, ...]]]:
-        """Capture via torch.compile + dynamo.export."""
+        """Capture via torch.compile + export.
+
+        On PyTorch 2.5+ we use the stable ``torch.export.export`` API
+        on the compiled model. On 2.4 and earlier we fall back to
+        ``torch._dynamo.export``.
+        """
         import torch._dynamo as dynamo
 
         # Compile the model first
@@ -201,9 +207,19 @@ class GraphCapture:
         with torch.no_grad():
             compiled_output = compiled(*example_inputs)
 
-        # Use dynamo.export to get the graph
-        exported = dynamo.export(compiled, *example_inputs)
-        graph_module = exported[0]  # dynamo.export returns (graph, guards)
+        if hasattr(torch.export, "export"):
+            # PyTorch 2.5+ stable export API
+            ep = torch.export.export(compiled, example_inputs)
+            graph_module = ep.graph_module
+        else:
+            # PyTorch 2.4 fallback: dynamo.export returns a tuple
+            # (graph_module, guards)
+            exported = dynamo.export(compiled, *example_inputs)
+            graph_module = (
+                exported[0]
+                if isinstance(exported, (list, tuple))
+                else exported
+            )
 
         output_shapes = self._collect_output_shapes(compiled_output)
         return graph_module, output_shapes

@@ -9,13 +9,17 @@ import pytest
 from src.bridges.triton_tvm.structured_logging import (
     Span,
     StageLog,
-    span as span_ctx,
-    stage as stage_ctx,
-    dump_ir,
-    get_ir_dumps,
     clear_ir_dumps,
-    emit_span_json,
     configure_logging,
+    dump_ir,
+    emit_span_json,
+    get_ir_dumps,
+)
+from src.bridges.triton_tvm.structured_logging import (
+    span as span_ctx,
+)
+from src.bridges.triton_tvm.structured_logging import (
+    stage as stage_ctx,
 )
 
 

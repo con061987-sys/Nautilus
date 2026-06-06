@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "active_work_id": "nautilus-enterprise-grade-plan-47a1d095",
+  "works": {
+    "nautilus-enterprise-grade-plan-47a1d095": {
+      "work_id": "nautilus-enterprise-grade-plan-47a1d095",
+      "active_plan": "/workspaces/NVINDIA_CUD/.omo/plans/nautilus-enterprise-grade-plan.md",
+      "plan_name": "nautilus-enterprise-grade-plan",
+      "status": "completed",
+      "started_at": "2026-06-06T07:05:31.252Z",
+      "updated_at": "2026-06-06T10:26:16.052Z",
+      "session_ids": [
+        "opencode:ses_1643fb51fffe1FdS6ErlOiQBzU"
+      ],
+      "session_origins": {
+        "opencode:ses_1643fb51fffe1FdS6ErlOiQBzU": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {},
+      "ended_at": "2026-06-06T10:26:16.052Z",
+      "elapsed_ms": 12044800
+    }
+  },
+  "active_plan": "/workspaces/NVINDIA_CUD/.omo/plans/nautilus-enterprise-grade-plan.md",
+  "started_at": "2026-06-06T07:05:31.252Z",
+  "status": "completed",
+  "updated_at": "2026-06-06T10:26:16.052Z",
+  "session_ids": [
+    "opencode:ses_1643fb51fffe1FdS6ErlOiQBzU"
+  ],
+  "session_origins": {
+    "opencode:ses_1643fb51fffe1FdS6ErlOiQBzU": "direct"
+  },
+  "plan_name": "nautilus-enterprise-grade-plan",
+  "task_sessions": {},
+  "agent": "atlas",
+  "ended_at": "2026-06-06T10:26:16.052Z",
+  "elapsed_ms": 12044800
+}

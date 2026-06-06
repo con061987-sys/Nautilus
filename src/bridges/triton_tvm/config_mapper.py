@@ -13,8 +13,6 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-import triton
-
 
 @dataclass(frozen=True)
 class MappedTuningConfig:
@@ -45,6 +43,8 @@ class MappedTuningConfig:
         Returns:
             triton.Config with the mapped parameters.
         """
+        import triton  # local import: config_mapper must load without triton installed
+
         kwargs: dict[str, Any] = {
             "BLOCK_SIZE_M": self.block_m,
             "BLOCK_SIZE_N": self.block_n,

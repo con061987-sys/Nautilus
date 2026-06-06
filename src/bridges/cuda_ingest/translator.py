@@ -36,6 +36,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,15 +44,16 @@ from src.common.errors import IngestionUnsupportedIntrinsicError
 from src.common.logging import get_logger
 
 from .intrinsic_mapper import IntrinsicMapper
-from .shared_memory import SharedMemoryAnalyzer, SharedMemPlan
 from .pointer_analysis import PointerAnalyzer, PointerLayout
+from .shared_memory import SharedMemoryAnalyzer, SharedMemPlan
 
 # Import CudaStatementType for dispatch
 try:
     from .parser import CudaStatementType
 except ImportError:
     # Fallback for backward compatibility during transition
-    from enum import Enum, auto as _auto
+    from enum import Enum
+    from enum import auto as _auto
     class CudaStatementType(str, Enum):
         FUNCTION_DEF = "FUNCTION_DEF"
         SHARED_MEM = "SHARED_MEM"
@@ -119,9 +121,9 @@ _CUDA_FIELD_TO_TRITON: dict[str, dict[str, str]] = {
 }
 
 _SYNC_TO_TRITON: dict[str, str] = {
-    "__syncthreads": "tl.debug_barrier()",
-    "__syncwarp": "# tl.syncwarp — closest equivalent: tl.debug_barrier()",
-    "__threadfence": "tl.debug_barrier()",
+    "__syncthreads": "tl.barrier()",
+    "__syncwarp": "# tl.syncwarp — closest equivalent: tl.barrier()",
+    "__threadfence": "tl.barrier()",
 }
 
 _ATOMIC_TO_TRITON: dict[str, str] = {
@@ -135,6 +137,141 @@ _ATOMIC_TO_TRITON: dict[str, str] = {
     "atomicCAS": "tl.atomic_cas",
     "atomicExch": "tl.atomic_xchg",
 }
+
+# Canonical CUDA global thread linearization. The backreference \1
+# forces all three dim letters to match — mixed-dim expressions are
+# bugs in the original source and are left to fall through.
+_BLOCK_LINEAR_RE = re.compile(
+    r'blockIdx\.([xyz])\s*\*\s*blockDim\.\1\s*\+\s*threadIdx\.\1',
+)
+
+_COMPOUND_OPS: dict[str, str] = {
+    "+=": "+",
+    "-=": "-",
+    "*=": "*",
+    "/=": "/",
+    "%=": "%",
+    "&=": "&",
+    "|=": "|",
+    "^=": "^",
+    "<<=": "<<",
+    ">>=": ">>",
+}
+
+_COMPOUND_ASSIGN_RE = re.compile(
+    r'^([^=+\-*/%&|^!<>]+?)\s*(<<=|>>=|\+=|-=|\*=|/=|%=|&=|\|=|\^=)\s*(.+)$',
+    re.DOTALL,
+)
+
+# C++11 `auto` declaration prefix. Catches plain `auto`, `auto&`, `auto*`,
+# `const auto&`, and `static auto`. Whitespace tolerant.
+_AUTO_DECL_RE = re.compile(
+    r'^(?:const\s+)?(?:static\s+)?(?:constexpr\s+)?auto(?:\s*[&*]+)?\s+',
+)
+
+# C++11 `decltype(...)` declaration prefix. The decltype expression is
+# dropped entirely — Triton doesn't need a type annotation.
+_DECLTYPE_DECL_RE = re.compile(
+    r'^(?:const\s+)?(?:static\s+)?decltype\s*\([^)]*\)\s*(?:[&*]\s*)?',
+)
+
+# C++11 `std::move(x)` → `x` (rvalue-reference cast, no-op in Triton).
+# The leading \b prevents `mystd::move` and similar names from matching.
+_STD_MOVE_RE = re.compile(r'\bstd::move\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)')
+
+
+def _is_scalar_lhs(lhs: str) -> bool:
+    """True iff LHS is a simple identifier (no array-index or member access).
+
+    Non-scalar compound assignments (`x[i] += y`, `obj.field += y`) are
+    atomic-unsafe in CUDA and require `tl.atomic_*`; we flag them with a
+    `# (atomic-unsafe)` comment so the caller can fix them rather than
+    silently produce a racy non-atomic load/modify/store.
+    """
+    return lhs.isidentifier()
+
+
+def _decompose_compound_assignment(
+    raw: str, temp_name: str | None = None,
+) -> list[str] | None:
+    """Decompose `x <op>= y` into the load → modify → store sequence.
+
+    Per spec, ``x += y;`` is rewritten to::
+
+        temp = x
+        temp = temp + y
+        x = temp
+
+    A non-scalar LHS (e.g. ``x[i] += y``) returns a single review comment
+    because it requires ``tl.atomic_*`` and the translator cannot decide
+    which one to use from raw text alone.
+
+    Args:
+        raw: The raw statement text (e.g. ``"x += y;"``).
+        temp_name: Explicit name for the temp variable.  If None, a
+            stable name is derived from the LHS (``__tmp_<lhs>``) so
+            consecutive decompositions of the same LHS produce
+            matching variable names.
+
+    Returns:
+        A list of 3 Triton statements for the scalar case, a single
+        ``# (atomic-unsafe)`` comment for the non-scalar case, or
+        None if the input is not a compound assignment.
+    """
+    match = _COMPOUND_ASSIGN_RE.match(raw.strip())
+    if not match:
+        return None
+    lhs = match.group(1).strip()
+    op = match.group(2)
+    rhs = match.group(3).strip()
+    py_op = _COMPOUND_OPS.get(op)
+    if py_op is None:
+        return None
+
+    if not _is_scalar_lhs(lhs):
+        return [f"# (atomic-unsafe) review: {lhs} {op} {rhs}"]
+
+    if temp_name is None:
+        temp_name = f"__tmp_{lhs}"
+
+    return [
+        f"{temp_name} = {lhs}",
+        f"{temp_name} = {temp_name} {py_op} {rhs}",
+        f"{lhs} = {temp_name}",
+    ]
+
+
+def _apply_block_linearization(text: str) -> str:
+    """Rewrite `blockIdx.d * blockDim.d + threadIdx.d` patterns.
+
+    Runs BEFORE field-by-field replacement so the linearization is
+    handled atomically (the field pass would otherwise produce the same
+    string via three separate replacements, but the order of fields
+    in `cuda_fields` metadata is what guarantees it; the explicit
+    pattern here is more robust to that ordering).
+
+    Returns the input unchanged if no canonical pattern is present.
+
+    The backreference `\\1` in `_BLOCK_LINEAR_RE` forces all three dim
+    letters to match — mixed-dim expressions are bugs in the original
+    source and are left to fall through (the field-by-field pass will
+    still produce *something* for them, just not the canonical
+    linearization).
+    """
+    def _repl(match: re.Match[str]) -> str:
+        dim = match.group(1)
+        dim_idx = {"x": 0, "y": 1, "z": 2}[dim]
+        return (
+            f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx})"
+            f" + tl.program_id({dim_idx})"
+        )
+
+    return _BLOCK_LINEAR_RE.sub(_repl, text)
+
+
+def _apply_std_move(text: str) -> str:
+    """Replace `std::move(x)` with `x` (rvalue-cast is a Triton no-op)."""
+    return _STD_MOVE_RE.sub(lambda m: m.group(1).strip(), text)
 
 
 class CudaToTritonTranslator:
@@ -280,8 +417,11 @@ class CudaToTritonTranslator:
         lines.append("")
         lines.append("    # Translated kernel body")
         translated_stmts = self._translate_statements(kernel.body)
+        # Compound-assignment decomposition produces multi-line strings;
+        # split so each decomposed line gets the body indent.
         for stmt in translated_stmts:
-            lines.append(f"    {stmt}")
+            for sub in stmt.split("\n"):
+                lines.append(f"    {sub}")
 
         return "\n".join(lines)
 
@@ -382,7 +522,7 @@ class CudaToTritonTranslator:
         if mapped.strip() != stmt.raw_text.strip():
             return mapped
 
-        return "tl.debug_barrier()  # ~sync (auto-detected)"
+        return "tl.barrier()  # ~sync (auto-detected)"
 
     # ------------------------------------------------------------------
     # Atomic translation
@@ -460,7 +600,40 @@ class CudaToTritonTranslator:
         Uses metadata to replace CUDA field expressions (threadIdx.x,
         blockIdx.y, etc.) with Triton equivalents.  Falls back to
         text-level mapping for simple assignments.
+
+        Compound assignments (`+=`, `-=`, `*=`, `/=`, …) are decomposed
+        into the explicit load → modify → store sequence::
+
+            temp = x
+            temp = temp + y
+            x = temp
+
+        The three lines are returned as a single string with embedded
+        newlines; the body generator splits and indents each line.
+
+        Memory-deref compound assignments (`x[i] += y`) are flagged
+        with a `# (atomic-unsafe)` review comment rather than silently
+        producing racy non-atomic code — the caller must rewrite to
+        use ``tl.atomic_*``.
         """
+        raw = stmt.raw_text
+
+        # Compound assignment pass: produce the load/modify/store form.
+        decomposed = _decompose_compound_assignment(raw)
+        if decomposed is not None:
+            translated_lines: list[str] = []
+            for line in decomposed:
+                if line.startswith("#"):
+                    translated_lines.append(line)
+                    continue
+                if self._has_cuda_constructs(stmt):
+                    translated_lines.append(
+                        self._replace_cuda_constructs(stmt, line),
+                    )
+                else:
+                    translated_lines.append(line)
+            return "\n".join(translated_lines)
+
         if not self._has_cuda_constructs(stmt):
             return self._strip_triton_import(
                 self.intrinsic_mapper.transform_text(stmt.raw_text),
@@ -537,46 +710,62 @@ class CudaToTritonTranslator:
             int i = 0;       → i = 0
             float x = 1.0;   → x = 1.0
         Replaces CUDA field expressions in the value if present.
+
+        C++11 `auto` and `decltype(...)` prefixes are also stripped, and
+        `std::move(x)` wrappers inside the value are unwrapped, since
+        Triton doesn't have explicit type annotations and the rvalue
+        cast is a no-op.
         """
-        raw = stmt.raw_text.rstrip(";").strip()
+        # Apply std::move unwrap before the type-strip so pointer
+        # declarations still get the rvalue cast removed.
+        raw = _apply_std_move(stmt.raw_text).rstrip(";").strip()
 
         if raw.startswith("__shared__"):
             return ""
 
-        types_to_strip = [
-            "int", "float", "double", "char", "short", "long",
-            "unsigned int", "unsigned long", "size_t",
-            "bool", "void", "unsigned",
-        ]
+        # C++11 `auto` declaration: `auto x = expr;`, `auto& x = ...;`
+        # Treated as "type stripped" so the rest of the logic handles it
+        # the same way as `int x = expr;`.
+        if _AUTO_DECL_RE.match(raw):
+            stripped = _AUTO_DECL_RE.sub("", raw, count=1)
+        elif _DECLTYPE_DECL_RE.match(raw):
+            stripped = _DECLTYPE_DECL_RE.sub("", raw, count=1)
+        else:
+            types_to_strip = [
+                "int", "float", "double", "char", "short", "long",
+                "unsigned int", "unsigned long", "size_t",
+                "bool", "void", "unsigned",
+            ]
 
-        stripped = raw
-        stripped_type = False
-        for t in types_to_strip:
-            if raw.startswith(t + " ") or raw.startswith(t + "*"):
-                rest = raw[len(t):].strip()
-                if rest.startswith("*"):
-                    # Pointer declaration — needs manual review
-                    return f"# (review) {raw}"
-                stripped = rest
-                stripped_type = True
-                break
-            if raw.startswith("const " + t):
-                rest = raw[len("const " + t):].strip()
-                if rest.startswith("*"):
-                    return f"# (review) {raw}"
-                stripped = rest
-                stripped_type = True
-                break
+            stripped = raw
+            stripped_type = False
+            for t in types_to_strip:
+                if raw.startswith(t + " ") or raw.startswith(t + "*"):
+                    rest = raw[len(t):].strip()
+                    if rest.startswith("*"):
+                        # Pointer declaration — needs manual review
+                        return f"# (review) {raw}"
+                    stripped = rest
+                    stripped_type = True
+                    break
+                if raw.startswith("const " + t):
+                    rest = raw[len("const " + t):].strip()
+                    if rest.startswith("*"):
+                        return f"# (review) {raw}"
+                    stripped = rest
+                    stripped_type = True
+                    break
 
-        if not stripped_type:
-            return f"# (decl) {raw}"
+            if not stripped_type:
+                return f"# (decl) {raw}"
 
         if "=" not in stripped:
-            return f"# (decl) {raw}"
+            return f"# (decl) {stripped}"
 
         parts = stripped.split("=", 1)
         var_name = parts[0].strip()
         value = parts[1].strip()
+        value = _apply_std_move(value)
 
         if self._has_cuda_constructs(stmt):
             value = self._replace_cuda_constructs(stmt, value)
@@ -618,6 +807,15 @@ class CudaToTritonTranslator:
         Also replaces sync calls and atomic calls using metadata.
         """
         result = text
+
+        # 0. Atomic block-linearization pass: `blockIdx.d * blockDim.d + threadIdx.d`
+        #    Must run before field-by-field replacement so the canonical
+        #    pattern is handled in one shot and is robust to metadata
+        #    ordering.
+        result = _apply_block_linearization(result)
+
+        # 0b. C++11 rvalue cast is a no-op in Triton.
+        result = _apply_std_move(result)
 
         # 1. Replace CUDA field expressions (threadIdx.x, blockIdx.y, etc.)
         fields = stmt.metadata.get("cuda_fields", [])

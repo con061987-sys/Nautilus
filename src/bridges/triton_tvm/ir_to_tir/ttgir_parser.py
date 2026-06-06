@@ -24,13 +24,14 @@ Supported ops (Pass 1's working set):
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Iterator
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class OpKind(Enum):
@@ -70,6 +71,10 @@ class OpKind(Enum):
     FOR_LOOP = auto()
     IF_STATEMENT = auto()
     YIELD = auto()
+    # Pass-4 materialization targets
+    TVM_BLOCK = auto()
+    TVM_INIT = auto()
+    ALLOC_BUFFER = auto()
     # Everything else
     UNKNOWN = auto()
 
@@ -404,15 +409,17 @@ class TTGIRParser:
             if i >= n:
                 break
 
-            # Try to match an op definition: %name = <op> ...
+            # Match an op definition. <op> is a dotted name (e.g. "tt.dot")
+            # or a quoted generic op (e.g. "tt.reduce"); the trailing
+            # space is optional because generic ops are immediately
+            # followed by an argument list: "tt.reduce"(...).
             op_match = re.match(
-                r'(%\w+)\s*=\s*([\w.]+)\s+',
+                r'(%\w+)\s*=\s*("(?:[^"]+)"|[\w.]+)\s*',
                 body_text[i:],
             )
             if op_match:
                 result_name = op_match.group(1)
-                op_name = op_match.group(2)
-                # Determine op kind
+                op_name = op_match.group(2).strip('"')
                 op_kind = self.OP_KIND_MAP.get(op_name, OpKind.UNKNOWN)
 
                 # Capture the raw text of this op (until next op or closing brace)
@@ -467,6 +474,27 @@ class TTGIRParser:
                 i = body_end
                 continue
 
+            # Statement-style op: no ``%result =`` prefix. Used for
+            # ``tt.return`` / ``tt.store``, which occupy a single line.
+            stmt_match = re.match(
+                r'(tt\.\w+)\s+([^\n]*)',
+                body_text[i:],
+            )
+            if stmt_match:
+                op_name = stmt_match.group(1)
+                op_kind = self.OP_KIND_MAP.get(op_name, OpKind.UNKNOWN)
+                line_text = stmt_match.group(0)
+                op = TTGIROperation(
+                    kind=op_kind,
+                    raw_text=line_text.strip(),
+                    name=op_name,
+                )
+                rest = line_text[len(op_name):]
+                op.operands, op.attributes = self._parse_operands(rest)
+                ops.append(op)
+                i += len(line_text)
+                continue
+
             # Skip unrecognized content (one character at a time)
             i += 1
 
@@ -475,8 +503,10 @@ class TTGIRParser:
     def _find_op_end(self, text: str, start: int) -> int:
         """Find the end of an op definition.
 
-        An op ends at the next top-level newline-followed-by-% or by the
-        closing brace of the enclosing block.
+        An op ends at the next top-level newline followed by either a
+        ``%``-prefixed op definition, a statement-style op
+        (``tt.return``, ``tt.store``), or the closing brace of the
+        enclosing block.
         """
         depth = 0
         n = len(text)
@@ -490,15 +520,24 @@ class TTGIRParser:
                     return i
                 depth -= 1
             elif c == "\n" and depth == 0:
-                # Check if the next non-whitespace starts a new op
                 j = i + 1
                 while j < n and text[j] in " \t":
                     j += 1
-                if j < n and text[j] == "%":
-                    # Verify this is an op definition (not a use)
+                if j >= n:
+                    return n
+                if text[j] == "%":
                     rest = text[j:]
-                    if re.match(r'%\w+\s*=\s*[\w.]+\s+', rest) or re.match(r'%\w+\s*=\s*scf\.', rest):
+                    if (
+                        re.match(r'%\w+\s*=\s*"(?:[^"]+)"\s*', rest)
+                        or re.match(r'%\w+\s*=\s*[\w.]+\s*', rest)
+                        or re.match(r'%\w+\s*=\s*scf\.', rest)
+                    ):
                         return i
+                elif re.match(
+                    r'(tt|arith|math|scf|memref|llvm|affine)\.\w+',
+                    text[j:],
+                ):
+                    return i
             i += 1
         return n
 

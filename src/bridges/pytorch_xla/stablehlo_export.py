@@ -254,10 +254,9 @@ class _TVMScriptExporter:
         # ── Build a TVM relax Module from the FX graph ──────────────
         # Use TVM's torch frontend if available, else build manually
         try:
-            from tvm.relax.frontend.torch import from_pytorch
-
             # Script the GraphModule so TVM can consume it
             import torch
+            from tvm.relax.frontend.torch import from_pytorch
 
             scripted = torch.jit.script(graph_module)
             mod, params = from_pytorch(scripted, example_inputs)
@@ -388,8 +387,8 @@ class _TVMScriptExporter:
         node: Any,
     ) -> Any | None:
         """Emit a single relax operation from an FX call_function node."""
-        import tvm.relax as relax
         import torch
+        import tvm.relax as relax
 
         target = node.target
         target_str = (
@@ -722,7 +721,8 @@ class StableHLOExporter:
 
 # ── Deprecated (backward-compatible) API surface ───────────────────────
 
-from enum import Enum, auto as _auto  # noqa: E402
+from enum import Enum  # noqa: E402
+from enum import auto as _auto
 
 
 class ExportMethod(Enum):

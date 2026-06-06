@@ -11,20 +11,21 @@ Triton IR into TVM-consumable TIR.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
 
-from .ttgir_parser import TTGIRFunction, TTGIRParser
+from src.common.logging import get_logger
+
 from .pass1_lower_tensor_idioms import LowerTensorIdioms
 from .pass2_rewrite_spmd import RewriteSPMDToLoops
 from .pass3_replace_pointers import ReplacePointersWithMemRefs
 from .pass4_materialize_tvm import MaterializeTensorsToTVM
+from .tt_dot_split import SplitResult, TTDotSplitter
+from .ttgir_parser import TTGIRFunction, TTGIRParser
 from .tvmscript_emitter import TVMScriptEmitter
-from .tt_dot_split import TTDotSplitter, SplitResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConversionStatus(Enum):

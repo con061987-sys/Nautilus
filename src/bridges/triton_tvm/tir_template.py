@@ -20,13 +20,14 @@ methods stay, but the primary path is now real IR conversion.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from src.common.logging import get_logger
+
 try:
-    from tvm.script import tirx as T
     import tvm
     import tvm.tirx as tirx
+    from tvm.script import tirx as T
 
     TVM_AVAILABLE = True
 except ImportError:
@@ -35,7 +36,7 @@ except ImportError:
         class prim_func: pass
         class Buffer: pass
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TIRTemplateBuilder:

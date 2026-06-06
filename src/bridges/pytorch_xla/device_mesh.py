@@ -22,13 +22,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class DeviceVendor(Enum):

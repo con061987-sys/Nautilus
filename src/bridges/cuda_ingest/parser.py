@@ -402,12 +402,17 @@ class TreeSitterCudaParser:
 
     @staticmethod
     def _clean_type_string(raw: str) -> str:
-        """Remove __restrict__, extra whitespace from a type string."""
+        """Normalise a parameter type string.
+
+        Strips function-level CUDA qualifiers (``__device__``,
+        ``__global__``, ``__constant__``) and collapses whitespace.
+        ``__restrict__`` is PRESERVED because downstream
+        ``PointerAnalyzer`` uses it to mark the parameter as disjoint
+        from every other restrict pointer (the C99 restrict contract).
+        """
         cleaned = raw
-        # Remove CUDA qualifiers
-        for q in ("__restrict__", "__device__", "__global__", "__constant__"):
+        for q in ("__device__", "__global__", "__constant__"):
             cleaned = cleaned.replace(q, "")
-        # Collapse whitespace
         cleaned = " ".join(cleaned.split())
         return cleaned
 

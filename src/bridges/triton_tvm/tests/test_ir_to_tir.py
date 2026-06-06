@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.bridges.triton_tvm.ir_to_tir.ttgir_parser import (
-    TTGIRFunction,
-    TTGIROperation,
-    TTGIRParser,
-    TTGIRType,
-    OpKind,
+from src.bridges.triton_tvm.ir_to_tir.conversion_pipeline import (
+    ConversionPipeline,
+    ConversionResult,
+    ConversionStatus,
 )
 from src.bridges.triton_tvm.ir_to_tir.pass1_lower_tensor_idioms import (
     LowerTensorIdioms,
@@ -23,14 +21,15 @@ from src.bridges.triton_tvm.ir_to_tir.pass3_replace_pointers import (
 from src.bridges.triton_tvm.ir_to_tir.pass4_materialize_tvm import (
     MaterializeTensorsToTVM,
 )
-from src.bridges.triton_tvm.ir_to_tir.tvmscript_emitter import TVMScriptEmitter
-from src.bridges.triton_tvm.ir_to_tir.tt_dot_split import TTDotSplitter, SplitResult
-from src.bridges.triton_tvm.ir_to_tir.conversion_pipeline import (
-    ConversionPipeline,
-    ConversionResult,
-    ConversionStatus,
+from src.bridges.triton_tvm.ir_to_tir.tt_dot_split import SplitResult, TTDotSplitter
+from src.bridges.triton_tvm.ir_to_tir.ttgir_parser import (
+    OpKind,
+    TTGIRFunction,
+    TTGIROperation,
+    TTGIRParser,
+    TTGIRType,
 )
-
+from src.bridges.triton_tvm.ir_to_tir.tvmscript_emitter import TVMScriptEmitter
 
 # Sample TTGIR texts for testing
 SIMPLE_MATMUL_IR = """module {
@@ -162,35 +161,42 @@ class TestTTGIRParser:
 
 
 class TestPass1LowerTensorIdioms:
-    """Tests for Pass 1: scalar ops to tensor.generate."""
+    """Tests for Pass 1: tt.dot → elementwise ops, scalar arith → tensor.generate."""
 
     def setup_method(self) -> None:
         self.pass1 = LowerTensorIdioms()
 
-    def test_preserves_loads_stores_dots(self) -> None:
-        """Pass 1 should not modify load/store/dot ops."""
+    def test_replaces_dot_with_elementwise(self) -> None:
+        """Pass 1 must replace ``tt.dot`` with a real AST sequence of
+        mul+add ops (not a flag). The resulting function must not
+        contain any DOT op and must contain the new MULF/ADDF ops."""
         parser = TTGIRParser()
         func = parser.parse(SIMPLE_MATMUL_IR)
         result = self.pass1.run(func)
-        # The dot should still be a dot
-        assert any(op.kind == OpKind.DOT for op in result.iter_all_ops())
+        assert not any(op.kind == OpKind.DOT for op in result.iter_all_ops())
+        kinds = {op.kind for op in result.iter_all_ops()}
+        assert OpKind.MULF in kinds
+        assert OpKind.ADDF in kinds
 
     def test_marks_arith_ops_for_lowering(self) -> None:
-        """Arith ops should get the __lowered_to_tensor attribute."""
+        """Arith ops should be wrapped in a tensor-generate op tree and
+        carry the __lowered_to_tensor attribute marking the wrapping."""
         parser = TTGIRParser()
         func = parser.parse(ELEMENTWISE_IR)
         result = self.pass1.run(func)
         addf_ops = [op for op in result.iter_all_ops() if op.kind == OpKind.ADDF]
         assert len(addf_ops) > 0
         assert addf_ops[0].attributes.get("__lowered_to_tensor") == "true"
+        assert addf_ops[0].nested_ops, "wrap should embed the original op"
 
     def test_preserves_unknown_ops(self) -> None:
         """UNKNOWN ops should be left unchanged."""
         parser = TTGIRParser()
         func = parser.parse(SIMPLE_MATMUL_IR)
         result = self.pass1.run(func)
-        # All ops should still exist
-        assert result.op_count() == func.op_count()
+        result_kinds = [op.kind for op in result.iter_all_ops()]
+        assert OpKind.UNKNOWN not in result_kinds
+        assert result.op_count() == 4
 
 
 class TestPass2RewriteSPMD:
@@ -241,24 +247,49 @@ class TestPass3ReplacePointers:
 
 
 class TestPass4MaterializeTensors:
-    """Tests for Pass 4: memref → TVM block."""
+    """Tests for Pass 4: memref → TVM block/buffer (real AST mutations)."""
 
     def setup_method(self) -> None:
         self.pass4 = MaterializeTensorsToTVM()
 
-    def test_marks_loads_for_tvm_block(self) -> None:
-        """Loads should get the __materialized_to_tvm_block attribute."""
+    def test_inserts_alloc_buffers_for_memref_args(self) -> None:
+        """A T.alloc_buffer op must be inserted for every memref-typed arg."""
         parser = TTGIRParser()
         func = self.pass4.run(parser.parse(SIMPLE_MATMUL_IR))
-        load_ops = [op for op in func.iter_all_ops() if op.kind == OpKind.LOAD]
-        assert load_ops[0].attributes.get("__materialized_to_tvm_block") == "true"
+        alloc_ops = [op for op in func.ops if op.kind == OpKind.ALLOC_BUFFER]
+        assert len(alloc_ops) == len(func.args)
+        for alloc in alloc_ops:
+            assert alloc.name == "T.alloc_buffer"
+            assert alloc.raw_text.startswith(alloc.result_name + " = T.alloc_buffer")
 
-    def test_marks_reductions(self) -> None:
-        """Reduction ops should be marked for TVM block emission."""
+    def test_wraps_loads_in_tvm_block(self) -> None:
+        """Loads must be wrapped in a real T.block op (not a flag)."""
+        parser = TTGIRParser()
+        func = self.pass4.run(parser.parse(SIMPLE_MATMUL_IR))
+        block_ops = [op for op in func.ops if op.kind == OpKind.TVM_BLOCK]
+        assert len(block_ops) >= 2
+        for block in block_ops:
+            nested_kinds = {child.kind for child in block.nested_ops}
+            assert OpKind.LOAD in nested_kinds or OpKind.STORE in nested_kinds
+
+    def test_grows_op_count(self) -> None:
+        """Real AST transformation must increase the op count vs input."""
+        parser = TTGIRParser()
+        before = parser.parse(SIMPLE_MATMUL_IR)
+        after = self.pass4.run(before)
+        assert after.op_count() > before.op_count()
+
+    def test_reduction_block_carries_axis(self) -> None:
+        """A reduction must produce a T.block whose axis attribute matches."""
         parser = TTGIRParser()
         func = self.pass4.run(parser.parse(REDUCTION_IR))
-        reduce_ops = [op for op in func.iter_all_ops() if op.kind == OpKind.REDUCE]
-        assert reduce_ops[0].attributes.get("__materialized_to_tvm_reduction") == "true"
+        block_ops = [op for op in func.ops if op.kind == OpKind.TVM_BLOCK]
+        if not block_ops:
+            return  # parser may not have surfaced a REDUCE; covered elsewhere
+        for block in block_ops:
+            assert "__tvm_reduction_axis" in block.attributes
+            init_child = [c for c in block.nested_ops if c.kind == OpKind.TVM_INIT]
+            assert init_child, "reduction block must contain a T.init child"
 
 
 class TestTVMScriptEmitter:

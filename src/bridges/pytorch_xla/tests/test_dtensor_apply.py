@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from src.bridges.pytorch_xla.device_mesh import (
+    DeviceMesh,
+    DeviceVendor,
+    InterconnectType,
+    MeshDevice,
+)
 from src.bridges.pytorch_xla.dtensor_apply import (
     DTensorApplier,
     DTensorPlan,
@@ -12,12 +18,6 @@ from src.bridges.pytorch_xla.gspmd_runner import (
     ShardingSpec,
     ShardingStrategy,
     TensorSharding,
-)
-from src.bridges.pytorch_xla.device_mesh import (
-    DeviceMesh,
-    DeviceVendor,
-    InterconnectType,
-    MeshDevice,
 )
 
 

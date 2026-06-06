@@ -7,11 +7,10 @@ from pathlib import Path
 import pytest
 
 from src.bridges.aot_packager.amd_backend import (
-    AMDBackend,
     AMDArch,
+    AMDBackend,
     AMDCompilationResult,
 )
-
 
 SAMPLE_KERNEL = '''
 import triton

@@ -7,7 +7,6 @@ import pytest
 from src.bridges.triton_tvm.bounds_extractor import BoundsExtractor
 from src.bridges.triton_tvm.ir_capture import IRBounds, KernelKind
 
-
 # Sample IR texts with clear bounds
 MATMUL_IR_128 = """
 module {

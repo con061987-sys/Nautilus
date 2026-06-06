@@ -112,10 +112,10 @@ nautilus-shard = "src.cli.commands.shard:cli"
 nautilus-verify = "src.cli.commands.verify:cli"
 
 [project.urls]
-Homepage = "https://github.com/nvindia-cud/nautilus"
-Documentation = "https://nvindia-cud.readthedocs.io"
-Repository = "https://github.com/nvindia-cud/nautilus"
-Issues = "https://github.com/nvindia-cud/nautilus/issues"
+Homepage = "https://github.com/nvindia-cud/NVINDIA_CUD"
+Documentation = "https://nvindia-cud.github.io/NVINDIA_CUD"
+Repository = "https://github.com/nvindia-cud/NVINDIA_CUD"
+Issues = "https://github.com/nvindia-cud/NVINDIA_CUD/issues"
 
 [tool.setuptools]
 include-package-data = true
@@ -143,11 +143,6 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--tb=short",
-    "--ignore=src/bridges/triton_tvm/tests",
-    "--ignore=src/bridges/aot_packager/tests",
-    "--ignore=src/bridges/pytorch_xla/tests",
-    "--ignore=src/bridges/cuda_ingest/tests",
-    "--ignore=src/bridges/conftest.py",
 ]
 markers = [
     "gpu: requires a real GPU (Nvidia/AMD/Intel)",

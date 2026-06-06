@@ -22,18 +22,19 @@ Production features:
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .graph_capture import GraphCapture, CapturedGraph
-from .stablehlo_export import StableHLOExporter, StableHLOModule
-from .gspmd_runner import GSPMDRunner, GSPMDResult, ShardingSpec, ShardingStrategy
-from .dtensor_apply import DTensorApplier, DTensorPlan
-from .device_mesh import DeviceMesh
+from src.common.logging import get_logger
+
 from .comm_backend import CommBackend
-from .hardware_orchestrator import ShardExecutor, ShardExecutionResult
+from .device_mesh import DeviceMesh
+from .dtensor_apply import DTensorApplier, DTensorPlan
+from .graph_capture import CapturedGraph, GraphCapture
+from .gspmd_runner import GSPMDResult, GSPMDRunner, ShardingSpec, ShardingStrategy
+from .hardware_orchestrator import ShardExecutionResult, ShardExecutor
+from .stablehlo_export import StableHLOExporter, StableHLOModule
 
 try:
     from src.bridges.triton_tvm.circuit_breaker import (
@@ -42,19 +43,21 @@ try:
         CircuitState,
         get_default_breakers,
     )
-    from src.bridges.triton_tvm.timeout_manager import (
-        TimeoutManager,
-        StageBudgets,
-    )
     from src.bridges.triton_tvm.structured_logging import (
         span as span_context,
+    )
+    from src.bridges.triton_tvm.structured_logging import (
         stage as stage_context,
+    )
+    from src.bridges.triton_tvm.timeout_manager import (
+        StageBudgets,
+        TimeoutManager,
     )
     BRIDGE_INFRA = True
 except ImportError:
     BRIDGE_INFRA = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -260,7 +263,9 @@ class AutoShardingBridge:
     ) -> GSPMDResult | None:
         """Run GSPMD with circuit breaker protection."""
         if self.breakers is not None:
-            breaker = self.breakers.get("tvm_tune", None)
+            # "gspmd_tune" must be distinct from Phase 1's "tvm_tune"
+            # so a noisy TVM phase cannot short-circuit GSPMD.
+            breaker = self.breakers.get("gspmd_tune", None)
             if breaker is not None:
                 try:
                     return breaker.call(

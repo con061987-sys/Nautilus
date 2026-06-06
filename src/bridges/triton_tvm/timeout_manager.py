@@ -13,7 +13,6 @@ This module provides:
 
 from __future__ import annotations
 
-import logging
 import signal
 import threading
 import time
@@ -21,7 +20,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class StageTimeoutError(Exception):
@@ -130,14 +131,13 @@ class TimeoutManager:
         timer.start()
         try:
             yield budget
-            timed_out.set()
         except Exception as exc:
             exception_holder.append(exc)
             timed_out.set()
             raise
         finally:
             elapsed = time.time() - self._stage_start
-            if timed_out.is_set() and not exception_holder:
+            if elapsed > budget and not exception_holder:
                 raise StageTimeoutError(name, budget, elapsed)
             if elapsed > budget:
                 logger.warning(

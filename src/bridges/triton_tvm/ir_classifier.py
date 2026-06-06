@@ -76,12 +76,14 @@ class IRClassifier:
     def collect_ops(self, ir_text: str) -> list[str]:
         """Collect all op names from the IR in order of appearance.
 
-        Returns a list like ['load', 'addf', 'mulf', 'store'].
+        Each occurrence is preserved so that callers can count repeats
+        (e.g. attention kernels have multiple tt.dot ops). Use
+        `collect_op_counts()` for deduplicated counts.
         """
         ops: list[str] = []
         for m in self.OP_RE.finditer(ir_text):
             op = m.group(1) or m.group(2) or m.group(3) or m.group(4) or m.group(5) or m.group(6)
-            if op and op not in ops:
+            if op:
                 ops.append(op)
         return ops
 

@@ -15,15 +15,16 @@ from typing import Any
 
 import click
 
+from src.cli.commands.tune import _parse_target
 from src.common.errors import (
     CompilationError,
     DependencyMissingError,
     LinkingError,
     NautilusError,
 )
-from src.common.logging import get_logger, span as span_context
-from src.common.types import HardwareTarget, Vendor, Arch, Result, Ok, Err
-from src.cli.commands.tune import _parse_target
+from src.common.logging import get_logger
+from src.common.logging import span as span_context
+from src.common.types import Arch, Err, HardwareTarget, Ok, Result, Vendor
 
 log = get_logger("nautilus.cli.build")
 
@@ -162,7 +163,7 @@ def _build_impl(
     )
 
     # 1. Load kernel source
-    from src.cli.commands.tune import _load_kernel_file, _hash_source
+    from src.cli.commands.tune import _hash_source, _load_kernel_file
     kernel_name, kernel_text = _load_kernel_file(kernel_file)
     source_hash = _hash_source(kernel_text)
     log.info("kernel loaded", name=kernel_name, source_hash=source_hash[:12])
@@ -199,9 +200,10 @@ def _build_impl(
 
     # 3. Compile per-vendor
     from src.bridges.aot_packager.builder import (
-        FatBinaryBuilder, FatBinaryConfig, FatBinaryResult,
+        FatBinaryBuilder,
+        FatBinaryConfig,
+        FatBinaryResult,
     )
-    from src.bridges.aot_packager.builder import FatBinaryConfig
     config = FatBinaryConfig(
         kernel_name=kernel_name,
         kernel_source=kernel_text,

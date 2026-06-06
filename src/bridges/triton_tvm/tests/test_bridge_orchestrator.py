@@ -9,8 +9,8 @@ import pytest
 
 from src.bridges.triton_tvm.bridge_orchestrator import (
     FallbackTier,
-    TritonTVMBridge,
     MappedTuningConfig,
+    TritonTVMBridge,
 )
 
 

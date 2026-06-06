@@ -27,7 +27,6 @@ from pathlib import Path
 
 import pytest
 
-
 EXAMPLE_MATMUL = textwrap.dedent('''
     import triton
     import triton.language as tl
@@ -65,8 +64,16 @@ class TestFullPipeline:
     def test_common_imports(self):
         """src.common must be importable without any optional deps."""
         from src.common import (
-            Ok, Err, Result, Vendor, Arch, HardwareTarget,
-            CircuitBreaker, Span, StageLog, configure_logging,
+            Arch,
+            CircuitBreaker,
+            Err,
+            HardwareTarget,
+            Ok,
+            Result,
+            Span,
+            StageLog,
+            Vendor,
+            configure_logging,
         )
         assert Ok(1).is_ok()
         assert Err(ValueError("x")).is_err()
@@ -74,7 +81,7 @@ class TestFullPipeline:
 
     def test_fat_binary_serialization_roundtrip(self):
         """Fat binary data model can be serialized and deserialized loss-lessly."""
-        from src.common import FatBinary, KernelSection, SectionFormat, Vendor, Arch
+        from src.common import Arch, FatBinary, KernelSection, SectionFormat, Vendor
         ptx_data = b"// PTX text"           # 10 bytes
         hsaco_data = b"\\x7fELFhsaco"       # 12 bytes (includes escaped backslash)
         fb = FatBinary(kernel_name="matmul")
@@ -105,11 +112,13 @@ class TestFullPipeline:
         a GPU, at least one must return True. There is no "Unknown"
         middle ground.
         """
-        from src.common.hardware import (
-            has_nvidia_gpu, has_amd_gpu, has_intel_gpu,
-            get_device_paths,
-        )
         from src.common.errors import HardwareNotFoundError
+        from src.common.hardware import (
+            get_device_paths,
+            has_amd_gpu,
+            has_intel_gpu,
+            has_nvidia_gpu,
+        )
         from src.common.types import Vendor
         # At least the call must not raise
         nv = has_nvidia_gpu()
@@ -144,7 +153,7 @@ class TestFullPipeline:
     def test_aot_nvidia_round_trip(self, tmp_path: Path):
         """A Nvidia AOT compile should produce a non-empty PTX (or cubin)."""
         try:
-            from src.bridges.aot_packager.nvidia_backend import NvidiaBackend, NvidiaArch
+            from src.bridges.aot_packager.nvidia_backend import NvidiaArch, NvidiaBackend
         except ImportError as exc:
             pytest.skip(f"aot packager not importable: {exc}")
         backend = NvidiaBackend(
@@ -169,6 +178,7 @@ class TestFullPipeline:
     def test_cli_help(self):
         """All CLI commands must show help without crashing."""
         from click.testing import CliRunner
+
         from src.cli.main import cli
         runner = CliRunner()
         for sub in ("tune", "build", "shard", "verify"):
@@ -178,7 +188,7 @@ class TestFullPipeline:
 
     def test_c_api_stub_loads(self):
         """src.c_api must import even when the C library isn't built."""
-        from src.c_api import is_available, compile, triton_version
+        from src.c_api import compile, is_available, triton_version
         # is_available() should return False (no .so built) without raising
         available = is_available()
         assert available is False

@@ -14,10 +14,11 @@ module and routes it to the bridge orchestrator.
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Callable
+
+from src.common.logging import get_logger
 
 try:
     from triton.backends.compiler import (
@@ -36,9 +37,10 @@ except ImportError:
     class Language:  # type: ignore
         pass
 
+from . import CAPTURE_KEY_FMT
 from .options import TVMOptions
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Module-level cache for capturing IR across stage lambdas
@@ -278,7 +280,10 @@ class TVMBackend(BaseBackend):
         # runs the TVM MetaSchedule adapter on a background thread.
         # Storing in a module-level dict keeps the capture zero-overhead
         # when the bridge is not active.
-        cache_key = f"{source_hash}:{self._tvm_target}:{stage_name}"
+        cache_key = CAPTURE_KEY_FMT.format(
+            source_hash=source_hash[:16],
+            kernel_name=metadata.get("name", "unknown"),
+        )
         _CAPTURE_BUFFER[cache_key] = ir_text
 
         logger.debug(

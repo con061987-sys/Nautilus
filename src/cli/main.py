@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import click
 
-from src.cli.commands.tune import cli as tune_cmd
 from src.cli.commands.build import cli as build_cmd
+from src.cli.commands.inspect import cli as inspect_cmd
 from src.cli.commands.shard import cli as shard_cmd
+from src.cli.commands.tune import cli as tune_cmd
 from src.cli.commands.verify import cli as verify_cmd
 from src.common.logging import configure_logging
 
@@ -53,6 +54,7 @@ cli.add_command(tune_cmd, name="tune")
 cli.add_command(build_cmd, name="build")
 cli.add_command(shard_cmd, name="shard")
 cli.add_command(verify_cmd, name="verify")
+cli.add_command(inspect_cmd, name="inspect")
 
 
 __all__ = ["cli"]

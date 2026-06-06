@@ -5,12 +5,11 @@ from __future__ import annotations
 import pytest
 
 from src.bridges.cuda_ingest.parser import (
-    CudaParser,
     CudaKernel,
+    CudaParser,
     CudaStatement,
     CudaStatementType,
 )
-
 
 SAMPLE_MATMUL_CUDA = '''
 #include <cuda_runtime.h>

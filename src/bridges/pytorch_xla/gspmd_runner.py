@@ -235,7 +235,8 @@ class _TorchXLASharding:
             from torch_xla.experimental.sharding_impl import shard_module
         except ImportError:
             # Fall back to the distributed/spmd path which is more stable
-            from torch_xla.distributed.spmd import Mesh, ShardingSpec as XlaShardingSpec
+            from torch_xla.distributed.spmd import Mesh
+            from torch_xla.distributed.spmd import ShardingSpec as XlaShardingSpec
             return cls._shard_via_spmd_api(
                 module, mesh_shape, strategy, custom_shardings,
             )
@@ -611,8 +612,8 @@ class _TVMMetaScheduleSharding:
         try:
             from tvm import meta_schedule as ms
 
-            # Configure MetaSchedule for sharding
-            target = tvm.target.Target("llvm")  # use CPU target for portability
+            # Configure MetaSchedule for sharding.
+            target = tvm.target.Target(cls._mesh_target(mesh_shape))  # real GPU target (H-06 fix)
             work_dir = "/tmp/tvm_ms_sharding"
             tune_config = ms.TuneConfig(
                 strategy="evolutionary",
@@ -804,6 +805,19 @@ def {func_name}(
         # AUTO
         return '{"mhlo.sharding": "maximal"}'
 
+    @staticmethod
+    def _mesh_target(mesh: Any) -> str:
+        """Map a device mesh (or mesh-shape list) to a TVM target string.
+
+        Delegates to ``src.bridges.pytorch_xla.device_mesh_utils``. Examples:
+            "nvidia/nvidia-h100" for Nvidia H100
+            "rocm/gfx942"       for AMD MI300X
+            "intel/gaudi-2"     for Intel Gaudi 2
+            "llvm"              fallback for CPU or when no device info
+        """
+        from src.bridges.pytorch_xla.device_mesh_utils import infer_target_from_mesh
+        return infer_target_from_mesh(mesh)
+
     @classmethod
     def _build_spec_from_tvm(
         cls,
@@ -940,88 +954,150 @@ def _num_devices_on_axes(
     return total
 
 
+# ── Sharding annotation: real MLIR attribute insertion ─────────────────
+
+# Captures: 1=prefix "func.func @name(", 2=args, 3=suffix ") -> ret {"
+_FUNC_SIG_RE = re.compile(
+    r"(func\.func\s+@\w+\s*\()"
+    r"([^)]*)"
+    r"(\)\s*(?:->\s*[^{]+)?\s*\{)",
+    re.DOTALL,
+)
+
+# Captures: 1=name (%foo), 2=type (tensor<...>/memref<...>), 3=optional attrs
+_FUNC_ARG_RE = re.compile(
+    r"(%\w+)\s*:\s*"
+    r"((?:tensor|memref)<[^>]+>)"
+    r"(\s*\{[^{}]*\})?",
+    re.DOTALL,
+)
+
+# Strips an existing mhlo.sharding attr from a brace group (for idempotency).
+_SHARDING_ATTR_INNER_RE = re.compile(r'\s*mhlo\.sharding\s*=\s*"[^"]*"')
+
+
+def _sharding_spec_to_string(ts: TensorSharding, mesh_shape: list[int]) -> str:
+    """Convert a TensorSharding to a StableHLO sharding string.
+
+    Format follows the OpenXLA convention:
+        * Replicated: ``"replicated"``
+        * Maximal (single device): ``"maximal"``
+        * Sharded:     ``"devices=[<tile_shape>]<=[<num_devices>]"``
+
+    Examples:
+        * Data parallel on 4 devices, axis 0:   ``"devices=[4]<=[4]"``
+        * Model parallel on 4 devices, axis 1:   ``"devices=[1,4]<=[4]"``
+        * Tensor parallel on 2x2 mesh:           ``"devices=[2,2]<=[4]"``
+    """
+    if not ts.mesh_axes:
+        return "replicated" if ts.replicate_on_other_axes else "maximal"
+
+    # partition_shape is per-tensor-dim: it is the canonical "tile" view.
+    # Fall back to mesh_shape entries only when partition_shape is empty.
+    if ts.partition_shape:
+        tile_str = ",".join(str(s) for s in ts.partition_shape)
+    else:
+        tile_str = ",".join(
+            str(mesh_shape[a]) if a < len(mesh_shape) else "1"
+            for a in ts.mesh_axes
+        )
+
+    num_devices = 1
+    for a in ts.mesh_axes:
+        if a < len(mesh_shape):
+            num_devices *= mesh_shape[a]
+
+    return f"devices=[{tile_str}]<=[{num_devices}]"
+
+
+def _insert_sharding_attr(
+    mlir_text: str,
+    arg_name: str,
+    sharding_str: str,
+) -> str:
+    """Insert or replace ``{mhlo.sharding = "..."}`` on a function argument.
+
+    For a function::
+
+        func.func @matmul(%A: tensor<128x128xf32>, %B: tensor<128x128xf32>) -> ...
+
+    inserts::
+
+        func.func @matmul(
+            %A: tensor<128x128xf32> {mhlo.sharding = "..."},
+            %B: tensor<128x128xf32>) -> ...
+
+    Idempotent: if the arg already has an ``mhlo.sharding`` attribute,
+    it is replaced (not duplicated).
+
+    Returns the input text unchanged if no ``func.func`` definition is
+    found, or if no argument matches ``arg_name``.
+    """
+    func_match = _FUNC_SIG_RE.search(mlir_text)
+    if not func_match:
+        return mlir_text
+
+    sig_args = func_match.group(2)
+
+    def annotate_arg(match: re.Match) -> str:
+        name = match.group(1)
+        type_str = match.group(2)
+        existing_attrs = match.group(3) or ""
+
+        if name[1:] != arg_name:
+            return match.group(0)
+
+        cleaned = _SHARDING_ATTR_INNER_RE.sub("", existing_attrs)
+        new_attr = f'mhlo.sharding = "{sharding_str}"'
+
+        inner = cleaned.strip().strip("{}").strip()
+        if inner:
+            return f"{name}: {type_str} {{{inner}, {new_attr}}}"
+        return f"{name}: {type_str} {{{new_attr}}}"
+
+    new_sig_args = _FUNC_ARG_RE.sub(annotate_arg, sig_args)
+    if new_sig_args == sig_args:
+        return mlir_text
+
+    return (
+        mlir_text[: func_match.start()]
+        + func_match.group(1)
+        + new_sig_args
+        + func_match.group(3)
+        + mlir_text[func_match.end():]
+    )
+
+
 def _annotate_stablehlo_with_sharding(
     mlir_text: str,
     spec: ShardingSpec,
 ) -> str:
-    """Annotate a StableHLO MLIR text with ``mhlo.sharding`` attributes.
+    """Annotate a StableHLO MLIR text with real ``mhlo.sharding`` attributes.
 
-    The annotation format follows the OpenXLA convention:
-      ``mhlo.sharding = "{devices=[<tile_shape>]<=[<mesh_shape>]}"``
+    For each tensor in ``spec.tensor_shardings`` whose name matches a
+    function argument in ``mlir_text``, inserts a real MLIR attribute on
+    that argument:
+
+        func.func @main(%arg0: tensor<...> {mhlo.sharding = "..."})
+
+    H-03 fix: the previous implementation only added ``// mhlo.sharding``
+    *comments*, which are ignored by the StableHLO/XLA pipeline. This
+    version inserts real MLIR attributes that GSPMD actually consumes.
 
     Args:
         mlir_text: The raw StableHLO MLIR text.
         spec: The sharding specification.
 
     Returns:
-        Annotated MLIR text with sharding specifications on relevant ops.
+        MLIR text with sharding attributes inserted on relevant args.
     """
-    lines = mlir_text.split("\n")
-    annotated: list[str] = []
+    if not mlir_text or not spec.tensor_shardings:
+        return mlir_text
 
-    # Build sharding strings per tensor
-    sharding_strs: dict[str, str] = {}
+    result = mlir_text
     for tname, ts in spec.tensor_shardings.items():
-        if not ts.mesh_axes:
-            sharding_strs[tname] = 'mhlo.sharding = "replicated"'
-        else:
-            # Build the tile device assignment
-            tile_dims = [str(ts.partition_shape[a]) if a < len(ts.partition_shape) else "1"
-                         for a in ts.mesh_axes]
-            tile_str = ",".join(tile_dims) if tile_dims else "1"
-            sharding_strs[tname] = (
-                f'mhlo.sharding = "{{devices=[{tile_str}]}}"'
-            )
-
-    # Add sharding metadata header
-    annotated.append(f"// GSPMD-sharded module")
-    annotated.append(f"// Mesh shape: {spec.mesh_shape}")
-    annotated.append(f"// Strategy: {spec.strategy_used.name}")
-    annotated.append(f"// Estimated comm volume: {spec.estimated_comm_volume_bytes} bytes")
-    annotated.append(f"// Inserted collectives: {len(spec.inserted_collectives)}")
-    annotated.append("")
-
-    # Annotate each function argument and result
-    for line in lines:
-        stripped = line.strip()
-
-        # Skip empty lines and existing annotations header
-        if not stripped or stripped.startswith("// GSPMD") or stripped.startswith("// Mesh") or stripped.startswith("// Strategy"):
-            continue
-
-        # Add sharding annotations to function arguments
-        if "func.func @" in stripped and "(" in stripped:
-            # Add sharding annotation attribute to function
-            for tname, sharding_str in sharding_strs.items():
-                # Find the matching tensor in the function signature
-                annotated.append(f"  // tensor {tname}: {sharding_str}")
-
-        # Annotate return operations with output sharding
-        if stripped.startswith("return ") and ":" in stripped:
-            # Add sharding annotation to the return op
-            out_sharding = sharding_strs.get("output", sharding_strs.get(
-                list(spec.tensor_shardings.keys())[-1] if spec.tensor_shardings else "",
-                'mhlo.sharding = "replicated"',
-            ))
-            annotated.append(f"  // output_sharding: {out_sharding}")
-
-        # Add region-level sharding annotations
-        if stripped.startswith("module {"):
-            annotated.append(f"  // sharding_spec: mesh={spec.mesh_shape}, "
-                             f"strategy={spec.strategy_used.name}")
-
-        # Annotate arithmetic ops that correspond to sharded tensors
-        annotated.append(line)
-
-    # If no annotations were added (empty module), wrap with annotation
-    result = "\n".join(annotated)
-    if not result:
-        result = (
-            f"// GSPMD-sharded module\n"
-            f"// Mesh shape: {spec.mesh_shape}\n"
-            f"// Strategy: {spec.strategy_used.name}\n"
-            f"{mlir_text}"
-        )
+        sharding_str = _sharding_spec_to_string(ts, spec.mesh_shape)
+        result = _insert_sharding_attr(result, tname, sharding_str)
 
     return result
 

@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import pytest
 
-from src.bridges.pytorch_xla.device_mesh import (
-    DeviceMesh,
-    DeviceVendor,
-    InterconnectType,
-    MeshDevice,
-)
 from src.bridges.pytorch_xla.comm_backend import (
     CollectiveOp,
     CommBackend,
     CommGroup,
     CommLibrary,
+)
+from src.bridges.pytorch_xla.device_mesh import (
+    DeviceMesh,
+    DeviceVendor,
+    InterconnectType,
+    MeshDevice,
 )
 
 
