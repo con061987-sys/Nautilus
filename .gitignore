@@ -65,6 +65,8 @@ cmake-build-release/
 # --- OpenCode / OhMyOpenCode runtime state ---
 .omo/run-continuation/
 .omo/cache/
+.opencode/node_modules/
+session-*.md
 
 # --- Local secrets / env ---
 .env
