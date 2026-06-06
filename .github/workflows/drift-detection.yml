@@ -1,0 +1,56 @@
+# .github/workflows/drift-detection.yml
+# Daily check for upstream version drift. If Triton, TVM, or XLA
+# releases a breaking change, this workflow opens an issue.
+
+name: Drift Detection
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # 06:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    name: Check upstream versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check pip for updates
+        run: |
+          pip install pip-check-updates==0.5.0
+          # The .outdated file lists all packages that have newer versions
+          pip-check-updates --format=columns --output-file=outdated.txt || true
+          cat outdated.txt
+      - name: Check for breaking changes
+        id: check
+        run: |
+          # If any of our pinned deps has moved past the pin, flag it.
+          python scripts/check_upstream_drift.py > drift_report.md
+          cat drift_report.md
+          if grep -q "DRIFT" drift_report.md; then
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+          fi
+      - name: Open issue on drift
+        if: steps.check.outputs.drift_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('drift_report.md', 'utf8');
+            const title = 'Upstream drift detected: ' + new Date().toISOString().split('T')[0];
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['drift', 'dependencies']
+            });
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift_report.md

@@ -37,6 +37,7 @@
     "edit": "allow",
     "read": "allow"
   },
+  "disabled_providers": ["github-copilot"],
   "plugin": [
     "oh-my-openagent@latest",
     "oh-my-opencode-slim"

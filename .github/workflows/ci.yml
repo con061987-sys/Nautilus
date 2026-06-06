@@ -1,0 +1,133 @@
+# .github/workflows/ci.yml
+# CI that runs on every PR. Tests the parts of the codebase that
+# DON'T require a GPU. GPU-dependent tests are dispatched to
+# real-hardware.yml which uses self-hosted runners.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -e .[dev]
+      - run: ruff check src/
+      - run: ruff format --check src/
+      - run: mypy src/ --ignore-missing-imports
+      - run: |
+          # Anti-comment guardrail: fail if "TODO: implement" or
+          # "# fixme" comments are added without a tracked issue.
+          if grep -RIn --include="*.py" -E "#\s*(TODO|FIXME|XXX):\s*implement" src/; then
+            echo "Found TODO/FIXME comments; please open an issue first." >&2
+            exit 1
+          fi
+
+  test-cpu:
+    name: Test (CPU)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld spirv-tools
+      - run: pip install -e .[dev]
+      - run: pip install torch==2.4.1 triton==3.0.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install apache-tvm==0.18.0
+      - name: Run CPU tests
+        run: |
+          python -m pytest src/ -v \
+            -m "not gpu and not cuda and not rocm and not intel and not slow" \
+            --cov=src --cov-report=term-missing --cov-fail-under=60
+
+  build-c-api:
+    name: Build C-API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld spirv-tools cmake ninja-build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .[dev]
+      - name: Build libnautilus_c_api
+        run: |
+          cmake -GNinja -S src/c_api -B build
+          cmake --build build
+          ls -la build/libnautilus_c_api*
+      - name: Test C-API load
+        run: |
+          NAUTILUS_C_LIB=$(pwd)/build/libnautilus_c_api.so python -c "
+          from src.c_api import is_available
+          assert is_available(), 'C-API should be loadable after build'
+          print('C-API loaded successfully')
+          "
+
+  build-fat-binary:
+    name: Build fat binary smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld spirv-tools gcc
+      - run: pip install -e .[dev]
+      - name: Build a fat binary (CPU-only — no real GPU)
+        run: |
+          python -c "
+          from src.bridges.aot_packager.builder import FatBinaryBuilder, FatBinaryConfig
+          from pathlib import Path
+          out = Path('build/test.fat.o')
+          out.parent.mkdir(exist_ok=True, parents=True)
+          builder = FatBinaryBuilder(cache_dir='build/cache')
+          result = builder.build(FatBinaryConfig(
+              kernel_name='smoke_test',
+              kernel_source='''
+import triton
+import triton.language as tl
+@triton.jit
+def smoke_kernel(X, n):
+    pid = tl.program_id(0)
+    tl.store(X + pid, pid)
+''',
+              output_dir=str(out.parent),
+              output_filename=out.name,
+              skip_amd=True,
+              skip_intel=True,
+              skip_nvidia=True,
+              skip_validation=True,
+          ))
+          print('Result:', result.to_dict())
+          assert result.fat_binary is not None, 'Fat binary was not built'
+          assert result.fat_binary.total_size > 0, 'Fat binary is empty'
+          print('OK: fat binary size =', result.fat_binary.total_size)
+          "

@@ -47,6 +47,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from src.common.errors import LinkingError
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,10 +147,14 @@ class FatBinaryLinker:
             link_result = self._run_lld(temp_dir, section_files, output_path, kernel_name)
         except Exception as exc:
             elapsed = time.perf_counter() - start
-            logger.error("Fat binary linking failed: %s", exc)
+            logger.error(
+                "Fat binary linking failed",
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
             return LinkingResult(
                 success=False,
-                error=f"Linking failed: {exc}",
+                error=str(exc),
                 linking_time_s=elapsed,
             )
         finally:
@@ -158,7 +164,7 @@ class FatBinaryLinker:
             elapsed = time.perf_counter() - start
             return LinkingResult(
                 success=False,
-                error="lld invocation failed",
+                error="lld invocation returned False (should have raised)",
                 linking_time_s=elapsed,
             )
 
@@ -315,36 +321,43 @@ class FatBinaryLinker:
         output_path: Path,
         kernel_name: str,
     ) -> bool:
-        """Invoke the LLVM linker to combine the section files."""
-        if not self._lld_path:
-            # lld not available — produce a minimal fat binary manually
-            return self._write_minimal_fat_binary(temp_dir, section_files, output_path)
+        """Invoke the LLVM linker to combine the section files.
 
-        # Build the lld command
+        Raises LinkingError on any failure. NEVER falls back to a
+        non-functional manual fat binary.
+        """
+        if not self._lld_path:
+            raise LinkingError(
+                "lld not found in PATH. Install LLVM (apt install lld / "
+                "brew install llvm). The fat binary cannot be linked "
+                "without lld.",
+            )
+
         cmd = [
             self._lld_path, "-r",  # relocatable link
             "-o", str(output_path),
             *[str(p) for p in section_files.values()],
         ]
-
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=self.timeout_seconds,
             )
-            if result.returncode == 0 and output_path.exists():
-                return True
-            logger.warning(
-                "lld failed (rc=%d): %s. Falling back to manual fat binary.",
-                result.returncode, result.stderr,
+        except subprocess.TimeoutExpired as exc:
+            raise LinkingError(
+                f"lld timed out after {self.timeout_seconds}s",
+                cause=exc,
+            ) from exc
+        if result.returncode != 0 or not output_path.exists():
+            raise LinkingError(
+                f"lld failed: {result.stderr or '(no stderr)'}",
+                context={
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "cmd": cmd,
+                },
             )
-            return self._write_minimal_fat_binary(temp_dir, section_files, output_path)
-        except subprocess.TimeoutExpired:
-            logger.warning("lld timeout; falling back to manual fat binary")
-            return self._write_minimal_fat_binary(temp_dir, section_files, output_path)
-        except FileNotFoundError:
-            logger.warning("lld not found; falling back to manual fat binary")
-            return self._write_minimal_fat_binary(temp_dir, section_files, output_path)
+        return True
 
     def _write_minimal_fat_binary(
         self,

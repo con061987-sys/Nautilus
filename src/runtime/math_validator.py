@@ -1,56 +1,61 @@
 """IEEE-754 bit-exact math validator for the Nautilus runtime.
 
-Validates that kernels produce bit-identical results across all
-hardware targets. Critical for users who need reproducible
-numerical results (e.g. scientific computing, ML reproducibility).
+Validates that kernels produce bit-identical (or bounded) results
+across different hardware targets. Critical for users who need
+reproducible numerical results (scientific computing, ML
+reproducibility, regulated industries).
 
-The validator supports two modes:
-  1. STRICT — bit-exact: every bit of the result must match
+Two modes:
+  1. STRICT — bit-exact: every bit must match
   2. TOLERANT — within ULP bounds: allows small rounding differences
 
-The bit-exact mode is expensive (requires special hardware flags
-on some platforms) but ensures true reproducibility. The tolerant
-mode is faster and sufficient for most ML workloads.
+The previous implementation had `max_ulp = max_abs  # Simplified`
+which defeated the purpose of ULP-level analysis. This rewrite
+computes REAL ULP error using the IEEE-754 ULP function.
 
-Production features:
-  - Per-operation tolerance configuration
-  - Detect rounding differences between vendors
-  - Insert rounding correction IR when needed
-  - Validate compiled kernels at runtime
+Anti-pattern eliminated: silent `(0.0, 0.0, 0.0)` returns on
+ImportError. Now raises DependencyMissingError with a clear
+install hint.
 """
 
 from __future__ import annotations
 
 import hashlib
-import logging
+import math
 import struct
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
-logger = logging.getLogger(__name__)
+from src.common.errors import (
+    BitExactMismatchError,
+    DependencyMissingError,
+    ValidationError,
+    NautilusError,
+    ErrorCode,
+)
+from src.common.logging import get_logger
+
+log = get_logger("nautilus.runtime.math")
 
 
 class StrictnessLevel(Enum):
-    """How strict the math validation should be."""
-    BIT_EXACT = auto()       # Every bit must match
-    ULP_1 = auto()           # Within 1 ULP
-    ULP_4 = auto()           # Within 4 ULP (default for ML)
-    ULP_16 = auto()          # Within 16 ULP
-    RELATIVE_1E_5 = auto()   # Relative tolerance 1e-5
-    RELATIVE_1E_3 = auto()   # Relative tolerance 1e-3
+    BIT_EXACT = auto()
+    ULP_1 = auto()
+    ULP_4 = auto()
+    ULP_16 = auto()
+    RELATIVE_1E_5 = auto()
+    RELATIVE_1E_3 = auto()
 
 
 @dataclass
 class MathOpSpec:
-    """Specification of a math operation's tolerance."""
     op_name: str
     strictness: StrictnessLevel
     notes: str = ""
 
     @property
     def tolerance(self) -> float:
-        """Get the tolerance value for this strictness level."""
         return {
             StrictnessLevel.BIT_EXACT: 0.0,
             StrictnessLevel.ULP_1: 1.0,
@@ -63,7 +68,6 @@ class MathOpSpec:
 
 @dataclass
 class MathValidationReport:
-    """Report from a math validation run."""
     op_name: str
     bit_exact: bool
     max_abs_error: float
@@ -77,16 +81,7 @@ class MathValidationReport:
 class MathValidator:
     """Validates that math operations produce bit-exact (or bounded)
     results across different hardware targets.
-
-    Usage:
-        validator = MathValidator(StrictnessLevel.ULP_4)
-        report = validator.validate_kernel_output(
-            kernel_name="matmul",
-            reference=ref_output,
-            actual=actual_output,
-        )
     """
-
     def __init__(self, default_strictness: StrictnessLevel = StrictnessLevel.ULP_4) -> None:
         self.default_strictness = default_strictness
         self._op_specs: dict[str, MathOpSpec] = {}
@@ -106,11 +101,9 @@ class MathValidator:
         self._bit_exact_mode = enabled
 
     def set_op_strictness(self, op_name: str, strictness: StrictnessLevel) -> None:
-        """Set the strictness for a specific operation."""
         self._op_specs[op_name] = MathOpSpec(op_name=op_name, strictness=strictness)
 
     def get_op_spec(self, op_name: str) -> MathOpSpec:
-        """Get the spec for an operation, with default fallback."""
         return self._op_specs.get(
             op_name,
             MathOpSpec(op_name=op_name, strictness=self.default_strictness),
@@ -136,22 +129,16 @@ class MathValidator:
         """
         import time
         start = time.perf_counter()
-
         spec = self.get_op_spec(kernel_name)
-
-        # Compute error metrics
-        max_abs_error, max_rel_error, max_ulp_error = self._compute_errors(
-            reference, actual,
-        )
-
-        tolerance = spec.tolerance
+        max_abs_error, max_rel_error, max_ulp_error = self._compute_errors(reference, actual)
         if spec.strictness == StrictnessLevel.BIT_EXACT:
-            bit_exact = max_abs_error == 0.0
+            bit_exact = max_ulp_error == 0.0
         else:
-            bit_exact = max_abs_error == 0.0
-            if not bit_exact and tolerance > 0:
+            tolerance = spec.tolerance
+            if spec.strictness in (StrictnessLevel.ULP_1, StrictnessLevel.ULP_4, StrictnessLevel.ULP_16):
                 bit_exact = max_ulp_error <= tolerance
-
+            else:
+                bit_exact = max_rel_error <= tolerance
         elapsed = (time.perf_counter() - start) * 1000
         return MathValidationReport(
             op_name=kernel_name,
@@ -165,39 +152,85 @@ class MathValidator:
         )
 
     def _compute_errors(
-        self, reference: Any, actual: Any,
+        self,
+        reference: Any,
+        actual: Any,
     ) -> tuple[float, float, float]:
-        """Compute max absolute, relative, and ULP errors."""
+        """Compute max absolute, relative, and ULP errors.
+
+        Raises:
+            DependencyMissingError: if numpy is not installed.
+                The previous version returned (0, 0, 0) silently,
+                which falsely reported bit-exact success. That
+                anti-pattern is removed.
+        """
         try:
             import numpy as np
+        except ImportError as exc:
+            raise DependencyMissingError(
+                "numpy is required for math validation. Install with: "
+                "pip install numpy",
+            ) from exc
+        try:
             ref = np.asarray(reference).flatten()
             act = np.asarray(actual).flatten()
-        except ImportError:
-            return (0.0, 0.0, 0.0)
-
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                f"Cannot convert reference/actual to numpy arrays: {exc}",
+                cause=exc,
+            ) from exc
         if ref.size == 0 or act.size == 0:
-            return (0.0, 0.0, 0.0)
-
+            return 0.0, 0.0, 0.0
         n = min(ref.size, act.size)
-        ref = ref[:n]
-        act = act[:n]
-
-        # Max absolute error
+        ref = ref[:n].astype(np.float64)
+        act = act[:n].astype(np.float64)
         diff = np.abs(ref - act)
         max_abs = float(np.max(diff)) if diff.size > 0 else 0.0
-
-        # Max relative error (avoid division by zero)
-        nonzero = np.abs(ref) > 1e-30
+        nonzero = np.abs(ref) > 0
         if nonzero.any():
             rel_diff = diff[nonzero] / np.abs(ref[nonzero])
             max_rel = float(np.max(rel_diff))
         else:
             max_rel = 0.0
+        max_ulp = self._compute_ulp_error(ref, act)
+        return max_abs, max_rel, max_ulp
 
-        # ULP error (approximate)
-        max_ulp = max_abs  # Simplified — true ULP computation is complex
+    def _compute_ulp_error(self, ref: Any, act: Any) -> float:
+        """Compute the REAL maximum ULP error.
 
-        return (max_abs, max_rel, max_ulp)
+        ULP (Unit in the Last Place) is the distance between a
+        floating-point number and the next representable value.
+        For two numbers a and b, ULP error is:
+            |a - b| / ULP(a)
+
+        The previous implementation used `max_abs` as a proxy,
+        which is wrong when numbers cross orders of magnitude.
+        """
+        import numpy as np
+        ref = np.asarray(ref, dtype=np.float64).flatten()
+        act = np.asarray(act, dtype=np.float64).flatten()
+        n = min(ref.size, act.size)
+        if n == 0:
+            return 0.0
+        ref = ref[:n]
+        act = act[:n]
+        # Per-element ULP error.
+        # nextafter(a, +inf) - a = ULP(a) for normal numbers
+        # For subnormals, ULP is 2^-1074 (smallest positive subnormal)
+        abs_ref = np.abs(ref)
+        # Compute ULP of each ref value
+        with np.errstate(over="ignore", under="ignore", invalid="ignore"):
+            # nextafter is the IEEE-754 successor
+            next_up = np.nextafter(ref, np.inf)
+            ulp_at_ref = np.abs(next_up - ref)
+            # For |ref| == 0, ULP is the smallest subnormal
+            zero_mask = abs_ref == 0
+            ulp_at_ref = np.where(zero_mask, np.finfo(np.float64).tiny, ulp_at_ref)
+            # Avoid divide-by-zero
+            ulp_at_ref = np.maximum(ulp_at_ref, np.finfo(np.float64).tiny)
+        abs_diff = np.abs(ref - act)
+        ulp_err = abs_diff / ulp_at_ref
+        return float(np.max(ulp_err)) if ulp_err.size > 0 else 0.0
 
     def insert_rounding_correction(self, ir_text: str) -> str:
         """Insert IR-level rounding correction for bit-exact mode.
@@ -207,12 +240,10 @@ class MathValidator:
         """
         if not self._bit_exact_mode:
             return ir_text
-
-        # Add a comment indicating bit-exact mode is active
-        header = "// IEEE-754 bit-exact mode active — no fast-math optimizations\n"
-        if "bit-exact mode" not in ir_text:
-            return header + ir_text
-        return ir_text
+        header = "// IEEE-754 bit-exact mode active - no fast-math optimizations\n"
+        if "bit-exact mode" in ir_text:
+            return ir_text
+        return header + ir_text
 
     def hash_tensor(self, tensor: Any) -> str:
         """Compute a deterministic hash of a tensor's bit pattern.
@@ -223,8 +254,15 @@ class MathValidator:
             import numpy as np
             arr = np.asarray(tensor)
             return hashlib.sha256(arr.tobytes()).hexdigest()
-        except ImportError:
-            return ""
+        except ImportError as exc:
+            raise DependencyMissingError(
+                "numpy is required for tensor hashing. Install with: pip install numpy",
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                f"Cannot hash tensor: {exc}",
+                cause=exc,
+            ) from exc
 
     def verify_reproducibility(
         self,
@@ -247,12 +285,13 @@ class MathValidator:
                 if self.hash_tensor(out) != first_hash:
                     return False
             return True
+        except NautilusError:
+            raise
         except Exception as exc:
-            logger.warning("Reproducibility check failed: %s", exc)
+            log.warning("Reproducibility check failed", error=str(exc))
             return False
 
     def get_stats(self) -> dict[str, Any]:
-        """Return validator statistics."""
         return {
             "bit_exact_mode": self._bit_exact_mode,
             "default_strictness": self.default_strictness.name,

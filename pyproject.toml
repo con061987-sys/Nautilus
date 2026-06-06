@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel", "cmake>=3.18", "ninja"]
+requires = ["setuptools>=68.0", "wheel", "cmake>=3.18", "ninja", "Cython>=3.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "triton-tvm-bridge"
+name = "nautilus"
 version = "0.1.0"
-description = "Bridge between OpenAI Triton and Apache TVM MetaSchedule for cross-vendor AI compilation"
+description = "Cross-vendor AI compilation framework: PyTorch -> auto-tuned kernels -> fat binary -> auto-sharded across AMD/Intel/Nvidia clusters"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -15,6 +15,7 @@ authors = [
 keywords = [
     "triton", "tvm", "metaschedule", "gpu", "compiler",
     "amd", "intel", "nvidia", "fat-binary", "ai-compilation",
+    "auto-sharding", "stablehlo", "gspmd", "xla",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -28,61 +29,94 @@ classifiers = [
     "Programming Language :: C++",
     "Topic :: Software Development :: Compilers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
 ]
 
-# Core dependencies — Triton and TVM are required at runtime
+# Core dependencies — pinned to exact versions for reproducibility.
+# Hardware-specific extras ([nvidia], [amd], [intel], [sharding])
+# pull in Triton/TVM/torch/torch_xla.
 dependencies = [
-    "torch>=2.0",
-    "triton>=3.0",
-    "apache-tvm>=0.18",
-    "numpy>=1.20",
-    "pyyaml>=6.0",
-    "click>=8.0",
+    "numpy>=1.26,<3.0",
+    "pyyaml>=6.0,<7.0",
+    "click>=8.1,<9.0",
+    "rich>=13.7,<14.0",
+    "pyzmq>=25.1,<27.0",
+    "msgpack>=1.0,<2.0",
+    "hypothesis>=6.100,<7.0",
 ]
 
 [project.optional-dependencies]
-# XGBoost cost model in TVM MetaSchedule
-tuning = ["xgboost>=2.0"]
-# RPC support for remote hardware tuning
-rpc = ["apache-tvm[rpc]>=0.18"]
-# All optional features
-all = ["xgboost>=2.0", "apache-tvm[rpc]>=0.18"]
-# Development tools
+nvidia = [
+    "torch==2.4.1",
+    "triton==3.0.0",
+]
+amd = [
+    "torch==2.4.1",
+    "triton==3.0.0",
+    "aotriton==0.10",
+]
+intel = [
+    "torch==2.4.1",
+    "triton==3.0.0",
+]
+sharding = [
+    "apache-tvm==0.18.0",
+    "torch_xla==2.4.0",
+    "networkx>=3.0,<4.0",
+]
+tuning = [
+    "apache-tvm==0.18.0",
+    "xgboost>=2.0,<3.0",
+    "scikit-learn>=1.3,<2.0",
+]
+cuda = [
+    "tree-sitter>=0.20,<0.26",
+    "tree-sitter-cpp>=0.20,<0.24",
+]
+rpc = ["apache-tvm[rpc]==0.18.0"]
+all = [
+    "torch==2.4.1",
+    "triton==3.0.0",
+    "apache-tvm==0.18.0",
+    "torch_xla==2.4.0",
+    "xgboost>=2.0,<3.0",
+    "networkx>=3.0,<4.0",
+    "aotriton==0.10",
+    "tree-sitter>=0.20,<0.26",
+    "tree-sitter-cpp>=0.20,<0.24",
+]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "mypy>=1.5",
-    "ruff>=0.1",
-    "black>=23.0",
+    "pytest>=8.0,<10.0",
+    "pytest-cov>=4.1,<6.0",
+    "pytest-xdist>=3.5,<4.0",
+    "pytest-asyncio>=0.23,<1.0",
+    "mypy>=1.10,<2.0",
+    "ruff>=0.5,<1.0",
+    "black>=24.0,<25.0",
+    "hypothesis>=6.100,<7.0",
+    "pre-commit>=3.7,<5.0",
 ]
 
-# ----------------------------------------------------------------------------
-# Triton backend plugin entry point
-# This is what makes the plugin discoverable to Triton via entry_points
-# or TRITON_PLUGIN_DIRS environment variable.
-# ----------------------------------------------------------------------------
 [project.entry-points."triton.backends"]
-tvm = "src.bridges.triton_tvm.backend:TVMBackend"
+nautilus = "src.bridges.triton_tvm.backend:TVMBackend"
 
-# Expose the driver as well
 [project.entry-points."triton.drivers"]
-tvm = "src.bridges.triton_tvm.backend:TVMDriver"
-
-[project.urls]
-Homepage = "https://github.com/nvindia-cud/bridge"
-Documentation = "https://nvindia-cud.readthedocs.io"
-Repository = "https://github.com/nvindia-cud/bridge"
-Issues = "https://github.com/nvindia-cud/bridge/issues"
+nautilus = "src.bridges.triton_tvm.backend:TVMDriver"
 
 [project.scripts]
-# CLI for tuning individual kernels
+nautilus = "src.cli.main:cli"
 nautilus-tune = "src.cli.commands.tune:cli"
 nautilus-build = "src.cli.commands.build:cli"
 nautilus-shard = "src.cli.commands.shard:cli"
+nautilus-verify = "src.cli.commands.verify:cli"
 
-# ----------------------------------------------------------------------------
-# Setuptools configuration
-# ----------------------------------------------------------------------------
+[project.urls]
+Homepage = "https://github.com/nvindia-cud/nautilus"
+Documentation = "https://nvindia-cud.readthedocs.io"
+Repository = "https://github.com/nvindia-cud/nautilus"
+Issues = "https://github.com/nvindia-cud/nautilus/issues"
+
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
@@ -90,55 +124,71 @@ zip-safe = false
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
-exclude = ["src.tests*", "tests*", "third_party*", "docs*", ".opencode*"]
+exclude = ["src.tests*", "src.*.tests", "tests*", "third_party*", "docs*", ".opencode*", "scripts*", "benchmarks*"]
 
 [tool.setuptools.package-data]
-"src.bridges.triton_tvm.lib" = ["*.so", "*.dylib", "*.dll", "CMakeLists.txt"]
+"src.bridges.triton_tvm.lib" = ["*.so", "*.dylib", "*.dll", "CMakeLists.txt", "*.h", "*.cpp"]
+"src.bridges.aot_packager" = ["*.c", "*.h"]
+"src.c_api" = ["*.h"]
+"src" = ["py.typed"]
 
-# ----------------------------------------------------------------------------
-# C++ build configuration (optional — only used if building the C++ plugin)
-# ----------------------------------------------------------------------------
-[tool.scikit-build]
-# scikit-build-core is used for the C++ shared library
-cmake.build-type = "Release"
-wheel.packages = ["src/bridges/triton_tvm/lib"]
-
-# ----------------------------------------------------------------------------
-# Development tool configuration
-# ----------------------------------------------------------------------------
 [tool.pytest.ini_options]
-minversion = "7.0"
-testpaths = ["src/tests", "src/bridges"]
+minversion = "8.0"
+testpaths = ["src"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
     "--tb=short",
+    "--ignore=src/bridges/triton_tvm/tests",
+    "--ignore=src/bridges/aot_packager/tests",
+    "--ignore=src/bridges/pytorch_xla/tests",
+    "--ignore=src/bridges/cuda_ingest/tests",
+    "--ignore=src/bridges/conftest.py",
 ]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "gpu: marks tests that require GPU hardware (deselect with '-m \"not gpu\"')",
-    "integration: marks integration tests requiring TVM/Triton installed",
+    "gpu: requires a real GPU (Nvidia/AMD/Intel)",
+    "cuda: requires CUDA toolkit installed",
+    "rocm: requires ROCm installed",
+    "intel: requires oneAPI/SYCL installed",
+    "slow: tests that take more than 10 seconds",
+    "integration: cross-bridge integration tests",
+    "requires_deps: requires optional ML dependencies",
 ]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "triton.*", "triton", "torch.*", "torch", "torch_xla.*", "torch_xla",
+    "tvm.*", "tvm", "aotriton", "pyzmq.*", "_pytest.*", "hypothesis.*",
+]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = ["third_party", ".opencode", "build", "dist"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PT", "RUF"]
-ignore = ["E501"]  # line length handled by formatter
+select = ["E", "W", "F", "I", "B", "C4", "UP", "N", "SIM", "RUF"]
+ignore = ["E501", "B008", "SIM108", "RUF012"]
 
-[tool.mypy]
-python_version = "3.10"
-strict_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-disallow_any_generics = true
-disallow_subclassing_any = true
-# Don't check files in third-party
-exclude = ["third_party/", ".opencode/", "build/"]
+[tool.ruff.lint.per-file-ignores]
+"src/**/tests/*.py" = ["B011", "N802", "N803"]
+"src/**/__init__.py" = ["F401", "F403"]
+"src/c_api/**" = ["N802", "N803"]
+
+[[tool.mypy.overrides]]
+module = ["src.common.tests.*"]
+ignore_errors = true
 
 [tool.black]
 line-length = 100

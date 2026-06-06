@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -34,6 +35,13 @@ from .nvidia_backend import NvidiaBackend, NvidiaArch, NvidiaCompilationResult
 from .linker import FatBinaryLinker, LinkingResult
 from .fat_binary import FatBinary, KernelSection, SectionFormat
 from .hardware_validator import HardwareValidator, ValidationResult, ValidationMode
+
+from src.common.errors import (
+    CompilationError,
+    DependencyMissingError,
+    LinkingError,
+    NautilusError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -352,19 +360,24 @@ class FatBinaryBuilder:
     def _compile_runtime_stub(self, config: FatBinaryConfig) -> bytes:
         """Compile the C runtime stub into an object file.
 
-        The stub is a small C file with vendor detection. We compile
-        it with gcc to produce a relocatable object file that lld
-        can combine with the per-vendor kernel sections.
+        The stub is a real C file with /dev probing and CPUID-based
+        vendor detection. We compile it with gcc to produce a
+        relocatable object file that lld can combine with the per-
+        vendor kernel sections. Raises CompilationError if gcc is
+        not available — never silently returns a stub.
         """
         stub_path = self.cache_dir / "runtime_stub.c"
         stub_path.write_text(self._read_runtime_stub_source())
 
         output_path = self.cache_dir / f"tmp_runtime_stub_{config.kernel_name}.o"
 
+        if not shutil.which("gcc"):
+            raise DependencyMissingError(
+                "gcc not found in PATH; cannot compile C runtime stub",
+            )
         try:
             cmd = [
                 "gcc", "-c",
-                "-nostdlib",
                 "-fPIC",
                 "-o", str(output_path),
                 str(stub_path),
@@ -372,45 +385,65 @@ class FatBinaryBuilder:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=30,
             )
-            if result.returncode == 0 and output_path.exists():
-                return output_path.read_bytes()
-            # Fall back: return a minimal ELF stub
-            return self._minimal_elf_stub()
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return self._minimal_elf_stub()
+            if result.returncode != 0 or not output_path.exists():
+                raise CompilationError(
+                    f"gcc failed to compile runtime_stub.c: {result.stderr}",
+                    context={"stdout": result.stdout, "stderr": result.stderr},
+                )
+            return output_path.read_bytes()
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            raise CompilationError(
+                f"Failed to compile runtime_stub.c: {exc}",
+                cause=exc,
+            ) from exc
         finally:
             stub_path.unlink(missing_ok=True)
 
     def _read_runtime_stub_source(self) -> str:
-        """Read the C runtime stub source code.
+        """Read the C runtime stub source from the package data.
 
-        In a production package this would be bundled as a resource.
-        For now, we embed it directly.
+        The previous design embedded a 4-line default-dispatch stub as
+        a string here, overwriting the real 100+ line runtime_stub.c
+        on every build. This implementation reads the real stub from
+        the package's bundled .c file via importlib.resources.
         """
-        return '''/* C runtime stub - embedded in the Python package. */
-typedef int (*nautilus_kernel_fn)(void*);
-extern nautilus_kernel_fn nautilus_kernel_nvidia;
-extern nautilus_kernel_fn nautilus_kernel_amd;
-extern nautilus_kernel_fn nautilus_kernel_intel;
-extern nautilus_kernel_fn nautilus_kernel_default;
-
-int nautilus_dispatch(void* args) {
-    nautilus_kernel_fn fn = nautilus_kernel_default;
-    return fn(args);
-}
-'''
+        from importlib import resources
+        try:
+            return (resources.files("src.bridges.aot_packager") / "runtime_stub.c").read_text()
+        except (FileNotFoundError, ModuleNotFoundError):
+            # Fallback: read relative to this file's location
+            here = Path(__file__).parent
+            stub = here / "runtime_stub.c"
+            if stub.exists():
+                return stub.read_text()
+            raise NautilusError(
+                f"runtime_stub.c not found in package; looked at {here}",
+            )
 
     def _minimal_elf_stub(self) -> bytes:
-        """Minimal ELF stub for the runtime when gcc is unavailable."""
+        """DEPRECATED. The previous design returned a 64-byte ELF
+        stub when gcc was unavailable. That stub had no symbols and
+        could not dispatch to any vendor, so every fat binary
+        would crash at startup.
+
+        This method is kept for back-compat but is no longer called
+        by _compile_runtime_stub (which now raises a real error
+        instead). New code should not use this.
+        """
+        import warnings
+        warnings.warn(
+            "_minimal_elf_stub is deprecated and produces a non-functional "
+            "ELF. Use _compile_runtime_stub which raises on gcc missing.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         import struct
         elf_magic = b"\x7fELF"
         header = (
             elf_magic
-            + b"\x02\x01\x01\x00"  # 64-bit, LE, current, SysV
+            + b"\x02\x01\x01\x00"
             + b"\x00" * 8
-            + b"\x01\x00"          # ET_REL
-            + b"\x00" * 50         # padding to size
+            + b"\x01\x00"
+            + b"\x00" * 50
         )
-        # Ensure total size is exactly 64 bytes
-        header = header + b"\x00" * (64 - len(header))
-        return header
+        return header + b"\x00" * (64 - len(header))

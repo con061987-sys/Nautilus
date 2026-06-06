@@ -5,62 +5,72 @@ them into Triton Python source code, which can then be compiled
 through the Phase 1/2 pipeline to run on any supported hardware
 (Nvidia, AMD, Intel, Apple).
 
-Architecture:
+Architecture (as of tree-sitter rewrite):
     [CUDA C++ Source (.cu)]
         │
         ▼
-    [parser.py] ──► [CUDAKernel AST]
-        │             - function signature
-        │             - body statements
-        │             - shared memory declarations
-        │             - thread/block indices
+    [parser.py — tree-sitter AST] ──► [CudaKernel AST]
+        │   Uses tree-sitter-cpp for full C++ grammar
+        │   support: templates, namespaces, complex loops
+        │   - function signatures + typed parameters
+        │   - body statements with AST metadata
+        │   - shared memory declarations
+        │   - CUDA field expressions (threadIdx/blockIdx/blockDim/gridDim)
         │
         ▼
-    [intrinsic_mapper.py] ──► [Mapped Intrinsics]
-        │             - __syncthreads → tl.barrier
-        │             - atomicAdd → tl.atomic_add
-        │             - __shfl_* → tl.shuffle
-        │             - cudaMalloc → torch.empty
+    [intrinsic_mapper.py] ──► [Mapping Table]
+        │   Used as a *lookup table* by the translator,
+        │   not for blind text-level replacement.
+        │   - __syncthreads → tl.debug_barrier
+        │   - atomicAdd → tl.atomic_add
+        │   - threadIdx.x → tl.program_id(0)
         │
         ▼
     [shared_memory.py] ──► [Shared Memory Plan]
-        │             - __shared__ arrays → tl.shared allocations
-        │             - bank conflict analysis
+        │   - __shared__ arrays → tl.zeros allocations
+        │   - bank conflict analysis
         │
         ▼
     [pointer_analysis.py] ──► [Pointer Layout]
-        │             - pointer arithmetic → block pointers
-        │             - boundary checks
-        │             - coalescing analysis
+        │   - pointer arithmetic → block pointers
+        │   - boundary checks
+        │   - coalescing analysis
         │
         ▼
-    [translator.py] ──► [Triton Python Source]
-        │             - @triton.jit decorated function
-        │             - proper block/thread hierarchy
-        │             - matching semantics
+    [translator.py — AST-level dispatch] ──► [Triton Source]
+        │   Dispatches per-statement using CudaStatementType
+        │   and AST metadata.  No silent no-ops: unsupported
+        │   intrinsics raise IngestionUnsupportedIntrinsicError.
+        │   - @triton.jit decorated function
+        │   - proper block/thread hierarchy (approximate)
+        │   - type-cast insertion for atomic args
         │
         ▼
     [kernel_compiler.py] ──► [Compiled Fat Binary]
-        │             - feeds Triton source to Phase 1/2
-        │             - compiles for all targets
-        │             - produces fat binary
+        │   - feeds Triton source to Phase 1/2
+        │   - compiles for all targets
+        │   - produces fat binary
 
-Production features:
-  - Loss-less translation (semantics preserved)
-  - Handles 90%+ of common CUDA kernel patterns
-  - Clear diagnostics for unsupported patterns
-  - Integration with Phase 1/2/3 pipelines
+Key changes in the tree-sitter rewrite (2026-06):
+  - parser.py now uses `tree-sitter-cpp` for AST-level parsing
+    rather than fragile regex patterns
+  - Handles template parameters, namespaces, function pointers,
+    extern "C" blocks, and complex for-loops natively
+  - translator.py uses StmtType + metadata for dispatch instead
+    of blind text-level replacement via intrinsic_mapper.transform_text()
+  - Unsupported constructs raise typed errors instead of
+    silently producing no-ops
 
 Modules:
-  parser.py             - CUDA C++ source parser
-  intrinsic_mapper.py   - CUDA intrinsic → Triton mapping
+  parser.py             - CUDA C++ source parser (tree-sitter-based)
+  intrinsic_mapper.py   - CUDA intrinsic → Triton mapping table
   shared_memory.py      - Shared memory analysis and translation
   pointer_analysis.py   - Pointer arithmetic analysis
-  translator.py         - CUDA AST → Triton Python source
+  translator.py         - CUDA AST → Triton Python source (AST dispatch)
   kernel_compiler.py    - End-to-end CUDA kernel compilation
 """
 
-from .parser import CudaParser, CudaKernel, CudaStatement
+from .parser import CudaParser, CudaKernel, CudaStatement, TreeSitterCudaParser
 from .intrinsic_mapper import IntrinsicMapper, IntrinsicMapping
 from .shared_memory import SharedMemoryAnalyzer, SharedMemPlan
 from .pointer_analysis import PointerAnalyzer, PointerLayout
