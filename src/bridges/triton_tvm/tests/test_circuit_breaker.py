@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import time
+from collections import OrderedDict
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from src.bridges.triton_tvm.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitOpenError,
     CircuitState,
+    LRUCache,
     get_default_breakers,
 )
 
@@ -185,3 +189,215 @@ class TestDefaultBreakers:
         all_stats = CircuitBreaker.all_stats()
         for name in breakers:
             assert name in all_stats
+
+
+class TestLRUCache:
+    """Tests for the LRU cache used by the bridge orchestrator."""
+
+    def test_setitem_and_getitem(self) -> None:
+        cache: LRUCache[str, int] = LRUCache(maxsize=3)
+        cache["a"] = 1
+        cache["b"] = 2
+        assert cache["a"] == 1
+        assert cache["b"] == 2
+        assert len(cache) == 2
+
+    def test_capacity_hard_cap(self) -> None:
+        cache: LRUCache[int, int] = LRUCache(maxsize=3)
+        for i in range(10):
+            cache[i] = i * 10
+            assert len(cache) <= 3
+        assert len(cache) == 3
+
+    def test_eviction_orders(self) -> None:
+        """Canonical LRU bug case: re-accessing 'a' protects it from
+        being the first eviction; 'b' is the one evicted when 'd' is
+        added to a full cache."""
+        cache: LRUCache[str, int] = LRUCache(maxsize=3)
+        cache["a"] = 1
+        cache["b"] = 2
+        cache["c"] = 3
+        _ = cache["a"]
+        cache["d"] = 4
+        assert "b" not in cache, "'b' should have been evicted (it was LRU)"
+        assert "a" in cache, "'a' was just accessed; it must NOT be evicted"
+        assert "c" in cache
+        assert "d" in cache
+        assert len(cache) == 3
+
+    def test_get_refreshes_recency(self) -> None:
+        cache: LRUCache[str, int] = LRUCache(maxsize=2)
+        cache["x"] = 1
+        cache["y"] = 2
+        assert cache.get("x") == 1
+        cache["z"] = 3
+        assert "x" in cache
+        assert "y" not in cache
+        assert "z" in cache
+
+    def test_get_miss_does_not_introduce_key(self) -> None:
+        cache: LRUCache[str, int] = LRUCache(maxsize=2)
+        cache["a"] = 1
+        size_before = len(cache)
+        assert cache.get("missing", -1) == -1
+        assert len(cache) == size_before
+        assert "missing" not in cache
+
+    def test_overwrite_existing_key_refreshes_recency(self) -> None:
+        cache: LRUCache[str, int] = LRUCache(maxsize=2)
+        cache["a"] = 1
+        cache["b"] = 2
+        cache["a"] = 99
+        cache["c"] = 3
+        assert "a" in cache
+        assert cache["a"] == 99
+        assert "b" not in cache
+        assert "c" in cache
+
+    def test_invalid_maxsize_raises(self) -> None:
+        with pytest.raises(ValueError):
+            LRUCache(maxsize=0)
+        with pytest.raises(ValueError):
+            LRUCache(maxsize=-1)
+
+    def test_eviction_order_matches_recency(self) -> None:
+        cache: LRUCache[str, int] = LRUCache(maxsize=3)
+        for k in ("a", "b", "c"):
+            cache[k] = ord(k)
+        cache["d"] = ord("d")
+        assert "a" not in cache
+        _ = cache["c"]
+        cache["e"] = ord("e")
+        assert "b" not in cache
+        assert "c" in cache
+        assert "d" in cache
+        assert "e" in cache
+
+    def test_clear_empties_cache(self) -> None:
+        cache: LRUCache[str, int] = LRUCache(maxsize=3)
+        cache["a"] = 1
+        cache["b"] = 2
+        cache.clear()
+        assert len(cache) == 0
+        assert "a" not in cache
+
+
+_OPS = st.sampled_from(["set", "get", "touch"])
+_KEYS = st.integers(min_value=0, max_value=6)
+_VALUES = st.integers(min_value=0, max_value=10_000)
+_OPERATIONS = st.lists(st.tuples(_KEYS, _VALUES, _OPS), min_size=0, max_size=60)
+
+
+def _reference_lru(maxsize: int):
+    """Reference LRU used as an oracle in property tests."""
+    data: OrderedDict[int, int] = OrderedDict()
+
+    def set_item(k: int, v: int) -> None:
+        if k in data:
+            data.pop(k)
+        data[k] = v
+        while len(data) > maxsize:
+            data.popitem(last=False)
+
+    def get_item(k: int):
+        if k in data:
+            data.move_to_end(k)
+            return data[k]
+        return None
+
+    return data, set_item, get_item, get_item
+
+
+class TestLRUCacheProperties:
+    """Hypothesis-driven property tests for LRU invariants.
+
+    A separate reference implementation acts as an oracle: after every
+    operation the property cache and the oracle must agree on:
+      - the set of keys present
+      - the values for each key
+      - the cache size
+      - the iteration order (LRU → MRU)
+    """
+
+    @given(
+        maxsize=st.integers(min_value=1, max_value=8),
+        ops=_OPERATIONS,
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    def test_lru_invariants(self, maxsize: int, ops: list[tuple[int, int, str]]) -> None:
+        cache: LRUCache[int, int] = LRUCache(maxsize=maxsize)
+        ref_data, ref_set, ref_get, ref_touch = _reference_lru(maxsize)
+
+        for k, v, op in ops:
+            if op == "set":
+                cache[k] = v
+                ref_set(k, v)
+            elif op == "get":
+                got = cache.get(k)
+                expected = ref_get(k)
+                assert got == expected, (
+                    f"get({k!r}) returned {got!r}, oracle returned {expected!r}"
+                )
+            elif op == "touch":
+                try:
+                    got = cache[k]
+                except KeyError:
+                    got = None
+                expected = ref_touch(k)
+                assert got == expected, (
+                    f"touch({k!r}) returned {got!r}, oracle returned {expected!r}"
+                )
+
+            assert len(cache) <= maxsize, (
+                f"size {len(cache)} > maxsize {maxsize} after {op}({k!r})"
+            )
+            assert set(cache.keys()) == set(ref_data.keys()), (
+                f"key sets diverge: cache={set(cache.keys())}, "
+                f"ref={set(ref_data.keys())}"
+            )
+            for key in ref_data:
+                assert cache[key] == ref_data[key], (
+                    f"value for {key!r} differs: cache={cache[key]!r}, "
+                    f"ref={ref_data[key]!r}"
+                )
+            assert list(cache.keys()) == list(ref_data.keys()), (
+                f"iteration order diverges: cache={list(cache.keys())}, "
+                f"ref={list(ref_data.keys())}"
+            )
+
+    @given(
+        maxsize=st.integers(min_value=2, max_value=6),
+        touched_idx=st.integers(min_value=0, max_value=10),
+    )
+    @settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    def test_most_recently_used_is_never_first_eviction(
+        self, maxsize: int, touched_idx: int
+    ) -> None:
+        """In a full cache, touching a key makes it the most-recently-used.
+        The next insertion must therefore evict the OLDEST key (the
+        actual LRU), not the touched key — that is, the touched key is
+        never the *first* one to be evicted."""
+        cache: LRUCache[int, int] = LRUCache(maxsize=maxsize)
+        for k in range(maxsize):
+            cache[k] = k * 10
+        victim = touched_idx % maxsize
+        _ = cache[victim]
+        order_before = list(cache.keys())
+        expected_lru = order_before[0]
+        cache[100] = 100
+        assert victim in cache, (
+            f"touched key {victim!r} was evicted first; expected eviction "
+            f"of LRU {expected_lru!r}. cache now contains {list(cache.keys())!r}"
+        )
+        assert expected_lru not in cache, (
+            f"LRU key {expected_lru!r} should have been evicted, not the "
+            f"touched key {victim!r}"
+        )

@@ -20,7 +20,6 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any
 
 from src.common.logging import get_logger
 
@@ -37,6 +36,8 @@ class KernelKind(Enum):
     ELEMENTWISE = auto()      # pointwise ops only
     SCAN = auto()             # tt.scan
     PERSISTENT = auto()       # while loops with persistent threads
+    BROADCAST = auto()        # tt.broadcast
+    TRANSPOSE = auto()        # tt.trans
     UNKNOWN = auto()
 
 
@@ -195,8 +196,8 @@ class IRCapture:
             ir_text=ir_text,
         )
 
-        # Step 1: Classify
-        result.kind = self.classifier.classify(ir_text)
+        # Step 1: Classify (returns just the KernelKind here).
+        result.kind = self.classifier.classify_kind(ir_text)
         result.ops_seen = self.classifier.collect_ops(ir_text)
         result.tensor_types = self.classifier.collect_tensor_types(ir_text)
         result.num_warps, result.num_stages = self._extract_compile_attrs(ir_text)

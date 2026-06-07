@@ -25,9 +25,9 @@ Supported ops (Pass 1's working set):
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Iterator
 
 from src.common.logging import get_logger
 
@@ -43,6 +43,7 @@ class OpKind(Enum):
     REDUCE = auto()
     BROADCAST = auto()
     RESHAPE = auto()
+    TRANSPOSE = auto()          # tt.trans — permute last two dims
     MAKE_TENSOR_PTR = auto()
     ADVANCE = auto()
     GET_PROGRAM_ID = auto()
@@ -50,6 +51,7 @@ class OpKind(Enum):
     ADDPTR = auto()
     MAX = auto()
     MIN = auto()
+    RETURN = auto()             # tt.return — kernel terminator
     # Standard arith
     ADDF = auto()
     SUBF = auto()
@@ -126,7 +128,7 @@ class TTGIROperation:
     types: list[TTGIRType] = field(default_factory=list)
     attributes: dict[str, str] = field(default_factory=dict)
     # For control flow: indices into the parent function's ops list
-    nested_ops: list["TTGIROperation"] = field(default_factory=list)
+    nested_ops: list[TTGIROperation] = field(default_factory=list)
     parent_idx: int = -1
 
 
@@ -170,6 +172,8 @@ class TTGIRParser:
         "tt.reduce": OpKind.REDUCE,
         "tt.broadcast": OpKind.BROADCAST,
         "tt.reshape": OpKind.RESHAPE,
+        "tt.trans": OpKind.TRANSPOSE,
+        "tt.return": OpKind.RETURN,
         "tt.make_tensor_ptr": OpKind.MAKE_TENSOR_PTR,
         "tt.advance": OpKind.ADVANCE,
         "tt.get_program_id": OpKind.GET_PROGRAM_ID,
@@ -447,6 +451,20 @@ class TTGIRParser:
                         inner = body_text[brace_start + 1:body_end - 1]
                         op.nested_ops = self._parse_ops(inner)
 
+                # Reduce bodies use `^bb0(...)` block syntax the
+                # line-oriented parser doesn't recurse into; surface
+                # the combine op as an attribute instead.
+                if op_kind == OpKind.REDUCE:
+                    combine_op = self._extract_combine_op(
+                        body_text[i + op_match.end() - 1:raw_end],
+                    )
+                    if combine_op is not None:
+                        op.attributes["combine_op"] = combine_op
+
+                op.types = self._extract_op_types(
+                    body_text[i + op_match.end() - 1:raw_end],
+                )
+
                 ops.append(op)
                 i = raw_end
                 continue
@@ -563,3 +581,23 @@ class TTGIRParser:
             attrs[key] = value
 
         return operands, attrs
+
+    def _extract_combine_op(self, op_text: str) -> str | None:
+        """Extract the combine op name from a tt.reduce's body region."""
+        m = re.search(r'\^bb\d*\([^)]*\)\s*:\s*([\w.]+)', op_text)
+        if m:
+            return m.group(1)
+        m = re.search(r'\b(arith|math|tt)\.\w+', op_text)
+        if m:
+            return m.group(0)
+        return None
+
+    def _extract_op_types(self, op_text: str) -> list[TTGIRType]:
+        """Extract tensor types from a single op's text."""
+        types: list[TTGIRType] = []
+        for m in re.finditer(r'tensor<([^>]+)>', op_text):
+            try:
+                types.append(self._parse_type(f"tensor<{m.group(1)}>"))
+            except Exception:
+                continue
+        return types

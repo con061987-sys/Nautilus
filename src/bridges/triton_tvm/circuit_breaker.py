@@ -21,15 +21,19 @@ time, and provides explicit reset() for operators.
 from __future__ import annotations
 
 import time
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, TypeVar
+from typing import Any, Generic, TypeVar
 
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
 T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 class CircuitState(Enum):
@@ -70,6 +74,104 @@ class CircuitOpenError(Exception):
         )
 
 
+class LRUCache(Generic[K, V]):
+    """Least-Recently-Used cache backed by ``collections.OrderedDict``.
+
+    Semantics
+    ---------
+    * Every successful read (``__getitem__`` / ``get``) marks the key as
+      most-recently-used, moving it to the **end** of the ordering.
+    * Writes (``__setitem__``) for an existing key also move it to the
+      end; writes for a new key append it. If the new size exceeds
+      ``maxsize``, the **oldest** (front) entry is evicted.
+    * Eviction therefore always drops the least-recently-used item.
+    * Cache size is hard-capped at ``maxsize``; it can never exceed it.
+
+    This class is deliberately minimal so it can be used as a building
+    block in the bridge orchestrator's per-dependency caches without
+    pulling in a third-party LRU library.
+    """
+
+    def __init__(self, maxsize: int = 128) -> None:
+        if maxsize <= 0:
+            raise ValueError(f"maxsize must be > 0, got {maxsize}")
+        self.maxsize = maxsize
+        # OrderedDict iteration order = insertion order. We treat the
+        # LEFT (front) end as the LRU slot and the RIGHT (back) end as
+        # the MRU slot. move_to_end(key) refreshes recency; popitem(last=False)
+        # evicts the LRU.
+        self._data: OrderedDict[K, V] = OrderedDict()
+
+    def __setitem__(self, key: K, value: V) -> None:
+        if key in self._data:
+            self._data.move_to_end(key)
+            self._data[key] = value
+            return
+        self._data[key] = value
+        if len(self._data) > self.maxsize:
+            self._data.popitem(last=False)
+
+    def __getitem__(self, key: K) -> V:
+        # Reading counts as a use — refresh recency BEFORE returning so
+        # that the caller sees the value as already-most-recently-used.
+        value = self._data[key]
+        self._data.move_to_end(key)
+        return value
+
+    def __delitem__(self, key: K) -> None:
+        del self._data[key]
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._data
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __repr__(self) -> str:
+        return (
+            f"LRUCache(maxsize={self.maxsize}, size={len(self._data)}, "
+            f"items={list(self._data.items())!r})"
+        )
+
+    def get(self, key: K, default: V | None = None) -> V | None:
+        """Return the value for ``key`` if present, else ``default``.
+
+        A successful lookup refreshes recency (true LRU semantics).
+        A miss does NOT introduce the key and does NOT affect order.
+        """
+        if key in self._data:
+            self._data.move_to_end(key)
+            return self._data[key]
+        return default
+
+    def pop(self, key: K, default: V | None = None) -> V | None:
+        """Remove ``key`` and return its value (no recency touch)."""
+        return self._data.pop(key, default)  # type: ignore[arg-type]
+
+    def clear(self) -> None:
+        """Remove all entries."""
+        self._data.clear()
+
+    def keys(self):
+        """Keys from LRU → MRU (oldest first)."""
+        return self._data.keys()
+
+    def values(self):
+        """Values from LRU → MRU (oldest first)."""
+        return self._data.values()
+
+    def items(self):
+        """Items from LRU → MRU (oldest first)."""
+        return self._data.items()
+
+    @property
+    def is_full(self) -> bool:
+        return len(self._data) >= self.maxsize
+
+
 class CircuitBreaker:
     """Per-dependency circuit breaker for the bridge.
 
@@ -90,7 +192,7 @@ class CircuitBreaker:
     """
 
     # Class-level registry of all breakers (for observability)
-    _registry: dict[str, "CircuitBreaker"] = {}
+    _registry: dict[str, CircuitBreaker] = {}
 
     def __init__(self, name: str, config: CircuitBreakerConfig | None = None) -> None:
         self.name = name
