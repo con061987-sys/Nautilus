@@ -808,3 +808,61 @@ again — every entry exists because something non-obvious bit us once.
 - Baseline (without my changes) shows the same 7 failures + 3 from
   test_bounds_extractor.py. My changes fix the 3 bounds_extractor
   failures and don't introduce any new ones.
+
+---
+
+## 2026-06-07 — Integration test for auto-tuning bridge (Task 14)
+
+### `auto_tuning_bridge` fixture must patch the RIGHT `TVM_AVAILABLE`
+- The bridge orchestrator has its own module-level `TVM_AVAILABLE` check
+  (lines 44-48 of `bridge_orchestrator.py`), separate from
+  `metaschedule_adapter.TVM_AVAILABLE` and `tir_template.TVM_AVAILABLE`.
+  The fixture must patch `bridge_orchestrator.TVM_AVAILABLE` (not
+  `tir_template.TVM_AVAILABLE`) because the bridge's `__init__` reads
+  its own module's `TVM_AVAILABLE` to decide whether to create the
+  `MetaScheduleAdapter`.
+- `metaschedule_adapter.TVM_AVAILABLE` must also be patched because
+  `MetaScheduleAdapter.tune()` checks it at call time.
+
+### `MagicMock` cannot serve as a Triton kernel function
+- `MetadataExtractor._compute_source_hash()` calls `inspect.getsource()`
+  on the kernel function, which fails for `MagicMock`. The fallback path
+  reads `.__module__` and `.__name__` — MagicMock lacks `.__name__`.
+- Fix: use a real Python function (`_dummy_kernel`) with a trivial body.
+  The metadata extractor's fallback handles it correctly.
+
+### Reduction `reduce_size` vs `keep_size` semantics
+- For a `tt.reduce(%val) {axis = 0 : i32}` on a `tensor<128x1024xf32>`,
+  `reduce_size` is 128 (the size of dim 0 being reduced), and
+  `keep_size` is 1024 (product of the non-reduced dims). The first
+  attempt had these swapped in test assertions.
+
+### `tune()` goes through metadata extraction before cache check
+- Tests that call `bridge.tune()` must provide a real function for
+  `kernel_fn` because `extract_from_call()` computes a source hash
+  via `inspect.getsource()` before checking the cache. The cache
+  short-circuit only happens after metadata is extracted.
+
+### Integration test coverage: 54 tests, 6 categories
+- `TestFullPipeline` (6 tests): mocked end-to-end pipeline, stage
+  timing, `tune()` result, metadata type invariance, real-IR fallback,
+  real-IR cache path.
+- `TestFallbackTiers` (11 tests): each L0-L5 tier independently
+  verified — enum definition, L0 from mocked tune, L1/L2 presence,
+  L3 disk cache, L4 Err recovery, L5 template error paths (ValueError,
+  ImportError, OSError), matmul fallback defaults, non-matmul defaults.
+- `TestCircuitBreakerIntegration` (8 tests): open/close/half-open
+  transitions, breaker used in `_tune_with_breaker`, stats tracking,
+  default breakers config, reset behavior.
+- `TestTimeoutIntegration` (5 tests): per-stage timeout raise,
+  under-budget completion, total budget exhaustion, timeout handled
+  as Err in tuning chain, stage budget independence.
+- `TestConfigValidity` (9 tests): defaults, power-of-two invariants,
+  valid warps, mapper from trace, JSON round-trip, empty trace,
+  None record, triton.Config conversion.
+- `TestBoundsInPipeline` (11 tests): matmul/reduction/elementwise
+  bounds extraction, IRCapture pipeline, classifier dispatch, inline
+  pipeline consistency, op collection, attention detection, error
+  messages, unsupported IR handling.
+- `TestTuningResultValidity` (4 tests): structural fields, fallback
+  metadata, configs list generation, no-TVM degradation.
