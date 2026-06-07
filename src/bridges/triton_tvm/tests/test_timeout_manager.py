@@ -128,6 +128,5 @@ class TestWallclockTimeout:
         if sys.platform == "win32":
             pytest.skip("SIGALRM not available on Windows")
 
-        with pytest.raises((StageTimeoutError, TimeoutError)):
-            with wallclock_timeout(seconds=0.1, label="fast_op"):
+        with pytest.raises((StageTimeoutError, TimeoutError)), wallclock_timeout(seconds=0.1, label="fast_op"):
                 time.sleep(1.0)  # Will definitely exceed 0.1s

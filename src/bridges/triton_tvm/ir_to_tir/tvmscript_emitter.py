@@ -152,7 +152,7 @@ class TVMScriptEmitter:
         shape = arg_type.shape or (1,)
         shape_str = ", ".join(str(d) for d in shape)
         dtype = arg_type.element_dtype
-        return f'{clean_name}: T.Buffer(({shape_str}), "{dtype}")'
+        return f'{clean_name}: T.Buffer[{shape_str}, "{dtype}"]'
 
     def _emit_alloc_buffers(self, func: TTGIRFunction) -> list[str]:
         """Emit T.alloc_buffer for every tensor arg.

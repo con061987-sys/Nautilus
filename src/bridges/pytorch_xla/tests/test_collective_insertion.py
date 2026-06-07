@@ -159,7 +159,7 @@ class TestTensorBytes:
             ((32, 32), "bf16", 32 * 32 * 2),
             ((8,), "i64", 8 * 8),
             ((1, 1, 1, 1), "i1", 1),
-            ((), "f32", 4),  # scalar: 1 element × 4 bytes
+            ((), "f32", 4),  # scalar: 1 element x 4 bytes
             ((100, 100), "unknown_dtype", 100 * 100 * 4),  # default fp32
         ],
     )
@@ -248,7 +248,7 @@ class TestPlanCollectives:
             },
         )
         plan = _plan_collectives(spec, mod, mesh=None)
-        # 4 collective types × 1 sharded axis = 4
+        # 4 collective types x 1 sharded axis = 4
         assert len(plan) == 4
         types = {c.collective_type for c in plan}
         assert types == set(CollectiveType)
@@ -262,7 +262,7 @@ class TestPlanCollectives:
             },
         )
         plan = _plan_collectives(spec, mod, mesh=None)
-        # 4 collective types × 2 sharded axes = 8
+        # 4 collective types x 2 sharded axes = 8
         assert len(plan) == 8
 
     def test_volume_scales_with_shape(self) -> None:
@@ -873,5 +873,5 @@ class TestPropertyCommBackend:
         assert result.success
         assert all(c.comm_library == expected for c in result.inserted_collectives), (
             f"n_nvidia={n_nvidia}, n_amd={n_amd}, n_intel={n_intel}, "
-            f"expected={expected}, got={set(c.comm_library for c in result.inserted_collectives)}"
+            f"expected={expected}, got={ {c.comm_library for c in result.inserted_collectives} }"
         )

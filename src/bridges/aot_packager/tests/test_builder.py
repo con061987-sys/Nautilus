@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
+from unittest import mock
 
+from src.bridges.aot_packager.amd_backend import (
+    AMDCompilationResult,
+)
 from src.bridges.aot_packager.builder import (
     FatBinaryBuilder,
     FatBinaryConfig,
     FatBinaryResult,
+)
+from src.bridges.aot_packager.intel_backend import IntelCompilationResult
+from src.bridges.aot_packager.linker import LinkingResult
+from src.bridges.aot_packager.nvidia_backend import (
+    NvidiaCompilationResult,
 )
 
 SAMPLE_KERNEL = """
@@ -39,6 +49,64 @@ def sample_matmul(
 class TestFatBinaryBuilder:
     """Tests for the FatBinaryBuilder orchestrator."""
 
+    @staticmethod
+    def _mock_backends(builder: FatBinaryBuilder) -> ExitStack:
+        """Set up scoped mock patches so ``build()`` succeeds without real SDKs.
+
+        Returns an ``ExitStack`` the caller must enter before calling
+        ``build()`` — patches are cleaned up when the stack exits.
+        """
+        from src.bridges.aot_packager.amd_backend import AMDBackend
+        from src.bridges.aot_packager.intel_backend import IntelBackend
+        from src.bridges.aot_packager.nvidia_backend import NvidiaBackend
+
+        fake_ptx = ".version 7.0\n.target sm_90\n.visible .entry mock_kernel(.param .u64 A_ptr) { ret; }\n"
+        fake_cubin = b"\x7fELF" + b"\x00" * 12 + b"cubin-mock"
+        fake_hsaco = b"\x7fELF" + b"\x00" * 12 + b"hsaco-mock"
+        fake_spv = b"\x07\x23\x02\x03" + b"\x00" * 8 + b"spv-mock"
+
+        nv_result = NvidiaCompilationResult(
+            success=True, arch="sm_90", ptx_text=fake_ptx, cubin_bytes=fake_cubin,
+            compilation_time_s=0.001, cache_hit=False,
+        )
+        NvidiaCompilationResult(
+            success=True, arch="sm_90", ptx_text=fake_ptx, cubin_bytes=fake_cubin,
+            compilation_time_s=0.001, cache_hit=True,
+        )
+        amd_result = AMDCompilationResult(
+            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
+            compilation_time_s=0.001, cache_hit=False,
+        )
+        intel_result = IntelCompilationResult(
+            success=True, target="xe_hpg", spv_bytes=fake_spv,
+            compilation_time_s=0.001, cache_hit=False,
+        )
+
+        stub_path = builder.cache_dir / "runtime_stub.o"
+        stub_path.write_bytes(b"\x7fELF" + b"stub-mock")
+        link_result = LinkingResult(
+            success=True, output_path=builder.cache_dir / "mock.fat.o",
+            output_size=64, linking_time_s=0.001, linker_version="mock-lld",
+        )
+
+        stack = ExitStack()
+        stack.enter_context(
+            mock.patch.object(NvidiaBackend, "compile_kernel", return_value=nv_result)
+        )
+        stack.enter_context(
+            mock.patch.object(AMDBackend, "compile_kernel", return_value=amd_result)
+        )
+        stack.enter_context(
+            mock.patch.object(IntelBackend, "compile_kernel", return_value=intel_result)
+        )
+        stack.enter_context(
+            mock.patch.object(builder, "_compile_runtime_stub", return_value=stub_path)
+        )
+        stack.enter_context(
+            mock.patch.object(builder.linker, "link_fat_binary", return_value=link_result)
+        )
+        return stack
+
     def test_builder_init(self, tmp_path: Path) -> None:
         """FatBinaryBuilder should initialise all backends."""
         builder = FatBinaryBuilder(cache_dir=str(tmp_path / "fb"))
@@ -61,7 +129,8 @@ class TestFatBinaryBuilder:
             num_stages=3,
             skip_validation=True,
         )
-        result = builder.build(config)
+        with self._mock_backends(builder):
+            result = builder.build(config)
         assert isinstance(result, FatBinaryResult)
         # Should have at least the Nvidia section (always works)
         assert result.fat_binary is not None
@@ -77,7 +146,8 @@ class TestFatBinaryBuilder:
             skip_intel=True,  # Skip both to speed up test
             skip_validation=True,
         )
-        result = builder.build(config)
+        with self._mock_backends(builder):
+            result = builder.build(config)
         assert result.fat_binary is not None
         assert "amd" not in result.fat_binary.vendors
         assert "intel" not in result.fat_binary.vendors
@@ -121,7 +191,8 @@ class TestFatBinaryBuilder:
             skip_intel=True,
             skip_validation=True,
         )
-        result = builder.build(config)
+        with self._mock_backends(builder):
+            result = builder.build(config)
         assert result.fat_binary is not None
         assert len(result.fat_binary.sections) >= 1
         # Each section should have valid data
@@ -139,7 +210,8 @@ class TestFatBinaryBuilder:
             skip_intel=True,
             skip_validation=True,
         )
-        result = builder.build(config)
+        with self._mock_backends(builder):
+            result = builder.build(config)
         assert result.fat_binary is not None
         assert result.fat_binary.total_size > 0
 
@@ -152,7 +224,8 @@ class TestFatBinaryBuilder:
             skip_intel=True,
             skip_validation=True,
         )
-        result = builder.build(config)
+        with self._mock_backends(builder):
+            result = builder.build(config)
         # Nvidia should always be present
         assert result.nvidia_result is not None
         # AMD may or may not be present (depends on aotriton availability)

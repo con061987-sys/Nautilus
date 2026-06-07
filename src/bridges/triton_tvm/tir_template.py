@@ -98,16 +98,16 @@ class TIRTemplateBuilder:
     ) -> tvm.IRModule:
         @_tir.prim_func
         def matmul_kernel(
-            A: _tir.Buffer[(m, k), dtype],
-            B: _tir.Buffer[(k, n), dtype],
-            C: _tir.Buffer[(m, n), dtype],
+            a: _tir.Buffer[(m, k), dtype],
+            b: _tir.Buffer[(k, n), dtype],
+            c: _tir.Buffer[(m, n), dtype],
         ) -> None:
             for i, j, kk in _tir.grid(m, n, k):
-                with _tir.block("C"):
+                with _tir.block("c"):
                     vi, vj, vk = _tir.axis.remap("SSR", [i, j, kk])
                     with _tir.init():
-                        C[vi, vj] = _tir.cast(_tir.float32(0), dtype)
-                    C[vi, vj] = C[vi, vj] + A[vi, vk] * B[vk, vj]
+                        c[vi, vj] = _tir.cast(_tir.float32(0), dtype)
+                    c[vi, vj] = c[vi, vj] + a[vi, vk] * b[vk, vj]
 
         return tvm.IRModule({"main": matmul_kernel})
 
@@ -152,21 +152,21 @@ class TIRTemplateBuilder:
     ) -> tvm.IRModule:
         @_tir.prim_func
         def elem_kernel(
-            A: _tir.Buffer[shape, dtype],
-            B: _tir.Buffer[shape, dtype],
-            C: _tir.Buffer[shape, dtype],
+            a: _tir.Buffer[shape, dtype],
+            b: _tir.Buffer[shape, dtype],
+            c: _tir.Buffer[shape, dtype],
         ) -> None:
             for idx in _tir.grid(*shape):
                 with _tir.block("elem"):
                     vi = [_tir.axis.spatial(s, i) for s, i in zip(shape, idx, strict=True)]
                     if op == "add":
-                        C[vi] = A[vi] + B[vi]
+                        c[vi] = a[vi] + b[vi]
                     elif op == "mul":
-                        C[vi] = A[vi] * B[vi]
+                        c[vi] = a[vi] * b[vi]
                     elif op == "max":
-                        C[vi] = _tir.max(A[vi], B[vi])
+                        c[vi] = _tir.max(a[vi], b[vi])
                     else:
-                        C[vi] = A[vi] + B[vi]
+                        c[vi] = a[vi] + b[vi]
 
         return tvm.IRModule({"main": elem_kernel})
 

@@ -48,8 +48,11 @@ class TestEvidenceCaptureFixture:
         self,
         evidence_capture: EvidenceCapture | None,
     ) -> None:
-        """Without --evidence-dir the fixture yields None and writes nothing."""
-        assert evidence_capture is None
+        """Without --evidence-dir the fixture uses a default dir
+        (``<repo_root>/.omo/evidence``) and yields an active capture."""
+        assert evidence_capture is not None
+        assert evidence_capture.evidence_dir is not None
+        assert ".omo/evidence" in str(evidence_capture.evidence_dir)
 
     def test_evidence_attaches_text(
         self,
@@ -61,9 +64,9 @@ class TestEvidenceCaptureFixture:
         with tempfile.TemporaryDirectory() as tmp:
             # Inject a resolved evidence_dir by patching the option on the
             # config and re-running the fixture logic directly.
-            from src.tests.conftest import EvidenceCapture as _EC
+            from src.tests.conftest import EvidenceCapture
 
-            cap = _EC(test_name=request.node.name, evidence_dir=Path(tmp))
+            cap = EvidenceCapture(test_name=request.node.name, evidence_dir=Path(tmp))
             try:
                 p = cap.attach_text("hello", "world")
                 assert p.exists()
@@ -83,10 +86,10 @@ class TestEvidenceCaptureFixture:
         self,
         request: pytest.FixtureRequest,
     ) -> None:
-        from src.tests.conftest import EvidenceCapture as _EC
+        from src.tests.conftest import EvidenceCapture
 
         with __import__("tempfile").TemporaryDirectory() as tmp:
-            cap = _EC(test_name=request.node.name, evidence_dir=Path(tmp))
+            cap = EvidenceCapture(test_name=request.node.name, evidence_dir=Path(tmp))
             try:
                 json_path = cap.attach_json("config", {"a": 1, "b": [2, 3]})
                 assert json_path.exists()
@@ -105,10 +108,10 @@ class TestEvidenceCaptureFixture:
         request: pytest.FixtureRequest,
     ) -> None:
         """A WARNING+ log record should land in the warnings file."""
-        from src.tests.conftest import EvidenceCapture as _EC
+        from src.tests.conftest import EvidenceCapture
 
         with __import__("tempfile").TemporaryDirectory() as tmp:
-            cap = _EC(test_name=request.node.name, evidence_dir=Path(tmp))
+            cap = EvidenceCapture(test_name=request.node.name, evidence_dir=Path(tmp))
             try:
                 logging.getLogger("test_evidence_captures_warnings").warning(
                     "hello from a warning",
@@ -125,10 +128,10 @@ class TestEvidenceCaptureFixture:
         self,
         request: pytest.FixtureRequest,
     ) -> None:
-        from src.tests.conftest import EvidenceCapture as _EC
+        from src.tests.conftest import EvidenceCapture
 
         with __import__("tempfile").TemporaryDirectory() as tmp:
-            cap = _EC(test_name=request.node.name, evidence_dir=Path(tmp))
+            cap = EvidenceCapture(test_name=request.node.name, evidence_dir=Path(tmp))
             cap.finalize(outcome="passed")
             cap.finalize(outcome="failed")  # no-op
             # Only one summary file is written.
@@ -276,7 +279,7 @@ class TestUseRealBackendMarker:
         # here — pytest handles the skip outcome — but we do assert
         # the fixture is wired (yielded a real bridge OR skipped with a
         # clear reason). Touching the fixture forces its evaluation.
-        assert auto_tuning_bridge is not None or True
+        assert True
 
     @pytest.mark.use_real_backend
     def test_aot_packager_skips_without_lld(
@@ -284,4 +287,4 @@ class TestUseRealBackendMarker:
         aot_packager: Any,
     ) -> None:
         # Same pattern: in CI without lld/gcc, this test is skipped.
-        assert aot_packager is not None or True
+        assert True

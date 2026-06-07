@@ -35,7 +35,6 @@ try:
     from src.bridges.aot_packager.builder import (
         FatBinaryBuilder,
         FatBinaryConfig,
-        FatBinaryResult,
     )
 
     FAT_BINARY_AVAILABLE = True

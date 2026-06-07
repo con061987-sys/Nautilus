@@ -200,7 +200,7 @@ def _build_impl(
                     num_ctas=1,
                 )
                 target_for_tune = hardware_targets[0].to_tvm_target()
-                mapped = bridge._tuning_chain(metadata, target_for_tune)
+                mapped = bridge._tuning_chain(metadata, target_for_tune).unwrap()
                 block_m_eff, block_n_eff, block_k_eff = (
                     mapped.block_m,
                     mapped.block_n,

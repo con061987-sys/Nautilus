@@ -302,7 +302,7 @@ class FatBinaryLinker:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        if link_result.is_err():
+        if isinstance(link_result, Err):
             elapsed = time.perf_counter() - start
             return LinkingResult(
                 success=False,

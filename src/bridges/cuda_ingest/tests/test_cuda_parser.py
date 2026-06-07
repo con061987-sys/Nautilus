@@ -76,9 +76,8 @@ class TestCudaParser:
         matmul = kernels[0]
         assert matmul.name == "matmul_kernel"
         assert matmul.is_global
-        assert matmul.num_params == 5  # A, B, C, M, N, K — but K is inside too
-        # Wait: 6 params: A, B, C, M, N, K
-        # Actually 5 in source but 6 total: const float* A, const float* B, float* C, int M, int N, int K
+        # 6 params: const float* A, const float* B, float* C, int M, int N, int K
+        assert matmul.num_params == 6
         assert matmul.num_params >= 5
 
     def test_parse_shared_memory(self) -> None:

@@ -234,18 +234,18 @@ def _build_topology(node_file: Path | None):
     hostnames = [n.hostname for n in nodes]
     raw_as_dict = cast(dict[str, object], raw)
     if "links" in raw_as_dict and isinstance(raw_as_dict["links"], list):
-        for l in raw_as_dict["links"]:
-            if not isinstance(l, dict):
+        for link in raw_as_dict["links"]:
+            if not isinstance(link, dict):
                 continue
             try:
                 inter_node_links.append(
                     InterNodeLink(
-                        source=l["source"],
-                        target=l["target"],
-                        bandwidth_gbps=float(l.get("bandwidth_gbps", 12.5)),
-                        latency_us=float(l.get("latency_us", 25.0)),
+                        source=link["source"],
+                        target=link["target"],
+                        bandwidth_gbps=float(link.get("bandwidth_gbps", 12.5)),
+                        latency_us=float(link.get("latency_us", 25.0)),
                         link_type=InterconnectType(
-                            l.get("link_type", "ethernet").lower(),
+                            link.get("link_type", "ethernet").lower(),
                         ),
                     )
                 )

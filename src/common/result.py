@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 E = TypeVar("E", bound=BaseException)
@@ -112,7 +112,7 @@ class Err(Generic[E]):
 
 
 # Type alias for the union; spelled out so type checkers accept both arms.
-Result = Union[Ok[T], Err[E]]
+Result = Ok[T] | Err[E]
 
 
 def is_ok(r: Result[T, E]) -> bool:

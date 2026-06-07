@@ -31,7 +31,7 @@ library) and the local mesh if none is provided.
 Design rules (enforced by the test suite):
 
   * No assumption that all devices share a vendor. A single-node
-    2×MI300X box, a 4×H100 DGX, and a 2×AMD + 2×Intel + 2×Nvidia
+    2xMI300X box, a 4xH100 DGX, and a 2xAMD + 2xIntel + 2xNvidia
     dev cluster are all first-class inputs.
   * No hardcoded device counts. Topology is data-driven from the
     input nodes.
@@ -355,13 +355,13 @@ class ClusterTopology:
             "devices": devices,
             "inter_node_links": [
                 {
-                    "source": l.source,
-                    "target": l.target,
-                    "bandwidth_gbps": l.bandwidth_gbps,
-                    "latency_us": l.latency_us,
-                    "link_type": l.link_type.value,
+                    "source": link.source,
+                    "target": link.target,
+                    "bandwidth_gbps": link.bandwidth_gbps,
+                    "latency_us": link.latency_us,
+                    "link_type": link.link_type.value,
                 }
-                for l in self.inter_node_links
+                for link in self.inter_node_links
             ],
         }
 

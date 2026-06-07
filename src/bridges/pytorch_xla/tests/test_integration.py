@@ -540,7 +540,7 @@ class TestGSPMDFallbackTiers:
         runner = GSPMDRunner()
         module = make_stablehlo_module()
         mesh = make_device_mesh()
-        result1 = runner.run(module, mesh, ShardingStrategy.DATA_PARALLEL)
+        runner.run(module, mesh, ShardingStrategy.DATA_PARALLEL)
         result2 = runner.run(module, mesh, ShardingStrategy.DATA_PARALLEL)
         assert result2.cache_hit is True
 

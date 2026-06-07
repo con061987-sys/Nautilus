@@ -265,8 +265,7 @@ class CircuitBreaker:
         self.failure_count = 0  # reset on success
         self.success_count += 1
 
-        if self.state == CircuitState.HALF_OPEN:
-            if self.success_count >= self.config.success_threshold:
+        if self.state == CircuitState.HALF_OPEN and self.success_count >= self.config.success_threshold:
                 self.state = CircuitState.CLOSED
                 self.success_count = 0
                 logger.info(

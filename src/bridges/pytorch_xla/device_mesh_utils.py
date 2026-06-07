@@ -79,9 +79,8 @@ def infer_target_from_mesh(mesh: Any) -> str:
         ``"rocm/gfx942"``, ``"intel/gaudi-2"``, or ``"llvm"``.
     """
     # mesh_shape list: no vendor info -> CPU fallback.
-    if isinstance(mesh, (list, tuple)):
-        if not mesh or all(isinstance(x, int) for x in mesh):
-            return _CPU_FALLBACK
+    if isinstance(mesh, (list, tuple)) and (not mesh or all(isinstance(x, int) for x in mesh)):
+        return _CPU_FALLBACK
 
     # DeviceMesh: use first device's vendor + arch.
     devices = getattr(mesh, "devices", None)

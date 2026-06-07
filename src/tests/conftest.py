@@ -20,6 +20,7 @@ ISO-8601 timestamps so re-runs don't clobber each other.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -51,34 +52,14 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     has_intel = bool(shutil.which("spirv-val")) or bool(shutil.which("ocloc"))
     has_gpu = has_cuda or has_rocm or has_intel
 
-    has_torch = False
-    has_tvm = False
-    has_triton = False
-    has_torch_xla = False
-    try:
+    with contextlib.suppress(ImportError):
         import torch  # noqa: F401
-
-        has_torch = True
-    except ImportError:
-        pass
-    try:
+    with contextlib.suppress(ImportError):
         import tvm  # noqa: F401
-
-        has_tvm = True
-    except ImportError:
-        pass
-    try:
+    with contextlib.suppress(ImportError):
         import triton  # noqa: F401
-
-        has_triton = True
-    except ImportError:
-        pass
-    try:
+    with contextlib.suppress(ImportError):
         import torch_xla  # noqa: F401
-
-        has_torch_xla = True
-    except ImportError:
-        pass
 
     for item in items:
         markers = {m.name for m in item.iter_markers()}
@@ -264,10 +245,8 @@ class EvidenceCapture:
             return
         # Always remove the log handler so subsequent tests don't see it.
         if self._log_handler is not None:
-            try:
+            with contextlib.suppress(Exception):
                 logging.getLogger().removeHandler(self._log_handler)
-            except Exception:
-                pass
         try:
             summary_lines = [
                 f"test: {self.test_name}",
@@ -332,7 +311,7 @@ def evidence_capture(
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> Iterator[Any]:
     """Finalise the per-test evidence capture with the real outcome."""
     outcome = yield
-    if call.when != "call":
+    if call.when != "call" or outcome is None:
         return
     cap = getattr(item, "_evidence_capture", None)
     if cap is None or cap._finalized:
@@ -346,8 +325,13 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> 
 
 def _use_real_backend(request: pytest.FixtureRequest) -> bool:
     """True if either --use-real-backend is on or the test has the marker."""
-    if request.config.getoption("--use-real-backend"):
-        return True
+    try:
+        if request.config.getoption("--use-real-backend"):
+            return True
+    except ValueError:
+        # Option not registered (e.g. when running tests from a subdirectory
+        # whose conftest chain doesn't include src/tests/conftest.py)
+        pass
     return request.node.get_closest_marker("use_real_backend") is not None
 
 
@@ -389,7 +373,7 @@ def auto_tuning_bridge(
     """
     if _use_real_backend(request):
         try:
-            TritonTVMBridge = _try_import(
+            triton_tvm_bridge_cls = _try_import(
                 "src.bridges.triton_tvm.bridge_orchestrator",
                 "TritonTVMBridge",
             )
@@ -403,24 +387,24 @@ def auto_tuning_bridge(
             import tvm  # noqa: F401
         except ImportError:
             pytest.skip("TVM not installed (required for real backend)")
-        yield TritonTVMBridge(cache_dir=str(clean_cache), enable_tvm=True)
+        yield triton_tvm_bridge_cls(cache_dir=str(clean_cache), enable_tvm=True)
         return
 
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
-        TritonTVMBridge = _try_import(
+        triton_tvm_bridge_cls = _try_import(
             "src.bridges.triton_tvm.bridge_orchestrator",
             "TritonTVMBridge",
         )
-        MappedTuningConfig = _try_import(
+        mapped_tuning_config_cls = _try_import(
             "src.bridges.triton_tvm.config_mapper",
             "MappedTuningConfig",
         )
-        MetaScheduleAdapter = _try_import(
+        meta_schedule_adapter_cls = _try_import(
             "src.bridges.triton_tvm.metaschedule_adapter",
             "MetaScheduleAdapter",
         )
-        IRCapture = _try_import(
+        ir_capture_cls = _try_import(
             "src.bridges.triton_tvm.ir_capture",
             "IRCapture",
         )
@@ -429,19 +413,19 @@ def auto_tuning_bridge(
 
     from src.common.result import Ok
 
-    bridge = TritonTVMBridge(cache_dir=str(clean_cache), enable_tvm=False)
-    bridge.tvm_adapter = MetaScheduleAdapter(cache_dir=str(clean_cache))
-    synthetic_cfg = MappedTuningConfig()
+    bridge = triton_tvm_bridge_cls(cache_dir=str(clean_cache), enable_tvm=False)
+    bridge.tvm_adapter = meta_schedule_adapter_cls(cache_dir=str(clean_cache))
+    synthetic_cfg = mapped_tuning_config_cls()
     fake_tune = MagicMock(return_value=Ok(synthetic_cfg))
     fake_capture = MagicMock(return_value=MagicMock(is_usable=True))
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(MetaScheduleAdapter, "tune", fake_tune))
+        stack.enter_context(patch.object(meta_schedule_adapter_cls, "tune", fake_tune))
         # IRCapture's real entry points are capture_for_source /
         # capture_from_text, not capture. Patch both so callers
         # through either path get the mock.
-        stack.enter_context(patch.object(IRCapture, "capture_for_source", fake_capture))
-        stack.enter_context(patch.object(IRCapture, "capture_from_text", fake_capture))
+        stack.enter_context(patch.object(ir_capture_cls, "capture_for_source", fake_capture))
+        stack.enter_context(patch.object(ir_capture_cls, "capture_from_text", fake_capture))
         # Expose the mocks for tests that want to assert call counts.
         bridge._mock_tune = fake_tune
         bridge._mock_capture = fake_capture
@@ -471,7 +455,7 @@ def aot_packager(
     """
     if _use_real_backend(request):
         try:
-            FatBinaryBuilder = _try_import(
+            fat_binary_builder_cls = _try_import(
                 "src.bridges.aot_packager.builder",
                 "FatBinaryBuilder",
             )
@@ -481,44 +465,44 @@ def aot_packager(
             pytest.skip("lld not on PATH (required for real AOT backend)")
         if not shutil.which("gcc"):
             pytest.skip("gcc not on PATH (required for C runtime stub)")
-        yield FatBinaryBuilder(cache_dir=str(clean_cache))
+        yield fat_binary_builder_cls(cache_dir=str(clean_cache))
         return
 
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
-        FatBinaryBuilder = _try_import(
+        fat_binary_builder_cls = _try_import(
             "src.bridges.aot_packager.builder",
             "FatBinaryBuilder",
         )
-        AMDBackend = _try_import(
+        amd_backend_cls = _try_import(
             "src.bridges.aot_packager.amd_backend",
             "AMDBackend",
         )
-        IntelBackend = _try_import(
+        intel_backend_cls = _try_import(
             "src.bridges.aot_packager.intel_backend",
             "IntelBackend",
         )
-        NvidiaBackend = _try_import(
+        nvidia_backend_cls = _try_import(
             "src.bridges.aot_packager.nvidia_backend",
             "NvidiaBackend",
         )
-        FatBinaryLinker = _try_import(
+        fat_binary_linker_cls = _try_import(
             "src.bridges.aot_packager.linker",
             "FatBinaryLinker",
         )
-        AMDCompilationResult = _try_import(
+        amd_compilation_result_cls = _try_import(
             "src.bridges.aot_packager.amd_backend",
             "AMDCompilationResult",
         )
-        IntelCompilationResult = _try_import(
+        intel_compilation_result_cls = _try_import(
             "src.bridges.aot_packager.intel_backend",
             "IntelCompilationResult",
         )
-        NvidiaCompilationResult = _try_import(
+        nvidia_compilation_result_cls = _try_import(
             "src.bridges.aot_packager.nvidia_backend",
             "NvidiaCompilationResult",
         )
-        LinkingResult = _try_import(
+        linking_result_cls = _try_import(
             "src.bridges.aot_packager.linker",
             "LinkingResult",
         )
@@ -535,19 +519,19 @@ def aot_packager(
     fake_ptx_text = "// mock ptx\n.visible .entry mock_kernel() { ret; }\n"
     fake_cubin = b"\x7fELF" + b"\x00" * 12 + b"cubin-mock"
 
-    amd_mock_result = AMDCompilationResult(
+    amd_mock_result = amd_compilation_result_cls(
         success=True,
         arch="gfx942",
         hsaco_bytes=fake_hsaco,
         compilation_time_s=0.001,
     )
-    intel_mock_result = IntelCompilationResult(
+    intel_mock_result = intel_compilation_result_cls(
         success=True,
         target="xe_hpg",
         spv_bytes=fake_spv,
         compilation_time_s=0.001,
     )
-    nvidia_mock_result = NvidiaCompilationResult(
+    nvidia_mock_result = nvidia_compilation_result_cls(
         success=True,
         arch="sm_90",
         ptx_text=fake_ptx_text,
@@ -559,7 +543,7 @@ def aot_packager(
     # it wants to.
     linking_output = clean_cache / "mock_kernel.fat.o"
     linking_output.write_bytes(b"\x7fELF" + b"\x00" * 16 + b"fat-mock")
-    linking_mock_result = LinkingResult(
+    linking_mock_result = linking_result_cls(
         success=True,
         output_path=linking_output,
         output_size=linking_output.stat().st_size,
@@ -567,7 +551,7 @@ def aot_packager(
         linker_version="mock-lld",
     )
 
-    builder = FatBinaryBuilder(cache_dir=str(clean_cache))
+    builder = fat_binary_builder_cls(cache_dir=str(clean_cache))
 
     amd_compile = MagicMock(return_value=amd_mock_result)
     intel_compile = MagicMock(return_value=intel_mock_result)
@@ -576,10 +560,10 @@ def aot_packager(
     stub_call = MagicMock(return_value=b"\x7fELF" + b"stub-mock")
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(AMDBackend, "compile_kernel", amd_compile))
-        stack.enter_context(patch.object(IntelBackend, "compile_kernel", intel_compile))
-        stack.enter_context(patch.object(NvidiaBackend, "compile_kernel", nvidia_compile))
-        stack.enter_context(patch.object(FatBinaryLinker, "link_fat_binary", link_call))
+        stack.enter_context(patch.object(amd_backend_cls, "compile_kernel", amd_compile))
+        stack.enter_context(patch.object(intel_backend_cls, "compile_kernel", intel_compile))
+        stack.enter_context(patch.object(nvidia_backend_cls, "compile_kernel", nvidia_compile))
+        stack.enter_context(patch.object(fat_binary_linker_cls, "link_fat_binary", link_call))
         stack.enter_context(patch.object(builder, "_compile_runtime_stub", stub_call))
         # Mock validator (no hardware) so the optional validation stage is a no-op.
         stack.enter_context(
@@ -618,7 +602,7 @@ def sharding_bridge(
     """
     if _use_real_backend(request):
         try:
-            AutoShardingBridge = _try_import(
+            auto_sharding_bridge_cls = _try_import(
                 "src.bridges.pytorch_xla.pipeline_orchestrator",
                 "AutoShardingBridge",
             )
@@ -629,32 +613,32 @@ def sharding_bridge(
                 __import__(dep)
             except ImportError:
                 pytest.skip(f"{dep} not installed (required for real sharding backend)")
-        yield AutoShardingBridge(enable_circuit_breakers=True)
+        yield auto_sharding_bridge_cls(enable_circuit_breakers=True)
         return
 
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
-        AutoShardingBridge = _try_import(
+        auto_sharding_bridge_cls = _try_import(
             "src.bridges.pytorch_xla.pipeline_orchestrator",
             "AutoShardingBridge",
         )
-        GSPMDRunner = _try_import(
+        gspmd_runner_cls = _try_import(
             "src.bridges.pytorch_xla.gspmd_runner",
             "GSPMDRunner",
         )
-        GraphCapture = _try_import(
+        graph_capture_cls = _try_import(
             "src.bridges.pytorch_xla.graph_capture",
             "GraphCapture",
         )
-        StableHLOExporter = _try_import(
+        stablehlo_exporter_cls = _try_import(
             "src.bridges.pytorch_xla.stablehlo_export",
             "StableHLOExporter",
         )
-        GSPMDResult = _try_import(
+        _try_import(
             "src.bridges.pytorch_xla.gspmd_runner",
             "GSPMDResult",
         )
-        ShardingSpec = _try_import(
+        sharding_spec_cls = _try_import(
             "src.bridges.pytorch_xla.gspmd_runner",
             "ShardingSpec",
         )
@@ -662,7 +646,7 @@ def sharding_bridge(
         pytest.skip(f"pytorch_xla bridge not importable: {exc}")
 
     fake_sharding_spec = (
-        MagicMock(spec=ShardingSpec) if not isinstance(ShardingSpec, type) else MagicMock()
+        MagicMock(spec=sharding_spec_cls) if not isinstance(sharding_spec_cls, type) else MagicMock()
     )
     fake_gspmd_result = MagicMock()
     fake_gspmd_result.is_usable = True
@@ -688,12 +672,12 @@ def sharding_bridge(
     stablehlo_export = MagicMock(return_value=fake_stablehlo)
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(GSPMDRunner, "run", gspmd_run))
-        stack.enter_context(patch.object(GraphCapture, "capture", graph_capture))
+        stack.enter_context(patch.object(gspmd_runner_cls, "run", gspmd_run))
+        stack.enter_context(patch.object(graph_capture_cls, "capture", graph_capture))
         stack.enter_context(
-            patch.object(StableHLOExporter, "export_from_captured", stablehlo_export)
+            patch.object(stablehlo_exporter_cls, "export_from_captured", stablehlo_export)
         )
-        bridge = AutoShardingBridge(enable_circuit_breakers=False)
+        bridge = auto_sharding_bridge_cls(enable_circuit_breakers=False)
         bridge._mock_gspmd = gspmd_run
         bridge._mock_graph = graph_capture
         bridge._mock_stablehlo = stablehlo_export

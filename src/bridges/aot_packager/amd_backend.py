@@ -224,7 +224,6 @@ class AMDBackend:
         """Use AOTriton's Python API or CLI to compile."""
         # First, try the Python API
         try:
-            import aotriton
             from aotriton import compile
 
             with self._lock:

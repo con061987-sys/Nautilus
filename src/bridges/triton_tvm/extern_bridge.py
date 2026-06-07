@@ -31,9 +31,7 @@ from typing import Any
 from src.common.logging import get_logger
 
 try:
-    import tvm
-    from tvm.script import tir as T
-    from tvm.tir import PrimFunc
+    from tvm.script import tir as _tir
 
     TVM_AVAILABLE = True
 except ImportError:
@@ -171,27 +169,27 @@ class ExternMatmulBuilder:
 
         # Read the binary contents
         with open(matmul.cubin_path, "rb") as f:
-            binary_data = f.read()
+            f.read()
 
-        @T.prim_func
+        @_tir.prim_func
         def matmul_extern(
-            A_handle: T.handle,
-            B_handle: T.handle,
-            C_handle: T.handle,
+            a_handle: _tir.handle,
+            b_handle: _tir.handle,
+            c_handle: _tir.handle,
         ) -> None:
-            A = T.match_buffer(A_handle, (matmul.m, matmul.k), matmul.dtype)
-            B = T.match_buffer(B_handle, (matmul.k, matmul.n), matmul.dtype)
-            C = T.match_buffer(C_handle, (matmul.m, matmul.n), matmul.dtype)
+            a = _tir.match_buffer(a_handle, (matmul.m, matmul.k), matmul.dtype)
+            b = _tir.match_buffer(b_handle, (matmul.k, matmul.n), matmul.dtype)
+            c = _tir.match_buffer(c_handle, (matmul.m, matmul.n), matmul.dtype)
 
             # Call the Triton-compiled matmul via tvm.extern
-            T.evaluate(
-                T.tvm_call_cpacked(
+            _tir.evaluate(
+                _tir.tvm_call_cpacked(
                     "triton_matmul_run",
-                    T.tvm_stack_make_array(
-                        A.data,
-                        B.data,
-                        C.data,
-                        T.tvm_stack_make_shape(
+                    _tir.tvm_stack_make_array(
+                        a.data,
+                        b.data,
+                        c.data,
+                        _tir.tvm_stack_make_shape(
                             matmul.m,
                             matmul.k,
                             matmul.k,
@@ -199,8 +197,8 @@ class ExternMatmulBuilder:
                             matmul.m,
                             matmul.n,
                         ),
-                        T.float32(0.0),  # alpha
-                        T.float32(0.0),  # beta
+                        _tir.float32(0.0),  # alpha
+                        _tir.float32(0.0),  # beta
                     ),
                 )
             )
@@ -414,16 +412,16 @@ def {name}(A, B):
             # Create a fake tensor for compilation
             import torch
 
-            A = torch.zeros(
+            a = torch.zeros(
                 128, 128, device="cuda" if target == "cuda" else "cpu", dtype=torch.float32
             )
-            B = torch.zeros(
+            b = torch.zeros(
                 128, 128, device="cuda" if target == "cuda" else "cpu", dtype=torch.float32
             )
 
             # Trigger JIT compile
             grid = (1,)
-            kernel_fn[grid](A, B, A, 128, 128, 128, 128, 1, 128, 1, 128, 1)
+            kernel_fn[grid](a, b, a, 128, 128, 128, 128, 1, 128, 1, 128, 1)
 
             # Do NOT rglob-copy from ~/.triton/cache/ — filenames are
             # hash-derived and shared with other kernels in the same

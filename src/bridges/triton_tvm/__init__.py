@@ -70,7 +70,7 @@ def __getattr__(name: str):
 
 
 def __dir__() -> list[str]:
-    return sorted(list(_LAZY_EXPORTS.keys()))
+    return sorted(_LAZY_EXPORTS.keys())
 
 
 __all__ = list(_LAZY_EXPORTS.keys())

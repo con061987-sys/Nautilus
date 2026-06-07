@@ -15,6 +15,7 @@ Production features:
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import time
@@ -33,21 +34,17 @@ from src.bridges.triton_tvm.metaschedule_adapter import MetaScheduleAdapter
 from src.bridges.triton_tvm.timeout_manager import StageTimeoutError
 from src.common.errors import TuningError
 from src.common.logging import get_logger
-from src.common.result import Err, Result
+from src.common.result import Err, Ok, Result
 
 try:
-    import triton
-
-    TRITON_AVAILABLE = True
-except ImportError:
-    TRITON_AVAILABLE = False
-
-try:
-    from tvm import meta_schedule as ms
+    __import__("tvm.meta_schedule")
 
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
+
+
+TRITON_AVAILABLE = importlib.util.find_spec("triton") is not None
 
 logger = get_logger(__name__)
 
@@ -206,7 +203,7 @@ class TritonTVMBridge:
 
         # Step 3-5: TVM tuning chain
         tune_result = self._tuning_chain(metadata, target)
-        if tune_result.is_ok():
+        if isinstance(tune_result, Ok):
             mapped = tune_result.unwrap()
         else:
             mapped = self._fallback_config(
@@ -239,7 +236,7 @@ class TritonTVMBridge:
         so Triton can benchmark them at runtime.
         """
         tune_result = self._tuning_chain(metadata, target)
-        if tune_result.is_ok():
+        if isinstance(tune_result, Ok):
             best = tune_result.unwrap()
         else:
             best = self._fallback_config(
@@ -479,7 +476,7 @@ class TritonTVMBridge:
             )
             return MappedTuningConfig.defaults()
 
-        if result.is_ok():
+        if isinstance(result, Ok):
             return result.unwrap()
         logger.warning(
             "TVM tune returned Err (breaker=%s): %s",
@@ -756,7 +753,7 @@ class TritonTVMBridge:
                 fallback_reason=fallback_reason,
             )
         tune_result = self._tuning_chain(metadata, target)
-        if tune_result.is_ok():
+        if isinstance(tune_result, Ok):
             mapped = tune_result.unwrap()
         else:
             mapped = self._fallback_config(
@@ -918,7 +915,7 @@ class TritonTVMBridge:
                     )
                 )
 
-            if tune_result.is_ok():
+            if isinstance(tune_result, Ok):
                 self._stages["tvm_tune"] = (time.perf_counter() - t0) * 1000
                 return tune_result
             logger.error(
@@ -1029,6 +1026,10 @@ class TritonTVMBridge:
         if len(self._lru_order) > self._max_cache_entries:
             oldest = self._lru_order.pop(0)
             self._cache.pop(oldest, None)
+            # Also remove from disk to prevent re-population on get
+            disk_path = self._disk_cache_path(oldest)
+            if disk_path.exists():
+                disk_path.unlink(missing_ok=True)
 
         # Disk cache
         cache_path = self._disk_cache_path(full_key)
@@ -1120,7 +1121,7 @@ def autotune_configs(
         num_stages=num_stages,
     )
     tune_result = bridge._tuning_chain(metadata, target)
-    if tune_result.is_ok():
+    if isinstance(tune_result, Ok):
         mapped = tune_result.unwrap()
     else:
         mapped = bridge._fallback_config(

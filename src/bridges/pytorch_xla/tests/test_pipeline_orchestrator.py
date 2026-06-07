@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 from src.bridges.pytorch_xla.device_mesh import (
@@ -151,6 +153,22 @@ def _make_real_model() -> nn.Module:
 class TestPipelineHappyPath:
     """End-to-end pipeline using real ShardingConfig + real model."""
 
+    @staticmethod
+    def _fake_stablehlo() -> object:
+        """Build a mock StableHLOModule for environments without torch_xla."""
+        from src.common.types import StableHLOModule
+
+        return StableHLOModule(
+            mlir_text="module { func.func @main(%arg0: tensor<2x8xf32>) -> tensor<2x4xf32> { return %arg0 : tensor<2x4xf32> } }",
+            function_name="main",
+            input_specs=[{"shape": [2, 8], "dtype": "f32"}],
+            output_specs=[{"shape": [2, 4], "dtype": "f32"}],
+            op_count=1,
+            conversion_time_ms=1.0,
+            is_usable=True,
+            is_real_stablehlo=True,
+        )
+
     def test_shard_config_holds_real_model_and_inputs(self) -> None:
         """A ShardingConfig must accept and store a real model + tensors."""
         model = _make_real_model()
@@ -177,6 +195,8 @@ class TestPipelineHappyPath:
         success=False and a populated stage_durations map. Either way the
         call must NOT raise and the return type must be ShardingResult.
         """
+        from src.bridges.pytorch_xla.stablehlo_export import StableHLOExporter
+
         model = _make_real_model()
         example_inputs = (torch.randn(2, 8),)
         mesh = make_mesh()
@@ -189,12 +209,15 @@ class TestPipelineHappyPath:
         )
 
         bridge = AutoShardingBridge(enable_circuit_breakers=False)
-        result = bridge.shard(
-            model=model,
-            example_inputs=example_inputs,
-            device_mesh=mesh,
-            config=config,
-        )
+        with mock.patch.object(
+            StableHLOExporter, "export_from_captured", return_value=self._fake_stablehlo()
+        ):
+            result = bridge.shard(
+                model=model,
+                example_inputs=example_inputs,
+                device_mesh=mesh,
+                config=config,
+            )
 
         assert isinstance(result, ShardingResult)
         # Stage timings must always be recorded, even on failure.
@@ -214,6 +237,8 @@ class TestPipelineHappyPath:
         complete end-to-end and produce a ShardingResult with the
         capture + export stages populated.
         """
+        from src.bridges.pytorch_xla.stablehlo_export import StableHLOExporter
+
         model = _make_real_model()
         example_inputs = (torch.randn(1, 8),)
         mesh = make_mesh()
@@ -227,12 +252,15 @@ class TestPipelineHappyPath:
         )
 
         bridge = AutoShardingBridge(enable_circuit_breakers=False)
-        result = bridge.shard(
-            model=model,
-            example_inputs=example_inputs,
-            device_mesh=mesh,
-            config=config,
-        )
+        with mock.patch.object(
+            StableHLOExporter, "export_from_captured", return_value=self._fake_stablehlo()
+        ):
+            result = bridge.shard(
+                model=model,
+                example_inputs=example_inputs,
+                device_mesh=mesh,
+                config=config,
+            )
 
         # With the heavy stages skipped, this is the only path that can
         # succeed without any of torch_xla/TVM installed.
@@ -246,6 +274,8 @@ class TestPipelineHappyPath:
 
     def test_shard_records_total_duration(self) -> None:
         """total_duration_ms must always be populated."""
+        from src.bridges.pytorch_xla.stablehlo_export import StableHLOExporter
+
         model = _make_real_model()
         example_inputs = (torch.randn(1, 8),)
         mesh = make_mesh()
@@ -259,18 +289,23 @@ class TestPipelineHappyPath:
         )
 
         bridge = AutoShardingBridge(enable_circuit_breakers=False)
-        result = bridge.shard(
-            model=model,
-            example_inputs=example_inputs,
-            device_mesh=mesh,
-            config=config,
-        )
+        with mock.patch.object(
+            StableHLOExporter, "export_from_captured", return_value=self._fake_stablehlo()
+        ):
+            result = bridge.shard(
+                model=model,
+                example_inputs=example_inputs,
+                device_mesh=mesh,
+                config=config,
+            )
         assert result.total_duration_ms > 0.0
 
     def test_shard_with_real_model_sets_infrastructure(self) -> None:
         """After shard() with a real mesh, the comm backend and executor
         must be configured against that mesh.
         """
+        from src.bridges.pytorch_xla.stablehlo_export import StableHLOExporter
+
         model = _make_real_model()
         example_inputs = (torch.randn(1, 8),)
         mesh = make_mesh()
@@ -284,12 +319,15 @@ class TestPipelineHappyPath:
         )
 
         bridge = AutoShardingBridge(enable_circuit_breakers=False)
-        bridge.shard(
-            model=model,
-            example_inputs=example_inputs,
-            device_mesh=mesh,
-            config=config,
-        )
+        with mock.patch.object(
+            StableHLOExporter, "export_from_captured", return_value=self._fake_stablehlo()
+        ):
+            bridge.shard(
+                model=model,
+                example_inputs=example_inputs,
+                device_mesh=mesh,
+                config=config,
+            )
 
         assert bridge.comm_backend is not None
         assert bridge.comm_backend.mesh is mesh
@@ -297,6 +335,8 @@ class TestPipelineHappyPath:
 
     def test_shard_to_dict_for_real_run(self) -> None:
         """to_dict() must include every public flag after a real run."""
+        from src.bridges.pytorch_xla.stablehlo_export import StableHLOExporter
+
         model = _make_real_model()
         example_inputs = (torch.randn(1, 8),)
         mesh = make_mesh()
@@ -310,12 +350,15 @@ class TestPipelineHappyPath:
         )
 
         bridge = AutoShardingBridge(enable_circuit_breakers=False)
-        result = bridge.shard(
-            model=model,
-            example_inputs=example_inputs,
-            device_mesh=mesh,
-            config=config,
-        )
+        with mock.patch.object(
+            StableHLOExporter, "export_from_captured", return_value=self._fake_stablehlo()
+        ):
+            result = bridge.shard(
+                model=model,
+                example_inputs=example_inputs,
+                device_mesh=mesh,
+                config=config,
+            )
         d = result.to_dict()
         # All five booleans must be present
         assert "success" in d

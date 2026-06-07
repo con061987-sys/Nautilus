@@ -28,31 +28,43 @@ Examples
 
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import click
 
-# Ensure the project root is on sys.path so 'benchmarks' package resolves
-_project_root = Path(__file__).resolve().parent.parent.parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
+if TYPE_CHECKING:
+    import benchmarks.results as _benchmarks_results_mod
+    import benchmarks.runner as _benchmarks_runner_mod
+    import src.common.errors as _errors_mod
+    import src.common.logging as _logging_mod
+else:
+    _project_root = Path(__file__).resolve().parent.parent.parent.parent
+    if str(_project_root) not in sys.path:
+        sys.path.insert(0, str(_project_root))
+    _benchmarks_results_mod = importlib.import_module("benchmarks.results")
+    _benchmarks_runner_mod = importlib.import_module("benchmarks.runner")
+    _errors_mod = importlib.import_module("src.common.errors")
+    _logging_mod = importlib.import_module("src.common.logging")
 
-from benchmarks.results import (
-    DEFAULT_REGRESSION_THRESHOLDS,
-    DEFAULT_RESULTS_DIR,
-    ComparisonReport,
-    ResultSet,
-    compare_result_sets,
-    load_history,
-    trend_summary,
-)
-from benchmarks.runner import BenchmarkRunner, RunnerConfig
-from src.common.errors import NautilusError
-from src.common.logging import get_logger
-from src.common.logging import span as span_context
+DEFAULT_REGRESSION_THRESHOLDS = _benchmarks_results_mod.DEFAULT_REGRESSION_THRESHOLDS
+DEFAULT_RESULTS_DIR = _benchmarks_results_mod.DEFAULT_RESULTS_DIR
+ComparisonReport = _benchmarks_results_mod.ComparisonReport
+ResultSet = _benchmarks_results_mod.ResultSet
+compare_result_sets = _benchmarks_results_mod.compare_result_sets
+load_history = _benchmarks_results_mod.load_history
+trend_summary = _benchmarks_results_mod.trend_summary
+
+BenchmarkRunner = _benchmarks_runner_mod.BenchmarkRunner
+RunnerConfig = _benchmarks_runner_mod.RunnerConfig
+
+NautilusError = _errors_mod.NautilusError
+
+get_logger = _logging_mod.get_logger
+span_context = _logging_mod.span
 
 log = get_logger("nautilus.cli.bench")
 
@@ -437,7 +449,7 @@ def compare_cmd(
 ) -> None:
     """Compare two result sets."""
     try:
-        report, baseline_rs, candidate_rs = _compare_impl(
+        report, _baseline_rs, _candidate_rs = _compare_impl(
             baseline=baseline,
             candidate=candidate,
             latest=latest,

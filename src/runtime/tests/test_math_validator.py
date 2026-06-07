@@ -13,21 +13,27 @@ Covers:
 
 from __future__ import annotations
 
+import importlib
 import math
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-_HERE = Path(__file__).resolve()
-sys.path.insert(0, str(_HERE.parents[3]))
+if TYPE_CHECKING:
+    import src.common.errors as _errors_mod
+    import src.runtime.math_validator as _math_validator_mod
+else:
+    _HERE = Path(__file__).resolve()
+    sys.path.insert(0, str(_HERE.parents[3]))
+    _errors_mod = importlib.import_module("src.common.errors")
+    _math_validator_mod = importlib.import_module("src.runtime.math_validator")
 
-from src.common.errors import ValidationError
-from src.runtime.math_validator import (
-    MathValidator,
-    StrictnessLevel,
-)
+ValidationError = _errors_mod.ValidationError
+MathValidator = _math_validator_mod.MathValidator
+StrictnessLevel = _math_validator_mod.StrictnessLevel
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -81,7 +87,7 @@ class TestNaNHandling:
         """A single NaN position must not poison the ULP max."""
         ref = np.array([1.0, 2.0, float("nan"), 4.0])
         act = np.array([1.0, 2.0, 2.0, 4.0])  # mismatch only at index 2
-        abs_e, rel_e, ulp_e = validator._compute_errors(ref, act)
+        abs_e, _rel_e, ulp_e = validator._compute_errors(ref, act)
         # The mismatched position is NaN in ref only; the
         # sentinel ULP is finite but huge — bit_exact is off
         # here so the test is "finite, non-NaN".

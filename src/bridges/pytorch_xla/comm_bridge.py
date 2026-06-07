@@ -13,7 +13,7 @@ Key abstractions:
   * :class:`NCCLBackend` — Nvidia (torch.distributed "nccl").
   * :class:`RCCLBackend` — AMD ROCm (exposed by torch.distributed as
     "nccl" when running on a ROCm build of PyTorch).
-  * :class:`oneCCLBackend` — Intel XPU / oneAPI (torch.distributed
+  * :class:`OneCCLBackend` — Intel XPU / oneAPI (torch.distributed
     "xccl").
   * :class:`CrossVendorBridge` — bridges two per-vendor backends when
     the cluster is heterogeneous.  Falls back to host (CPU) memory
@@ -432,7 +432,7 @@ class _TorchDistributedBackend(CollectiveBackend):
         self._ensure_initialized()
         world_size = self._world_size(group)
         out = torch.empty(
-            (tensor.shape[0] * world_size,) + tuple(tensor.shape[1:]),
+            (tensor.shape[0] * world_size, *tuple(tensor.shape[1:])),
             dtype=tensor.dtype,
             device=tensor.device,
         )
@@ -542,7 +542,7 @@ class RCCLBackend(_TorchDistributedBackend):
 # ---------------------------------------------------------------------------
 
 
-class oneCCLBackend(_TorchDistributedBackend):
+class OneCCLBackend(_TorchDistributedBackend):
     """oneCCL backend for Intel XPU devices (Intel Max / Gaudi / PVC).
 
     torch.distributed uses the backend name ``"xccl"`` for oneCCL
@@ -684,7 +684,7 @@ class CrossVendorBridge(CollectiveBackend):
         host = self._stage_to_host(tensor)
         world_size = self._world_size(group)
         out_host = torch.empty(
-            (host.shape[0] * world_size,) + tuple(host.shape[1:]),
+            (host.shape[0] * world_size, *tuple(host.shape[1:])),
             dtype=host.dtype,
             device="cpu",
         )
@@ -758,7 +758,7 @@ class CrossVendorBridge(CollectiveBackend):
 _BACKEND_REGISTRY: dict[CommLibrary, type[CollectiveBackend]] = {
     CommLibrary.NCCL: NCCLBackend,
     CommLibrary.RCCL: RCCLBackend,
-    CommLibrary.ONECCL: oneCCLBackend,
+    CommLibrary.ONECCL: OneCCLBackend,
 }
 
 
@@ -791,9 +791,9 @@ __all__ = [
     "CollectiveBackend",
     "CrossVendorBridge",
     "NCCLBackend",
+    "OneCCLBackend",
     "P2PCapability",
     "RCCLBackend",
     "detect_p2p_capability",
     "make_backend",
-    "oneCCLBackend",
 ]

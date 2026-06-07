@@ -38,16 +38,7 @@ from .stablehlo_export import StableHLOExporter, StableHLOModule
 
 try:
     from src.bridges.triton_tvm.circuit_breaker import (
-        CircuitBreaker,
-        CircuitBreakerConfig,
-        CircuitState,
         get_default_breakers,
-    )
-    from src.bridges.triton_tvm.structured_logging import (
-        span as span_context,
-    )
-    from src.bridges.triton_tvm.structured_logging import (
-        stage as stage_context,
     )
     from src.bridges.triton_tvm.timeout_manager import (
         StageBudgets,
@@ -238,7 +229,17 @@ class AutoShardingBridge:
 
         # Stage 2: FX → StableHLO export
         t0 = time.perf_counter()
-        stablehlo = self.stablehlo_exporter.export_from_captured(captured)
+        try:
+            stablehlo = self.stablehlo_exporter.export_from_captured(captured)
+        except Exception as exc:
+            stage_durations["stablehlo_export"] = (time.perf_counter() - t0) * 1000
+            return ShardingResult(
+                success=False,
+                captured_graph=captured,
+                error=f"StableHLO export failed: {exc}",
+                total_duration_ms=(time.perf_counter() - start) * 1000,
+                stage_durations=stage_durations,
+            )
         stage_durations["stablehlo_export"] = (time.perf_counter() - t0) * 1000
         if not stablehlo.is_usable:
             return ShardingResult(

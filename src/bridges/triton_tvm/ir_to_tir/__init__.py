@@ -57,19 +57,19 @@ __all__ = [
     "ConversionPipeline",
     "ConversionResult",
     "ConversionStatus",
-    # AST
-    "TTGIRParser",
-    "TTGIRFunction",
-    "TTGIROperation",
-    "TTGIRType",
     # Passes
     "LowerTensorIdioms",
-    "RewriteSPMDToLoops",
-    "ReplacePointersWithMemRefs",
     "MaterializeTensorsToTVM",
-    # Emitter
-    "TVMScriptEmitter",
+    "ReplacePointersWithMemRefs",
+    "RewriteSPMDToLoops",
+    "SplitResult",
     # tt.dot splitting
     "TTDotSplitter",
-    "SplitResult",
+    "TTGIRFunction",
+    "TTGIROperation",
+    # AST
+    "TTGIRParser",
+    "TTGIRType",
+    # Emitter
+    "TVMScriptEmitter",
 ]

@@ -337,9 +337,7 @@ def _emit_all_gather(
     # Gather dimension 0 by default; the result shape is
     # ``(N * dim0, dim1, ..., dimN)``.
     if coll.tensor_shape:
-        gathered_shape: tuple[int, ...] = (
-            coll.num_devices * coll.tensor_shape[0],
-        ) + coll.tensor_shape[1:]
+        gathered_shape: tuple[int, ...] = (coll.num_devices * coll.tensor_shape[0], *coll.tensor_shape[1:])
     else:
         gathered_shape = coll.tensor_shape
     result_type = f"tensor<{'x'.join(str(d) for d in gathered_shape)}x{coll.dtype}>"
@@ -363,9 +361,7 @@ def _emit_reduce_scatter(
     result = coll.result_name
     type_str = f"tensor<{'x'.join(str(d) for d in coll.tensor_shape)}x{coll.dtype}>"
     if coll.tensor_shape:
-        scattered_shape: tuple[int, ...] = (
-            coll.tensor_shape[0] // coll.num_devices,
-        ) + coll.tensor_shape[1:]
+        scattered_shape: tuple[int, ...] = (coll.tensor_shape[0] // coll.num_devices, *coll.tensor_shape[1:])
     else:
         scattered_shape = coll.tensor_shape
     result_type = f"tensor<{'x'.join(str(d) for d in scattered_shape)}x{coll.dtype}>"
@@ -622,9 +618,7 @@ def _resolve_tensor_layout(
         if full_shape and ts.mesh_axes:
             axis = ts.mesh_axes[0]
             if axis < len(full_shape) and full_shape[axis] > 1:
-                per_device_shape = (
-                    full_shape[0] // max(1, _safe_prod_axis_count(ts.mesh_axes)),
-                ) + full_shape[1:]
+                per_device_shape = (full_shape[0] // max(1, _safe_prod_axis_count(ts.mesh_axes)), *full_shape[1:])
             else:
                 per_device_shape = full_shape
         else:
@@ -840,7 +834,7 @@ def _emit_collectives(
         replacement_len = 0
 
     # Splice the new ops + new return into the MLIR text.
-    insertion_block = "\n".join(new_ops + [new_ret])
+    insertion_block = "\n".join([*new_ops, new_ret])
     new_mlir = mlir_text[:ret_offset] + insertion_block + mlir_text[ret_offset + replacement_len :]
     return new_mlir, None
 

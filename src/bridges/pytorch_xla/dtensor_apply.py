@@ -22,10 +22,7 @@ from typing import Any
 from src.common.logging import get_logger
 
 try:
-    import torch
-    import torch.distributed as dist
     from torch.distributed._tensor import (
-        DeviceMesh,
         DTensor,
         Replicate,
         Shard,
@@ -99,7 +96,7 @@ class DTensorApplier:
 
         # Apply sharding to each parameter
         try:
-            for name, param in model.named_parameters():
+            for name, _param in model.named_parameters():
                 placement = self._placement_for_tensor(
                     name,
                     sharding_spec,
@@ -151,7 +148,7 @@ class DTensorApplier:
             # Add replicate placements for non-sharded axes
             all_axes = set(range(len(sharding_spec.mesh_shape)))
             sharded_axes = set(tensor_sharding.mesh_axes)
-            for axis in sorted(all_axes - sharded_axes):
+            for _axis in sorted(all_axes - sharded_axes):
                 placements.append(Replicate())
         if not placements:
             return (Replicate(),)

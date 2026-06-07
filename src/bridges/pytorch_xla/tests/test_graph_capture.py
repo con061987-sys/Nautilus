@@ -58,7 +58,7 @@ class TestCaptureMode:
 
     def test_modes_are_distinct(self) -> None:
         modes = list(CaptureMode)
-        assert len(modes) == len({m for m in modes})
+        assert len(modes) == len(set(modes))
 
 
 # ── GraphMetadata ─────────────────────────────────────────────────────

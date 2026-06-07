@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.common.errors import IngestionUnsupportedIntrinsicError
 from src.common.logging import get_logger
@@ -47,28 +47,31 @@ from .pointer_analysis import PointerAnalyzer, PointerLayout
 from .shared_memory import SharedMemoryAnalyzer, SharedMemPlan
 
 # Import CudaStatementType for dispatch
-try:
+if TYPE_CHECKING:
     from .parser import CudaStatementType
-except ImportError:
-    # Fallback for backward compatibility during transition
-    from enum import Enum
+else:
+    try:
+        from .parser import CudaStatementType
+    except ImportError:
+        # Fallback for backward compatibility during transition
+        from enum import Enum
 
-    class CudaStatementType(str, Enum):  # type: ignore[no-redef]
-        FUNCTION_DEF = "FUNCTION_DEF"
-        SHARED_MEM = "SHARED_MEM"
-        ASSIGNMENT = "ASSIGNMENT"
-        EXPRESSION = "EXPRESSION"
-        IF = "IF"
-        FOR = "FOR"
-        WHILE = "WHILE"
-        SYNC_THREADS = "SYNC_THREADS"
-        ATOMIC_OP = "ATOMIC_OP"
-        MEMORY_LOAD = "MEMORY_LOAD"
-        MEMORY_STORE = "MEMORY_STORE"
-        RETURN = "RETURN"
-        BLOCK_INDEX = "BLOCK_INDEX"
-        DECLARATION = "DECLARATION"
-        UNKNOWN = "UNKNOWN"
+        class CudaStatementType(str, Enum):
+            FUNCTION_DEF = "FUNCTION_DEF"
+            SHARED_MEM = "SHARED_MEM"
+            ASSIGNMENT = "ASSIGNMENT"
+            EXPRESSION = "EXPRESSION"
+            IF = "IF"
+            FOR = "FOR"
+            WHILE = "WHILE"
+            SYNC_THREADS = "SYNC_THREADS"
+            ATOMIC_OP = "ATOMIC_OP"
+            MEMORY_LOAD = "MEMORY_LOAD"
+            MEMORY_STORE = "MEMORY_STORE"
+            RETURN = "RETURN"
+            BLOCK_INDEX = "BLOCK_INDEX"
+            DECLARATION = "DECLARATION"
+            UNKNOWN = "UNKNOWN"
 
 
 logger = get_logger(__name__)
@@ -926,7 +929,7 @@ class CudaToTritonTranslator:
         if "import triton" in result and result.strip().startswith("import"):
             # Only if it's at the beginning of the string (shouldn't happen)
             lines = result.split("\n")
-            filtered = [l for l in lines if not l.strip().startswith("import ")]
+            filtered = [line for line in lines if not line.strip().startswith("import ")]
             result = "\n".join(filtered)
         return result
 

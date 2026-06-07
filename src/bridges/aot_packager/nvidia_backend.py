@@ -33,18 +33,24 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-try:
+if TYPE_CHECKING:
     from packaging.specifiers import SpecifierSet
     from packaging.version import InvalidVersion, Version
 
     _PACKAGING_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    SpecifierSet = None  # type: ignore[assignment,misc]
-    InvalidVersion = Exception  # type: ignore[assignment,misc]
-    Version = None  # type: ignore[assignment,misc]
-    _PACKAGING_AVAILABLE = False
+else:
+    try:
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import InvalidVersion, Version
+
+        _PACKAGING_AVAILABLE = True
+    except ImportError:  # pragma: no cover
+        SpecifierSet = None  # type: ignore[assignment]
+        InvalidVersion = Exception
+        Version = None  # type: ignore[assignment]
+        _PACKAGING_AVAILABLE = False
 
 from src.common.errors import (
     CompilationError,

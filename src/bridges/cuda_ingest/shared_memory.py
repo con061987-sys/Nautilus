@@ -37,6 +37,8 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+_NUM_SHARED_MEMORY_BANKS = 32
+
 
 @dataclass
 class SharedMemAllocation:
@@ -181,21 +183,21 @@ class SharedMemoryAnalyzer:
         - Adjacent addresses by adjacent threads (no conflict)
         """
         warnings: list[str] = []
-        NUM_BANKS = 32
 
         for alloc in allocations:
             if not alloc.is_static:
                 continue
-            # Simple check: if the array size is a power of 2 and
-            # the size is small, the stride will likely be the
-            # element size which could cause conflicts
-            if alloc.array_size > 0 and alloc.array_size & (alloc.array_size - 1) == 0:
-                if alloc.array_size >= 32 and alloc.array_size % NUM_BANKS == 0:
-                    warnings.append(
-                        f"Shared memory array '{alloc.name}' has size "
-                        f"{alloc.array_size} which is a multiple of {NUM_BANKS}. "
-                        f"Consider padding by 1 element to avoid bank conflicts."
-                    )
+            if (
+                alloc.array_size > 0
+                and alloc.array_size & (alloc.array_size - 1) == 0
+                and alloc.array_size >= 32
+                and alloc.array_size % _NUM_SHARED_MEMORY_BANKS == 0
+            ):
+                warnings.append(
+                    f"Shared memory array '{alloc.name}' has size "
+                    f"{alloc.array_size} which is a multiple of {_NUM_SHARED_MEMORY_BANKS}. "
+                    f"Consider padding by 1 element to avoid bank conflicts."
+                )
 
         return warnings
 

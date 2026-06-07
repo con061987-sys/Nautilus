@@ -151,11 +151,7 @@ def _is_pointer_like(name: str) -> bool:
 
 
 def _is_int_like(name: str) -> bool:
-    if name in _INT_NAMES:
-        return True
-    if name.upper() in _INT_NAMES:
-        return True
-    return False
+    return name in _INT_NAMES or name.upper() in _INT_NAMES
 
 
 def _is_constexpr_name(name: str) -> bool:
@@ -291,7 +287,7 @@ def build_signature(
     if not constexprs and not constexpr_by_idx and block_size_values:
         return _legacy_signature(block_size_values)
 
-    signature = {i: a for i, a in enumerate(sig_args)}
+    signature = dict(enumerate(sig_args))
     return signature, constexprs
 
 
@@ -306,10 +302,10 @@ def _legacy_signature(
     3 constexpr block sizes.
     """
     sig_args = ["*fp32"] * 3 + ["i32"] * 3 + ["constexpr"] * 3
-    signature = {i: a for i, a in enumerate(sig_args)}
+    signature = dict(enumerate(sig_args))
     values = list(block_size_values.values()) if block_size_values else [128, 128, 32]
     if len(values) < 3:
-        values = (values + [128, 128, 32])[:3]
+        values = [*values, 128, 128, 32][:3]
     constexprs = {
         len(sig_args) - 3: values[0],
         len(sig_args) - 2: values[1],

@@ -47,7 +47,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any
+from typing import Any, Protocol
 
 from src.common.errors import GSPMDError
 from src.common.logging import get_logger, span, stage
@@ -514,7 +514,7 @@ def _collectives_from_actual_mlir(
             num_devices = max(num_devices, 2)
         num_devices = max(num_devices, 1)
 
-        op_token = entry["op_token"]
+        entry["op_token"]
         op_kind = (
             "sum"
             if kind in ("all-reduce", "reduce-scatter")
@@ -752,11 +752,11 @@ class _TorchXLASharding:
                 # Replicated: empty spec means "Replicate()"
                 continue
             rank = len(ts.partition_shape) if ts.partition_shape else 2
-            spec = [None] * rank
+            spec_list: list[int | None] = [None] * rank
             for axis in ts.mesh_axes:
                 if axis < rank:
-                    spec[axis] = axis
-            partition_specs[tname] = tuple(spec)
+                    spec_list[axis] = axis
+            partition_specs[tname] = tuple(spec_list)
 
         # Build the ShardingSpec (will be returned even if shard_module
         # has no real torch module to wrap)
@@ -827,7 +827,7 @@ class _TorchXLASharding:
         )
 
         # Record OpSharding proto info in diagnostics (via tensors)
-        for tname, op in op_shardings.items():
+        for _tname, op in op_shardings.items():
             try:
                 # OpSharding protos are XLA-internal; try common
                 # attributes to be portable.
@@ -908,7 +908,7 @@ class _OpenXlaPjrtSharding:
         Returns ``None`` when the PJRT API is not importable / not
         usable. Returns ``(sharded_text, spec)`` on success.
         """
-        total_dev = _total_devices(mesh_shape)
+        _total_devices(mesh_shape)
         shardings = _build_default_shardings(
             module,
             mesh_shape,
@@ -1027,7 +1027,7 @@ class _GraphPartitionSharding:
             partition_mlir_with_collectives,
         )
 
-        total_dev = _total_devices(mesh_shape)
+        _total_devices(mesh_shape)
         shardings = _build_default_shardings(
             module,
             mesh_shape,
@@ -1211,7 +1211,23 @@ def _annotate_stablehlo_with_sharding(
 # ── Sharding tier registry ─────────────────────────────────────────────
 
 
-_SHARDING_TIERS = [
+class _ShardingProtocol(Protocol):
+    """Protocol for sharding tier classes."""
+
+    @staticmethod
+    def is_available() -> bool: ...
+
+    @classmethod
+    def shard(
+        cls,
+        module: StableHLOModule,
+        mesh_shape: list[int],
+        strategy: ShardingStrategy,
+        custom_shardings: dict[str, TensorSharding] | None,
+    ) -> tuple[str, ShardingSpec]: ...
+
+
+_SHARDING_TIERS: list[tuple[str, type[_ShardingProtocol]]] = [
     ("torch_xla_spmd", _TorchXLASharding),
     ("openxla_pjrt", _OpenXlaPjrtSharding),
     ("graph_partition", _GraphPartitionSharding),

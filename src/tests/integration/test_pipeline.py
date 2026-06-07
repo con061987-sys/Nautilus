@@ -358,7 +358,7 @@ class TestPipelineResume:
 
         real_build = _STAGE_HANDLERS[PipelineStage.BUILD]
 
-        def _spy_build():
+        def _spy_build(pipeline):
             captured_stages.append("build")
             return {
                 "output_path": str(out / "stub.fat.o"),

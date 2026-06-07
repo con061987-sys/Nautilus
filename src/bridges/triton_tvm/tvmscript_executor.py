@@ -26,7 +26,6 @@ logger = get_logger(__name__)
 
 try:
     import tvm
-    from tvm.script import tir as T
 
     TVM_AVAILABLE = True
 except ImportError:
@@ -154,12 +153,12 @@ class TVMScriptExecutor:
         the calling scope.
         """
         import tvm
-        from tvm.script import tir as T
+        from tvm.script import tir as _tir
 
         namespace: dict[str, Any] = {
             "__builtins__": __builtins__,
             "tvm": tvm,
-            "T": T,
+            "T": _tir,
         }
         # Also expose tir if available
         try:

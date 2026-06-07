@@ -15,6 +15,7 @@ hardening surface.
 
 from __future__ import annotations
 
+import importlib
 import pickle
 import sys
 import time
@@ -25,12 +26,13 @@ import pytest
 _HERE = Path(__file__).resolve()
 sys.path.insert(0, str(_HERE.parents[3]))
 
-from src.common.errors import DependencyMissingError
-from src.runtime.async_checkpointer import (
-    SCHEMA_VERSION,
-    AsyncCheckpointer,
-    CheckpointConfig,
-)
+_errors_mod = importlib.import_module("src.common.errors")
+DependencyMissingError = _errors_mod.DependencyMissingError
+
+_async_checkpointer_mod = importlib.import_module("src.runtime.async_checkpointer")
+SCHEMA_VERSION = _async_checkpointer_mod.SCHEMA_VERSION
+AsyncCheckpointer = _async_checkpointer_mod.AsyncCheckpointer
+CheckpointConfig = _async_checkpointer_mod.CheckpointConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures

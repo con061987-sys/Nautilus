@@ -202,7 +202,7 @@ class CommBackend:
             if set(group.devices) == set(device_ids):
                 return group
         # Try cross-vendor bridges
-        for (v1, v2), bridge in self._cross_vendor_bridges.items():
+        for (_v1, _v2), bridge in self._cross_vendor_bridges.items():
             target_devices = set(device_ids)
             source_devices = set(bridge.devices)
             if target_devices.issubset(source_devices):

@@ -26,7 +26,7 @@ import threading
 import time
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, TextIO
@@ -64,11 +64,8 @@ class StdoutLogSink(LogSink):
                 pass
 
     def flush(self) -> None:
-        with self._lock:
-            try:
-                self._stream.flush()
-            except Exception:
-                pass
+        with self._lock, suppress(Exception):
+            self._stream.flush()
 
 
 class JsonLogSink(LogSink):
@@ -175,11 +172,8 @@ class _HumanReadableSink(LogSink):
                 pass
 
     def flush(self) -> None:
-        with self._lock:
-            try:
-                self._stream.flush()
-            except Exception:
-                pass
+        with self._lock, suppress(Exception):
+            self._stream.flush()
 
 
 # Ensure default config so loggers never crash
@@ -404,10 +398,8 @@ class _NautilusLogger:
         if active is not None and "span_id" not in record:
             record["span_id"] = active.span.span_id
         for sink in _ACTIVE_SINKS:
-            try:
+            with suppress(Exception):
                 sink.emit(record)
-            except Exception:
-                pass
         # Mirror to stdlib (with safe extras only)
         std_level = {
             LogLevel.DEBUG: logging.DEBUG,

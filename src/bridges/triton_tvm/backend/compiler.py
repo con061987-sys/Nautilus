@@ -43,11 +43,15 @@ except ImportError:
         pass
 
 
-from . import CAPTURE_KEY_FMT
 from .options import TVMOptions
 
 logger = get_logger(__name__)
 
+
+# Capture-buffer key format shared between compiler.py and ir_capture.py.
+# Defined here (where it is used) and re-exported from __init__.py so
+# that ir_capture.py can import it without a circular dependency.
+CAPTURE_KEY_FMT = "nautilus:ttgir:{source_hash}:{kernel_name}"
 
 # Module-level cache for capturing IR across stage lambdas
 # Keyed by (source_hash, target) to avoid capture mixing between kernels
@@ -283,7 +287,7 @@ class TVMBackend(BaseBackend):
         ir_text = self._module_to_text(ir_module)
 
         # Store in the capture buffer
-        capture = CapturedIR(
+        CapturedIR(
             source_hash=source_hash,
             target=self._tvm_target,
             stage_name=stage_name,

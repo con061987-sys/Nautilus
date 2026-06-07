@@ -171,11 +171,11 @@ class TreeSitterCudaParser:
         try:
             with open(file_path, encoding="utf-8") as f:
                 source = f.read()
-        except FileNotFoundError:
+        except FileNotFoundError as err:
             raise IngestionParseError(
                 f"CUDA source file not found: {file_path}",
                 context={"file_path": file_path},
-            )
+            ) from err
         return self.parse_source(source)
 
     def parse_source(self, source: str) -> list[CudaKernel]:

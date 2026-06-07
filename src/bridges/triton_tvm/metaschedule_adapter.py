@@ -25,7 +25,6 @@ from src.common.result import Err, Ok, Result
 
 try:
     from tvm import meta_schedule as ms
-    from tvm import tir
     from tvm.target import Target
 
     TVM_AVAILABLE = True

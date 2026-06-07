@@ -484,7 +484,7 @@ def test_discover_topology_numa_aware_ordering(fake_fs):
 
 
 def test_discover_topology_pcie_fallback_bandwidth(fake_fs):
-    """No nvidia-smi / rocm-smi available → use PCIe gen×width fallback."""
+    """No nvidia-smi / rocm-smi available → use PCIe genxwidth fallback."""
     invalidate_enumeration_cache()
     fake_devices = (
         DeviceInfo(
@@ -517,7 +517,7 @@ def test_discover_topology_pcie_fallback_bandwidth(fake_fs):
     # Gen3 x8 = 8 * 8 = 64 Gbps
     assert topo.bandwidth_gbps[(0, 1)] == 64.0
     # Link should be PCIe, not measured
-    links_by_pair = {(l.source_id, l.target_id): l for l in topo.links}
+    links_by_pair = {(link.source_id, link.target_id): link for link in topo.links}
     pair_link = links_by_pair[(0, 1)]
     assert pair_link.link_type == LinkType.PCIE
     assert pair_link.measured is False
@@ -600,7 +600,7 @@ def test_cli_inspect_topology_outputs_json(capsys, fake_fs):
     )
     with mock.patch.object(hw, "enumerate_devices", return_value=fake_devices):
         runner = CliRunner()
-        result = runner.invoke(cli, ["topology"])
+        result = runner.invoke(cli, ["topology", "--format", "json"])
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     payload = json.loads(result.output)
     assert "host" in payload
@@ -624,7 +624,7 @@ def test_cli_inspect_topology_zero_gpus(capsys, fake_fs):
     invalidate_enumeration_cache()
     with mock.patch.object(hw, "enumerate_devices", return_value=()):
         runner = CliRunner()
-        result = runner.invoke(cli, ["topology"])
+        result = runner.invoke(cli, ["topology", "--format", "json"])
     assert result.exit_code == 0, f"CLI failed: {result.output}"
     payload = json.loads(result.output)
     assert payload["device_count"] == 0

@@ -17,6 +17,7 @@ therefore split the tests into three buckets:
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 from unittest.mock import MagicMock, patch
 
@@ -41,18 +42,18 @@ from src.bridges.pytorch_xla.comm_bridge import (
     CollectiveBackend,
     CrossVendorBridge,
     NCCLBackend,
+    OneCCLBackend,
     P2PCapability,
     RCCLBackend,
     detect_p2p_capability,
     make_backend,
-    oneCCLBackend,
 )
 from src.bridges.pytorch_xla.device_mesh import (
     DeviceVendor,
     InterconnectType,
     MeshDevice,
 )
-from src.common.errors import BridgeError
+from src.common.errors import BridgeError, DependencyMissingError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -201,7 +202,7 @@ class TestBackendMetadata:
         assert b.device_kind == "cuda"
 
     def test_oneccl_backend_identity(self) -> None:
-        b = oneCCLBackend(device_id=0)
+        b = OneCCLBackend(device_id=0)
         assert b.library == CommLibrary.ONECCL
         assert b.vendor == DeviceVendor.INTEL
         assert b.device_id == 0
@@ -234,7 +235,7 @@ class TestBackendMetadata:
         with pytest.raises(BridgeError):
             RCCLBackend(device_id=-1)
         with pytest.raises(BridgeError):
-            oneCCLBackend(device_id=-1)
+            OneCCLBackend(device_id=-1)
 
     def test_abstract_cannot_be_instantiated(self) -> None:
         """The abstract base refuses direct instantiation."""
@@ -274,11 +275,11 @@ class TestAvailabilityProbes:
             assert RCCLBackend(device_id=0).is_available is False
 
     def test_oneccl_probe_handles_missing_xpu(self) -> None:
-        with patch.object(oneCCLBackend, "_torch_backend_available", return_value=False):
-            assert oneCCLBackend(device_id=0).is_available is False
+        with patch.object(OneCCLBackend, "_torch_backend_available", return_value=False):
+            assert OneCCLBackend(device_id=0).is_available is False
         # xpu module missing
         with patch.object(torch, "xpu", None, create=True):
-            assert oneCCLBackend(device_id=0).is_available is False
+            assert OneCCLBackend(device_id=0).is_available is False
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +302,7 @@ class TestMakeBackend:
 
     def test_factory_returns_oneccl(self) -> None:
         b = make_backend(CommLibrary.ONECCL, device_id=0)
-        assert isinstance(b, oneCCLBackend)
+        assert isinstance(b, OneCCLBackend)
 
     def test_factory_rejects_gloo(self) -> None:
         """GLOO is supported by torch but we don't wrap it here."""
@@ -579,7 +580,7 @@ class TestCrossVendorBridgePrimitives:
             patch.object(comm_bridge, "TORCH_AVAILABLE", False),
             patch.object(comm_bridge, "dist", None),
             patch.object(comm_bridge, "torch", None),
-            pytest.raises(Exception),
+            pytest.raises((TypeError, ValueError, RuntimeError, AttributeError, DependencyMissingError)),
         ):
             bridge.all_reduce(tensor)
 
@@ -628,7 +629,7 @@ class TestVendorBackendPrimitives:
         assert kwargs["world_size"] == 1
 
     def test_oneccl_init_uses_xccl(self, mock_dist) -> None:
-        b = oneCCLBackend(device_id=0)
+        b = OneCCLBackend(device_id=0)
         b._ensure_initialized()
         kwargs = mock_dist.init_process_group.call_args.kwargs
         assert kwargs["backend"] == "xccl"
@@ -674,32 +675,28 @@ class TestRealCollectives:
         # If a previous test left the default group up, tear it down
         # so each test starts clean.
         if dist.is_initialized():
-            try:
+            with contextlib.suppress(Exception):
                 dist.destroy_process_group()
-            except Exception:
-                pass
 
         # Patch all three backends' _torch_backend_name to "gloo" so
         # init_process_group succeeds on CPU.  Restore at teardown.
         saved = {
             NCCLBackend: NCCLBackend._torch_backend_name,
             RCCLBackend: RCCLBackend._torch_backend_name,
-            oneCCLBackend: oneCCLBackend._torch_backend_name,
+            OneCCLBackend: OneCCLBackend._torch_backend_name,
         }
         NCCLBackend._torch_backend_name = "gloo"
         RCCLBackend._torch_backend_name = "gloo"
-        oneCCLBackend._torch_backend_name = "gloo"
+        OneCCLBackend._torch_backend_name = "gloo"
         try:
             yield
         finally:
             NCCLBackend._torch_backend_name = saved[NCCLBackend]
             RCCLBackend._torch_backend_name = saved[RCCLBackend]
-            oneCCLBackend._torch_backend_name = saved[oneCCLBackend]
+            OneCCLBackend._torch_backend_name = saved[OneCCLBackend]
             if dist.is_initialized():
-                try:
+                with contextlib.suppress(Exception):
                     dist.destroy_process_group()
-                except Exception:
-                    pass
 
     def test_all_reduce_identity(self) -> None:
         """On a 1-rank world, all_reduce is a no-op (sum of one)."""
@@ -756,7 +753,7 @@ class TestTorchlessImport:
         assert hasattr(comm_bridge, "CollectiveBackend")
         assert hasattr(comm_bridge, "NCCLBackend")
         assert hasattr(comm_bridge, "RCCLBackend")
-        assert hasattr(comm_bridge, "oneCCLBackend")
+        assert hasattr(comm_bridge, "OneCCLBackend")
         assert hasattr(comm_bridge, "CrossVendorBridge")
         assert hasattr(comm_bridge, "detect_p2p_capability")
 
@@ -771,5 +768,5 @@ class TestTorchlessImport:
 
         b = NCCLBackend(device_id=0)
         assert b.is_available is False
-        with pytest.raises(Exception):
+        with pytest.raises((TypeError, ValueError, RuntimeError, AttributeError, DependencyMissingError)):
             b.all_reduce(None)

@@ -129,7 +129,7 @@ class MetalCompilationResult:
     cache_hit: bool = False
     used_triton_metal_target: bool = False
     xcrun_version: str = ""
-    detection: dict = None  # type: ignore[assignment]
+    detection: dict | None = None
 
     def __post_init__(self) -> None:
         if self.detection is None:

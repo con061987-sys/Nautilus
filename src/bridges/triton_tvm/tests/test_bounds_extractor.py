@@ -485,7 +485,9 @@ class TestPropertyBasedExtraction:
         assert bounds.m == params["m"]
         assert bounds.n == params["n"]
         assert bounds.k == params["k"]
-        assert bounds.m > 0 and bounds.n > 0 and bounds.k > 0
+        assert bounds.m is not None and bounds.m > 0
+        assert bounds.n is not None and bounds.n > 0
+        assert bounds.k is not None and bounds.k > 0
         # Dtype round-trips through TTGIRParser._normalize_dtype.
         # All the _DTYPE_TOKENS values are already in canonical form.
         assert (
@@ -527,7 +529,7 @@ class TestPropertyBasedExtraction:
         )
         bounds = self.extractor.extract(ir_text, KernelKind.REDUCTION)
         assert bounds.reduce_size == params["shape"][params["axis"]]
-        assert bounds.reduce_size > 0
+        assert bounds.reduce_size is not None and bounds.reduce_size > 0
         expected_keep = 1
         for i, d in enumerate(params["shape"]):
             if i != params["axis"]:

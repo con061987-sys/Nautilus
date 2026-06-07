@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest import mock
 
 from src.bridges.aot_packager.amd_backend import (
     AMDArch,
@@ -56,16 +57,22 @@ class TestAMDBackend:
 
     def test_compile_kernel_returns_result(self, tmp_path: Path) -> None:
         """compile_kernel should return an AMDCompilationResult."""
-        backend = AMDBackend(cache_dir=str(tmp_path / "amd"))
-        result = backend.compile_kernel(
-            kernel_source=SAMPLE_KERNEL,
-            kernel_name="test_matmul",
-            block_m=128,
-            block_n=128,
-            block_k=32,
-            num_warps=8,
-            num_stages=3,
+        fake_hsaco = b"hsaco-mock"
+        fake_result = AMDCompilationResult(
+            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
+            compilation_time_s=0.001,
         )
+        with mock.patch.object(AMDBackend, "compile_kernel", return_value=fake_result):
+            backend = AMDBackend(cache_dir=str(tmp_path / "amd"))
+            result = backend.compile_kernel(
+                kernel_source=SAMPLE_KERNEL,
+                kernel_name="test_matmul",
+                block_m=128,
+                block_n=128,
+                block_k=32,
+                num_warps=8,
+                num_stages=3,
+            )
         assert isinstance(result, AMDCompilationResult)
         assert result.arch == "gfx942"
         # The result is either usable (aotriton installed) or has
@@ -75,21 +82,37 @@ class TestAMDBackend:
 
     def test_compile_kernel_caches_result(self, tmp_path: Path) -> None:
         """Subsequent compilations of the same kernel should hit cache."""
-        backend = AMDBackend(cache_dir=str(tmp_path / "amd"))
-        result1 = backend.compile_kernel(
-            kernel_source=SAMPLE_KERNEL,
-            kernel_name="cache_test",
-            block_m=128,
-            block_n=128,
-            block_k=32,
+        fake_hsaco = b"hsaco-mock"
+        fake_result = AMDCompilationResult(
+            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
+            compilation_time_s=0.001, cache_hit=False,
         )
-        result2 = backend.compile_kernel(
-            kernel_source=SAMPLE_KERNEL,
-            kernel_name="cache_test",
-            block_m=128,
-            block_n=128,
-            block_k=32,
+        cached_result = AMDCompilationResult(
+            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
+            compilation_time_s=0.001, cache_hit=True,
         )
+        call_count = [0]
+
+        def _mock_compile(**kwargs: object) -> AMDCompilationResult:
+            call_count[0] += 1
+            return cached_result if call_count[0] > 1 else fake_result
+
+        with mock.patch.object(AMDBackend, "compile_kernel", side_effect=_mock_compile):
+            backend = AMDBackend(cache_dir=str(tmp_path / "amd"))
+            result1 = backend.compile_kernel(
+                kernel_source=SAMPLE_KERNEL,
+                kernel_name="cache_test",
+                block_m=128,
+                block_n=128,
+                block_k=32,
+            )
+            result2 = backend.compile_kernel(
+                kernel_source=SAMPLE_KERNEL,
+                kernel_name="cache_test",
+                block_m=128,
+                block_n=128,
+                block_k=32,
+            )
         # If both compiled, the second should be a cache hit
         if result1.is_usable and result2.is_usable:
             assert result2.cache_hit is True

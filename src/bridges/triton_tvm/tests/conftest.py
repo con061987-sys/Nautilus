@@ -118,18 +118,11 @@ def auto_tuning_bridge(cache_dir: str) -> Any:
     ):
         bridge = TritonTVMBridge(cache_dir=cache_dir, enable_tvm=True)
 
-        bridge._build_tir_template = MagicMock(return_value=MagicMock())
+    # Apply mocks permanently for the fixture lifetime
+    # (not using patch.object context manager because the fixture must
+    # return the bridge with mocks still active)
+    bridge._build_tir_template = MagicMock(return_value=MagicMock())
+    assert bridge.tvm_adapter is not None
+    bridge.tvm_adapter.tune = MagicMock(return_value=Ok(MappedTuningConfig(block_m=64, block_n=128, block_k=64, num_warps=8, num_stages=4)))
 
-        bridge.tvm_adapter.tune = MagicMock(
-            return_value=Ok(
-                MappedTuningConfig(
-                    block_m=64,
-                    block_n=128,
-                    block_k=64,
-                    num_warps=8,
-                    num_stages=4,
-                )
-            ),
-        )
-
-        return bridge
+    return bridge

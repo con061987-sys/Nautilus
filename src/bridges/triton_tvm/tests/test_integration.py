@@ -232,7 +232,7 @@ class TestFullPipeline:
 
 
 # =========================================================================
-# L0–L5 fallback tiers
+# L0-L5 fallback tiers
 # =========================================================================
 
 
@@ -392,19 +392,13 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L4_TRITON_DEFAULT.
         """
-        auto_tuning_bridge.tvm_adapter.tune = MagicMock(
-            return_value=Err(
-                TuningError(
-                    "TVM unavailable for testing",
-                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-                )
-            ),
-        )
+        assert auto_tuning_bridge.tvm_adapter is not None
+        auto_tuning_bridge.tvm_adapter.tune = MagicMock(return_value=Err(TuningError("TVM unavailable for testing", context={"tier": FallbackTier.L4_TRITON_DEFAULT.name})))
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
         )
-        assert result.is_err()
+        assert isinstance(result, Err)
         error = result.error
         assert "tier" in error.context
         assert error.context["tier"] == FallbackTier.L4_TRITON_DEFAULT.name
@@ -423,9 +417,8 @@ class TestFallbackTiers:
           The tune() call returns a TuningResult with a valid config
           even when TVM tuning fails.
         """
-        auto_tuning_bridge.tvm_adapter.tune = MagicMock(
-            return_value=Err(TuningError("simulated failure")),
-        )
+        assert auto_tuning_bridge.tvm_adapter is not None
+        auto_tuning_bridge.tvm_adapter.tune = MagicMock(return_value=Err(TuningError("simulated failure")))
         result = auto_tuning_bridge.tune(
             kernel_fn=_dummy_kernel,
             grid=(1, 1, 1),
@@ -449,14 +442,12 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L5_SAFE_FALLBACK.name.
         """
-        auto_tuning_bridge._build_tir_template = MagicMock(
-            side_effect=ValueError("invalid bounds for template"),
-        )
+        auto_tuning_bridge._build_tir_template = MagicMock(side_effect=ValueError("invalid bounds for template"))
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
         )
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert result.error.context.get("tier") == FallbackTier.L5_SAFE_FALLBACK.name
 
     def test_l5_safe_fallback_on_import_error(
@@ -472,14 +463,12 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L5_SAFE_FALLBACK.name.
         """
-        auto_tuning_bridge._build_tir_template = MagicMock(
-            side_effect=ImportError("TVM not installed"),
-        )
+        auto_tuning_bridge._build_tir_template = MagicMock(side_effect=ImportError("TVM not installed"))
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
         )
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert result.error.context.get("tier") == FallbackTier.L5_SAFE_FALLBACK.name
 
     def test_l5_safe_fallback_on_os_error(
@@ -495,14 +484,12 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L5_SAFE_FALLBACK.name.
         """
-        auto_tuning_bridge._build_tir_template = MagicMock(
-            side_effect=OSError(13, "Permission denied: /tmp/tvm"),
-        )
+        auto_tuning_bridge._build_tir_template = MagicMock(side_effect=OSError(13, "Permission denied: /tmp/tvm"))
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
         )
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert result.error.context.get("tier") == FallbackTier.L5_SAFE_FALLBACK.name
 
     def test_tuning_produces_reasonable_default(
@@ -574,7 +561,7 @@ class TestCircuitBreakerIntegration:
 
         for i in range(3):
             with pytest.raises(RuntimeError):
-                cb.call(lambda: (_ for _ in ()).throw(RuntimeError(f"fail {i}")))
+                cb.call(lambda i=i: (_ for _ in ()).throw(RuntimeError(f"fail {i}")))
             assert cb.total_failures == i + 1
 
         assert cb.state == CircuitState.OPEN
@@ -805,12 +792,13 @@ class TestTimeoutIntegration:
         ) -> Any:
             raise StageTimeoutError("tvm_tune", 600.0, 601.5)
 
+        assert auto_tuning_bridge.tvm_adapter is not None
         auto_tuning_bridge.tvm_adapter.tune = MagicMock(side_effect=_timeout_raiser)
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
         )
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert "timed out" in result.error.message.lower()
         assert result.error.context.get("tier") == FallbackTier.L4_TRITON_DEFAULT.name
 

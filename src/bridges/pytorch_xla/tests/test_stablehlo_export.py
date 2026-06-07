@@ -18,8 +18,12 @@ three tiers are unavailable the orchestrator test asserts that
 from __future__ import annotations
 
 import importlib.util
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    import torch
 
 # All three tiers in stablehlo_export depend on PyTorch at import time
 # (the module imports ``src.common.errors`` which is safe, but the
@@ -34,6 +38,7 @@ from src.bridges.pytorch_xla.stablehlo_export import (  # noqa: E402
     _TorchXLAExporter,
     _TVMScriptExporter,
 )
+from src.common.errors import StableHLOExportError  # noqa: E402
 from src.common.types import StableHLOModule  # noqa: E402
 
 # ── Test fixtures ──────────────────────────────────────────────────────
@@ -170,7 +175,7 @@ class TestTVMScriptExporterTier:
         if not _TVMScriptExporter.is_available():
             pytest.skip("tvm is not installed")
 
-        graph = _make_minimal_fx_graph()
+        _make_minimal_fx_graph()
         example_inputs = (torch.randn(2, 4),)
 
         # _emit_stablehlo_like is the fallback emitter — call it directly
@@ -267,7 +272,7 @@ class TestStableHLOExporterOrchestrator:
     def test_export_from_captured_rejects_none_capture(self) -> None:
         """Passing None must raise a clear error."""
         exporter = StableHLOExporter()
-        with pytest.raises(Exception):
+        with pytest.raises((TypeError, ValueError, RuntimeError, StableHLOExportError)):
             exporter.export_from_captured(None)
 
     def test_tvm_path_can_be_disabled(self) -> None:

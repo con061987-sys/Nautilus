@@ -498,10 +498,7 @@ class MathValidator:
             if not outputs:
                 return True
             first_hash = self.hash_tensor(outputs[0])
-            for out in outputs[1:]:
-                if self.hash_tensor(out) != first_hash:
-                    return False
-            return True
+            return all(self.hash_tensor(out) == first_hash for out in outputs[1:])
         except NautilusError:
             raise
         except Exception as exc:
