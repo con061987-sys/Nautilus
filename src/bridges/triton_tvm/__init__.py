@@ -24,6 +24,8 @@ _LAZY_EXPORTS = {
     "KernelMetadata": "src.bridges.triton_tvm.metadata_extractor",
     "TIRTemplateBuilder": "src.bridges.triton_tvm.tir_template",
     "MetaScheduleAdapter": "src.bridges.triton_tvm.metaschedule_adapter",
+    "FusionAnalyzer": "src.bridges.triton_tvm.fusion_analyzer",
+    "PatternMatch": "src.bridges.triton_tvm.fusion_analyzer",
     "ConfigCache": "src.bridges.triton_tvm.config_cache",
     "ConfigMapper": "src.bridges.triton_tvm.config_mapper",
     "MappedTuningConfig": "src.bridges.triton_tvm.config_mapper",
@@ -49,6 +51,12 @@ _LAZY_EXPORTS = {
     "list_strategies": "src.bridges.triton_tvm.search_strategy",
     "save_strategy_report": "src.bridges.triton_tvm.search_strategy",
     "strategy_to_tune_kwargs": "src.bridges.triton_tvm.search_strategy",
+    # kernel fusion engine
+    "FusionPlanner": "src.bridges.triton_tvm.kernel_fusion",
+    "FusionPlan": "src.bridges.triton_tvm.kernel_fusion",
+    "FusionCodeGenerator": "src.bridges.triton_tvm.kernel_fusion",
+    "OpNode": "src.bridges.triton_tvm.kernel_fusion",
+    "OpKind": "src.bridges.triton_tvm.kernel_fusion",
     # observability is now in src.common; keep re-exports for back-compat
     "CircuitBreaker": "src.common.observability",
     "CircuitBreakerConfig": "src.common.observability",
