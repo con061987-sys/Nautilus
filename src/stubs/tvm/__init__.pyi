@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Any, Callable
 
+from typing import Any
 
 class IRModule:
     def __init__(self, data: dict[str, Any] | None = ...) -> None: ...
