@@ -28,6 +28,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Protocol, runtime_checkable
 
 from src.common.logging import get_logger
 
@@ -612,3 +613,15 @@ class TTGIRParser:
             except Exception:
                 continue
         return types
+
+
+@runtime_checkable
+class TTGIRPass(Protocol):
+    """A single conversion pass over a :class:`TTGIRFunction`.
+
+    Every pass implements ``run(func: TTGIRFunction) -> TTGIRFunction``.
+    This Protocol lets the pipeline type-check the pass loop without
+    requiring a shared base class.
+    """
+
+    def run(self, func: TTGIRFunction) -> TTGIRFunction: ...

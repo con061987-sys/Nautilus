@@ -497,6 +497,7 @@ class TestLinkerFatBinaryStructure:
             output_path=tmp_path / "multi.fat.o",
         )
         assert result.is_usable
+        assert result.output_path is not None, "linker should produce an output path"
         sections = _readelf_sections(result.output_path)
         expected = {
             ".nautilus.nvidia.ptx.matmul",

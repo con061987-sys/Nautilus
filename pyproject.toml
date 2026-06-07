@@ -159,6 +159,8 @@ markers = [
 
 [tool.mypy]
 python_version = "3.10"
+mypy_path = ["src/stubs"]
+exclude = ["src/stubs/"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
@@ -187,6 +189,15 @@ ignore = ["E501", "B008", "SIM108", "RUF012"]
 [[tool.mypy.overrides]]
 module = ["src.common.tests.*"]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "src.bridges.triton_tvm.tests.*",
+    "src.bridges.aot_packager.tests.*",
+    "src.bridges.pytorch_xla.tests.*",
+    "src.runtime.tests.*",
+]
+disable_error_code = ["method-assign", "arg-type", "union-attr", "operator"]
 
 [tool.black]
 line-length = 100

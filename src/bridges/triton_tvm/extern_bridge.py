@@ -37,7 +37,7 @@ try:
 except ImportError:
     TVM_AVAILABLE = False
 
-from src.common.errors import DependencyMissingError
+from src.common.errors import CompilationError, DependencyMissingError
 
 from .ir_capture import IRBounds
 
@@ -395,6 +395,11 @@ def {name}(A, B):
             import importlib.util
 
             spec = importlib.util.spec_from_file_location("kernel_mod", source_file)
+            if spec is None or spec.loader is None:
+                raise CompilationError(
+                    f"Could not load kernel module from {source_file}",
+                    context={"source_file": str(source_file)},
+                )
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
 

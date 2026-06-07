@@ -38,6 +38,7 @@ from .stablehlo_export import StableHLOExporter, StableHLOModule
 
 try:
     from src.bridges.triton_tvm.circuit_breaker import (
+        CircuitBreaker,
         get_default_breakers,
     )
     from src.bridges.triton_tvm.timeout_manager import (
@@ -156,6 +157,8 @@ class AutoShardingBridge:
         self.executor: ShardExecutor | None = None  # Set per-mesh
 
         # Production infrastructure
+        self.breakers: dict[str, CircuitBreaker] | None
+        self.timeout_manager: TimeoutManager | None
         if BRIDGE_INFRA and enable_circuit_breakers:
             self.breakers = get_default_breakers()
             self.timeout_manager = TimeoutManager(StageBudgets())

@@ -244,8 +244,10 @@ class TestDeserializeSecurity:
             calls.append({"weights_only": kwargs.get("weights_only")})
             return {"from_torch": True}
 
-        fake_torch = type(sys)("torch")
-        fake_torch.load = fake_torch_load
+        class _FakeTorch:
+            load = staticmethod(fake_torch_load)
+
+        fake_torch = _FakeTorch()
         monkeypatch.setitem(sys.modules, "torch", fake_torch)
         result = cp._deserialize_state(b"anything")
         assert result == {"from_torch": True}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from src.bridges.triton_tvm.metadata_extractor import (
@@ -125,7 +127,11 @@ class TestMetadataExtractor:
         import inspect
 
         original_getsource = inspect.getsource
-        inspect.getsource = lambda fn: "def matmul_kernel:\n  tl.dot(a, b, c)"
+
+        def _fake_getsource_matmul(__obj: object, /) -> str:
+            return "def matmul_kernel:\n  tl.dot(a, b, c)"
+
+        setattr(inspect, "getsource", _fake_getsource_matmul)
 
         try:
             result = extractor._classify_kernel(FakeMatmul())
@@ -147,7 +153,11 @@ class TestMetadataExtractor:
         import inspect
 
         original_getsource = inspect.getsource
-        inspect.getsource = lambda fn: "def reduce_kernel:\n  tl.reduce(x, y, z)"
+
+        def _fake_getsource_reduce(__obj: object, /) -> str:
+            return "def reduce_kernel:\n  tl.reduce(x, y, z)"
+
+        setattr(inspect, "getsource", _fake_getsource_reduce)
 
         try:
             result = extractor._classify_kernel(FakeReduce())
@@ -169,7 +179,11 @@ class TestMetadataExtractor:
         import inspect
 
         original_getsource = inspect.getsource
-        inspect.getsource = lambda fn: "def weird_kernel:\n  some_other_op(x)"
+
+        def _fake_getsource_unknown(__obj: object, /) -> str:
+            return "def weird_kernel:\n  some_other_op(x)"
+
+        setattr(inspect, "getsource", _fake_getsource_unknown)
 
         try:
             result = extractor._classify_kernel(FakeUnknown())
@@ -193,7 +207,11 @@ class TestMetadataExtractor:
 
         source_code = "def kernel(a, b):\n  return a + b"
         original_getsource = inspect.getsource
-        inspect.getsource = lambda fn: source_code
+
+        def _fake_getsource_hash(__obj: object, /) -> str:
+            return source_code
+
+        setattr(inspect, "getsource", _fake_getsource_hash)
 
         try:
             hash_a = extractor._compute_source_hash(FakeA())

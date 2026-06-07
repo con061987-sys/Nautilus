@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Final
+from typing import Final, TypeGuard
 
 from src.common.logging import get_logger
 
@@ -269,6 +269,8 @@ class BoundsExtractor:
 
             self._assert_tensor_shape(a_type, a_name, op.name)
             self._assert_tensor_shape(b_type, b_name, op.name)
+            # Narrow types: _assert_tensor_shape raises if None
+            assert a_type is not None and b_type is not None
 
             m, n, k = self._matmul_dims(op.name, a_type, b_type, result_type)
 
@@ -429,6 +431,7 @@ class BoundsExtractor:
             input_name = op.operands[0]
             input_type = value_types.get(input_name)
             self._assert_tensor_shape(input_type, input_name, "tt.reduce")
+            assert input_type is not None  # _assert_tensor_shape raises if None
 
             axis = self._parse_reduce_axis(op)
             ndim = len(input_type.shape)
@@ -516,6 +519,7 @@ class BoundsExtractor:
             arg_name = op.operands[0]
             ttype = value_types.get(arg_name)
             if self._has_known_shape(ttype):
+                assert ttype is not None
                 return self._build_elementwise_bounds(
                     ttype,
                     value_types,
@@ -525,6 +529,7 @@ class BoundsExtractor:
         # Fallback: any SSA value with a known shape.
         for ttype in value_types.values():
             if self._has_known_shape(ttype):
+                assert ttype is not None
                 return self._build_elementwise_bounds(
                     ttype,
                     value_types,
@@ -615,7 +620,7 @@ class BoundsExtractor:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _has_known_shape(ttype: TTGIRType | None) -> bool:
+    def _has_known_shape(ttype: TTGIRType | None) -> TypeGuard[TTGIRType]:
         """True if the type has a non-empty shape with all-known dims."""
         if ttype is None:
             return False

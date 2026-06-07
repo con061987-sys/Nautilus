@@ -82,7 +82,7 @@ class TestCommBackend:
 
     def test_select_library_for_op_empty(self) -> None:
         """select_library_for_op with no devices should return GLOO."""
-        devices = []
+        devices: list[MeshDevice] = []
         mesh = DeviceMesh(devices=devices, mesh_shape=[0])
         comm = CommBackend(mesh)
         library = comm.select_library_for_op(CollectiveOp.BARRIER, [])

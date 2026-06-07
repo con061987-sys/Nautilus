@@ -141,7 +141,7 @@ class DTensorApplier:
             return None
 
         # Build the DTensor placements
-        placements = []
+        placements: list[Shard | Replicate] = []
         for axis in tensor_sharding.mesh_axes:
             placements.append(Shard(axis))
         if tensor_sharding.replicate_on_other_axes and tensor_sharding.mesh_axes:

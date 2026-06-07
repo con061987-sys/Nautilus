@@ -207,16 +207,15 @@ class GraphCapture:
         """
         import torch._dynamo as dynamo
 
-        # Compile the model first
+        # Compile the model first for output shape collection
         compiled = torch.compile(model, fullgraph=True, backend="aot_eager")
 
-        # Then export the compiled model
         with torch.no_grad():
             compiled_output = compiled(*example_inputs)
 
         if hasattr(torch.export, "export"):
-            # PyTorch 2.5+ stable export API
-            ep = torch.export.export(compiled, example_inputs)
+            # PyTorch 2.5+ stable export API — works with original model
+            ep = torch.export.export(model, example_inputs)
             graph_module = ep.graph_module
         else:
             # PyTorch 2.4 fallback: dynamo.export returns a tuple

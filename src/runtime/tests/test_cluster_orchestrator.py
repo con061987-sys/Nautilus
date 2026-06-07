@@ -564,7 +564,8 @@ class TestCommunicationPlanner:
         )
         d = plan.to_dict()
         assert d["strategy"] == "p2p"
-        assert d["bandwidth_gbps"] >= 50.0
+        bandwidth = d["bandwidth_gbps"]
+        assert isinstance(bandwidth, (int, float)) and bandwidth >= 50.0
         assert d["library_hint"] == "nccl"
         assert d["via_host_staging"] is False
 

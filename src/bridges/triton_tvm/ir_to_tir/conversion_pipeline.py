@@ -21,7 +21,7 @@ from .pass2_rewrite_spmd import RewriteSPMDToLoops
 from .pass3_replace_pointers import ReplacePointersWithMemRefs
 from .pass4_materialize_tvm import MaterializeTensorsToTVM
 from .tt_dot_split import SplitResult, TTDotSplitter
-from .ttgir_parser import TTGIRFunction, TTGIRParser
+from .ttgir_parser import TTGIRFunction, TTGIRParser, TTGIRPass
 from .tvmscript_emitter import TVMScriptEmitter
 
 logger = get_logger(__name__)
@@ -81,10 +81,10 @@ class ConversionPipeline:
     def __init__(self) -> None:
         self.parser = TTGIRParser()
         self.dot_splitter = TTDotSplitter()
-        self.pass1 = LowerTensorIdioms()
-        self.pass2 = RewriteSPMDToLoops()
-        self.pass3 = ReplacePointersWithMemRefs()
-        self.pass4 = MaterializeTensorsToTVM()
+        self.pass1: TTGIRPass = LowerTensorIdioms()
+        self.pass2: TTGIRPass = RewriteSPMDToLoops()
+        self.pass3: TTGIRPass = ReplacePointersWithMemRefs()
+        self.pass4: TTGIRPass = MaterializeTensorsToTVM()
         self.emitter = TVMScriptEmitter()
 
     def convert(self, ir_text: str) -> ConversionResult:
@@ -129,13 +129,14 @@ class ConversionPipeline:
         pass_times["dot_split"] = (time.perf_counter() - t0) * 1000
 
         # Stage 3: Apply the 4 passes
-        current_func = func
-        for pass_name, pass_impl in [
+        current_func: TTGIRFunction = func
+        passes: list[tuple[str, TTGIRPass]] = [
             ("lower_tensor_idioms", self.pass1),
             ("rewrite_spmd", self.pass2),
             ("replace_pointers", self.pass3),
             ("materialize_tvm", self.pass4),
-        ]:
+        ]
+        for pass_name, pass_impl in passes:
             t0 = time.perf_counter()
             try:
                 current_func = pass_impl.run(current_func)

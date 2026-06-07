@@ -181,6 +181,14 @@ class CollectiveBackend(ABC):
     process group is currently active".
     """
 
+    def __init__(self, device_id: int = 0) -> None:
+        """Initialize the backend with a device id.
+
+        Args:
+            device_id: The local device id this backend is bound to.
+        """
+        self._device_id = device_id
+
     @property
     @abstractmethod
     def library(self) -> CommLibrary:

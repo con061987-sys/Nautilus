@@ -177,6 +177,7 @@ class TestUniqueSectionNaming:
             kernel_name="multi",
             output_path=tmp_path / "readelf.fat.o",
         )
+        assert result.output_path is not None, "linker should produce an output path"
         names = _read_section_names(result.output_path)
         nautilus_sections = [
             n for n in names if n.startswith(".nautilus.") and n != ".nautilus.index"

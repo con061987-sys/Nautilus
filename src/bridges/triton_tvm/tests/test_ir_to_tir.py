@@ -25,6 +25,7 @@ from src.bridges.triton_tvm.ir_to_tir.ttgir_parser import (
     OpKind,
     TTGIRFunction,
     TTGIRParser,
+    TTGIRPass,
 )
 from src.bridges.triton_tvm.ir_to_tir.tvmscript_emitter import TVMScriptEmitter
 
@@ -298,7 +299,7 @@ class TestTVMScriptEmitter:
 
     def setup_method(self) -> None:
         self.emitter = TVMScriptEmitter()
-        self.pipeline = [
+        self.pipeline: list[TTGIRPass] = [
             LowerTensorIdioms(),
             RewriteSPMDToLoops(),
             ReplacePointersWithMemRefs(),
@@ -307,7 +308,7 @@ class TestTVMScriptEmitter:
 
     def _convert(self, ir_text: str) -> TTGIRFunction:
         parser = TTGIRParser()
-        func = parser.parse(ir_text)
+        func: TTGIRFunction = parser.parse(ir_text)
         for pass_impl in self.pipeline:
             func = pass_impl.run(func)
         return func

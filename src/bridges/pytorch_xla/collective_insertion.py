@@ -145,7 +145,7 @@ class InsertedCollective:
 class CollectiveInsertionResult:
     """The output of running the insertion pass on one module."""
 
-    stablehlo_module: StableHLOModule
+    stablehlo_module: StableHLOModule | None
     inserted_collectives: list[InsertedCollective] = field(default_factory=list)
     total_comm_bytes: int = 0
     mlir_text: str = ""
@@ -671,7 +671,7 @@ class CollectiveInserter:
 
     def insert(
         self,
-        module: StableHLOModule,
+        module: StableHLOModule | None,
         spec: ShardingSpec,
         dtype_overrides: dict[str, str] | None = None,
     ) -> CollectiveInsertionResult:

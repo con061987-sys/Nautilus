@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -361,11 +362,11 @@ class _MockBackend(CollectiveBackend):
     def is_available(self) -> bool:
         return self._available
 
-    def _record(self, op: str, *args, **kwargs) -> None:
-        self.calls.append((op, args, kwargs))
+    def _record(self, op_name: str, *args: Any, **kwargs: Any) -> None:
+        self.calls.append((op_name, args, kwargs))
 
     def all_reduce(self, tensor, op=None, group=None):
-        self._record("all_reduce", tensor, op=op, group=group)
+        self._record("all_reduce", tensor, group=group)
         return tensor
 
     def all_gather(self, tensor, group=None):
@@ -373,7 +374,7 @@ class _MockBackend(CollectiveBackend):
         return tensor
 
     def reduce_scatter(self, tensor, op=None, group=None):
-        self._record("reduce_scatter", tensor, op=op, group=group)
+        self._record("reduce_scatter", tensor, group=group)
         return tensor
 
     def all_to_all(self, tensor, group=None):
