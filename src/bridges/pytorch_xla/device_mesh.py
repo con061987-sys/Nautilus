@@ -74,18 +74,45 @@ class MeshTopology:
     latency_matrix: list[list[float]] = field(default_factory=list)    # microseconds
     is_uniform: bool = True
 
+    # 1 GB/s is well below the gap between common interconnect tiers
+    # (NVLink ~900, Infinity Fabric ~800, PCIe ~64, Ethernet ~3-12),
+    # so a uniform mesh stays within tolerance but a mixed mesh does not.
+    _BANDWIDTH_TOLERANCE_GBPS = 1.0
+
     def __post_init__(self) -> None:
         if not self.bandwidth_matrix and not self.latency_matrix:
             self.is_uniform = True
-        elif self.bandwidth_matrix:
-            # Check if all entries are the same
-            first = self.bandwidth_matrix[0][1] if len(self.bandwidth_matrix[0]) > 1 else 0
-            self.is_uniform = all(
-                abs(row[j] - first) < 1.0
-                for row in self.bandwidth_matrix
-                for j in range(len(row))
-                if j != row.index(first)
-            )
+            return
+
+        if self.bandwidth_matrix:
+            matrix = self.bandwidth_matrix
+            n_rows = len(matrix)
+            row_length = len(matrix[0])
+
+            if any(len(row) != row_length for row in matrix):
+                self.is_uniform = False
+                return
+
+            if row_length != n_rows:
+                self.is_uniform = False
+                return
+
+            off_diagonal_values: list[float] = [
+                matrix[i][j]
+                for i in range(n_rows)
+                for j in range(row_length)
+                if i != j
+            ]
+
+            if not off_diagonal_values:
+                self.is_uniform = True
+                return
+
+            spread = max(off_diagonal_values) - min(off_diagonal_values)
+            self.is_uniform = spread < self._BANDWIDTH_TOLERANCE_GBPS
+            return
+
+        self.is_uniform = True
 
 
 @dataclass

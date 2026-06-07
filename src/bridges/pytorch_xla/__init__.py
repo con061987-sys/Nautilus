@@ -45,6 +45,13 @@ Modules:
   hardware_orchestrator.py - Per-shard kernel dispatch
 """
 
+from .collective_insertion import (
+    CollectiveInserter,
+    CollectiveInsertionResult,
+    CollectiveType,
+    InsertedCollective,
+    plan_and_insert,
+)
 from .comm_backend import CollectiveOp, CommBackend, CommGroup
 from .device_mesh import DeviceMesh, MeshDevice, MeshTopology
 from .device_mesh_utils import infer_target_from_mesh
@@ -78,4 +85,9 @@ __all__ = [
     "ShardingResult",
     "ShardExecutor",
     "ShardExecutionResult",
+    "CollectiveInserter",
+    "CollectiveInsertionResult",
+    "CollectiveType",
+    "InsertedCollective",
+    "plan_and_insert",
 ]
