@@ -47,6 +47,76 @@ _HIP_SUCCESS = 0
 # Level Zero error codes (subset — see ze_api.h).
 _ZE_RESULT_SUCCESS = 0
 
+# Level Zero structure type tags (ze_structure_type_t enum, see ze_api.h).
+# These are the integer tags the driver reads from the first 4 bytes of
+# every descriptor struct to know its layout. We need them when
+# constructing the descriptor for zeModuleCreate below.
+_ZE_STRUCTURE_TYPE_MODULE_DESC = 0x00000011  # decimal 17
+
+# Level Zero module formats (ze_module_format_t enum, see ze_api.h).
+# The Intel GPU compute path consumes SPIR-V as its intermediate
+# representation, which is exactly what our AOT pipeline emits.
+_ZE_MODULE_FORMAT_IL_SPIRV = 0x00000003  # decimal 3
+
+
+class _ZeModuleDesc(ctypes.Structure):
+    """Mirror of ``ze_module_desc_t`` from ``ze_api.h``.
+
+    Used as the descriptor argument to ``zeModuleCreate``. The C
+    definition (oneAPI 2025.x, level_zero headers) is:
+
+        typedef struct _ze_module_desc_t {
+            ze_structure_type_t stype;          // 4 bytes
+            const void*         pNext;          // 8 bytes (64-bit)
+            ze_module_format_t  format;         // 4 bytes
+            size_t              inputSize;      // 8 bytes (size_t)
+            const uint8_t*      pInput;         // 8 bytes
+            const char*         pBuildFlags;    // 8 bytes
+            const ze_module_constants_t* pConstants; // 8 bytes
+        } ze_module_desc_t;
+
+    The order, widths, and alignment here must match the C ABI
+    exactly. The Level Zero driver reads ``stype`` first to verify
+    the struct type, then ``format``, then ``inputSize``/``pInput``;
+    if any of those are wrong it returns ``ZE_RESULT_ERROR_INVALID_ARGUMENT``
+    or ``ZE_RESULT_ERROR_UNINITIALIZED`` rather than crashing, but the
+    validation would be meaningless because the driver would be looking
+    at the wrong fields.
+    """
+
+    _fields_ = [
+        ("stype", ctypes.c_uint32),        # ze_structure_type_t (enum)
+        ("pNext", ctypes.c_void_p),        # extension chain (NULL)
+        ("format", ctypes.c_uint32),       # ze_module_format_t (enum)
+        ("inputSize", ctypes.c_size_t),   # size_t
+        ("pInput", ctypes.c_void_p),       # const uint8_t* (SPIR-V blob)
+        ("pBuildFlags", ctypes.c_char_p),  # const char* (NULL)
+        ("pConstants", ctypes.c_void_p),   # const ze_module_constants_t* (NULL)
+    ]
+
+
+def _build_ze_module_desc(spv_bytes: bytes) -> tuple[_ZeModuleDesc, ctypes.Array]:
+    """Build a populated ``_ZeModuleDesc`` plus a backing buffer for
+    the SPIR-V input.
+
+    Returns ``(desc, input_buffer)`` where ``desc.pInput`` points at
+    ``input_buffer`` (a ctypes ``c_ubyte`` array). The buffer is
+    returned alongside the descriptor so the caller's reference
+    keeps it alive for the duration of the ``zeModuleCreate`` call —
+    ctypes does NOT copy; if the array is garbage-collected, the
+    driver will dereference freed memory.
+    """
+    input_buffer = (ctypes.c_ubyte * len(spv_bytes)).from_buffer_copy(spv_bytes)
+    desc = _ZeModuleDesc()
+    desc.stype = _ZE_STRUCTURE_TYPE_MODULE_DESC
+    desc.pNext = None
+    desc.format = _ZE_MODULE_FORMAT_IL_SPIRV
+    desc.inputSize = len(spv_bytes)
+    desc.pInput = ctypes.cast(input_buffer, ctypes.c_void_p).value
+    desc.pBuildFlags = None
+    desc.pConstants = None
+    return desc, input_buffer
+
 
 def _load_lib_candidate(names: tuple[str, ...]) -> ctypes.CDLL | None:
     """Best-effort load of a shared library by soname.
@@ -419,10 +489,23 @@ class HardwareValidator:
         """Load the binary as a Level Zero module via zeModuleCreate.
 
         Level Zero has no simple "load from file" helper; the
-        canonical path is zeModuleCreate with a
-        ze_module_desc_t describing a SPIR-V blob in memory. We
-        keep this method to a single FFI call and let the driver
-        do the SPIR-V magic/header validation.
+        canonical path is ``zeModuleCreate`` with a properly
+        populated ``ze_module_desc_t`` describing a SPIR-V blob in
+        memory. We mirror that struct as :class:`_ZeModuleDesc` and
+        let the Level Zero driver parse the SPIR-V magic/header and
+        validate the module. Validation "passes" only when the
+        driver returns ``ZE_RESULT_SUCCESS`` (i.e. it actually
+        accepted the SPIR-V — not a faked "we called the function"
+        result).
+
+        Context and device handles are ``None``: creating real L0
+        handles requires a driver init + driver enumeration sequence
+        (zeInit, zeDriverGet, zeDeviceGet) which is out of scope for
+        a structural validation. The driver may reject the call with
+        ``ZE_RESULT_ERROR_UNINITIALIZED`` or
+        ``ZE_RESULT_ERROR_INVALID_NULL_HANDLE`` — in that case
+        ``passed=False`` with the L0 error code in ``error`` is the
+        honest answer; we do NOT pretend it passed.
         """
         libze = _safe_load("intel")
         if libze is None:
@@ -434,31 +517,40 @@ class HardwareValidator:
                 "latency_ms": 0.0,
             }
 
-        # zeModuleCreate signature:
+        spv_bytes = binary_path.read_bytes()
+
+        # zeModuleCreate signature (ze_api.h):
         #   ze_result_t zeModuleCreate(
-        #       ze_context_handle_t context,
-        #       ze_device_handle_t device,
+        #       ze_context_handle_t hContext,
+        #       ze_device_handle_t hDevice,
         #       const ze_module_desc_t *desc,
-        #       ze_module_handle_t *module,
-        #       ze_module_build_log_handle_t *build_log);
-        # We pass NULL for the context/device — most L0 drivers
-        # accept this in the "default" mode and reject later when
-        # the module is actually executed. A rejection at
-        # zeModuleCreate time still proves the SPIR-V blob parsed.
+        #       ze_module_handle_t *phModule,
+        #       ze_module_build_log_handle_t *phBuildLog);
+        #
+        # The third argument is a POINTER to a ze_module_desc_t.
+        # Passing the SPIR-V bytes directly (as the previous version
+        # of this method did with ctypes.c_char_p(...)) made the
+        # driver read the first 32/64 bytes of the SPIR-V blob as
+        # struct fields — random memory contents, silent garbage.
+        # The fix is to build a real descriptor and pass its address.
         libze.zeModuleCreate.restype = ctypes.c_int
         libze.zeModuleCreate.argtypes = [
-            ctypes.c_void_p,                              # context
-            ctypes.c_void_p,                              # device
-            ctypes.c_void_p,                              # desc
-            ctypes.POINTER(ctypes.c_void_p),              # module
-            ctypes.POINTER(ctypes.c_void_p),              # build_log
+            ctypes.c_void_p,                      # hContext
+            ctypes.c_void_p,                      # hDevice
+            ctypes.POINTER(_ZeModuleDesc),        # *desc
+            ctypes.POINTER(ctypes.c_void_p),      # *phModule
+            ctypes.POINTER(ctypes.c_void_p),      # *phBuildLog
         ]
+        desc, _input_buf = _build_ze_module_desc(spv_bytes)
         module = ctypes.c_void_p()
         build_log = ctypes.c_void_p()
         t0 = time.perf_counter()
         rc = libze.zeModuleCreate(
-            None, None, ctypes.c_char_p(binary_path.read_bytes()),
-            ctypes.byref(module), ctypes.byref(build_log),
+            None,
+            None,
+            ctypes.byref(desc),
+            ctypes.byref(module),
+            ctypes.byref(build_log),
         )
         latency_ms = (time.perf_counter() - t0) * 1000.0
 

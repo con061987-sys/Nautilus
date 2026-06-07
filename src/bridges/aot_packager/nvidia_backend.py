@@ -25,10 +25,8 @@ import hashlib
 import importlib
 import importlib.util
 import json
-import logging
 import os
 import shutil
-import subprocess
 import tempfile
 import threading
 import time
@@ -37,12 +35,21 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+try:
+    from packaging.specifiers import SpecifierSet
+    from packaging.version import InvalidVersion, Version
+
+    _PACKAGING_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    SpecifierSet = None  # type: ignore[assignment,misc]
+    InvalidVersion = Exception  # type: ignore[assignment,misc]
+    Version = None  # type: ignore[assignment,misc]
+    _PACKAGING_AVAILABLE = False
+
 from src.common.errors import (
     CompilationError,
     CompilationOutputMissingError,
-    DependencyMissingError,
-    HardwareNotFoundError,
-    NautilusError,
+    DependencyVersionMismatchError,
     TritonMissingError,
 )
 from src.common.logging import get_logger
@@ -92,6 +99,9 @@ class NvidiaBackend:
          not a 6-line stub)
       4. Write to cache; on next identical request, return cached
     """
+    # Range covers 3.x and 4.x; intentionally not pinned to a
+    # micro-version per the project's drift strategy.
+    SUPPORTED_TRITON_VERSIONS = ">=3.0,<5.0"
     def __init__(
         self,
         target_arch: NvidiaArch = NvidiaArch.SM_90,
@@ -237,7 +247,6 @@ class NvidiaBackend:
         """
         try:
             import triton
-            import triton.language as tl
         except ImportError as exc:
             raise TritonMissingError(
                 "Triton is not installed. Install with: pip install triton",
@@ -248,6 +257,8 @@ class NvidiaBackend:
                 "Installed triton version is too old (no triton.compiler.compile). "
                 "Upgrade to triton>=3.0.0.",
             )
+
+        self._verify_triton_version(triton.__version__)
 
         with self._lock:
             tmp_dir = Path(tempfile.mkdtemp(prefix="nautilus_aot_", dir=str(self.cache_dir)))
@@ -283,9 +294,29 @@ class NvidiaBackend:
                         "BLOCK_K": block_k,
                     },
                 )
+                # Triton 3.0+ ASTSource requires:
+                #   - signature keyed by parameter NAME (str), not position
+                #   - constexprs keyed by positional index wrapped in a tuple
+                #   - the legacy `constants=` kwarg is gone (use `constexprs=`)
+                # build_signature() works in positional int keys (easier to
+                # infer from inspect.signature); remap to Triton's expected
+                # shape here so the backend stays self-contained regardless
+                # of upstream helper changes.
+                arg_names: list[str] = list(getattr(fn, "arg_names", []) or [])
+                if arg_names and all(isinstance(k, int) for k in signature):
+                    signature = {
+                        arg_names[i]: dtype
+                        for i, dtype in signature.items()
+                        if i < len(arg_names)
+                    }
+                if arg_names and all(isinstance(k, int) for k in constexprs):
+                    constexprs = {
+                        (idx,): value
+                        for idx, value in constexprs.items()
+                        if idx < len(arg_names)
+                    }
                 source = ASTSource(
                     fn=fn,
-                    constants={},
                     signature=signature,
                     constexprs=constexprs,
                     attrs={
@@ -325,22 +356,30 @@ class NvidiaBackend:
         older Triton versions that only accept backend-name strings.
         """
         arch_str = self.target_arch.value
+        # Triton 3.0+ moved GPUTarget to triton.backends.compiler.
+        gpu_target_cls: Any = None
         try:
-            from triton.compiler import GPUTarget  # type: ignore[attr-defined]
+            from triton.backends.compiler import GPUTarget as _NewGPUTarget
+            gpu_target_cls = _NewGPUTarget
         except ImportError:
+            try:
+                from triton.compiler import GPUTarget as _LegacyGPUTarget
+                gpu_target_cls = _LegacyGPUTarget
+            except ImportError:
+                return arch_str if arch_str else "cuda"
+        if gpu_target_cls is None:
             return arch_str if arch_str else "cuda"
-        try:
-            if arch_str.startswith("sm_"):
-                parts = arch_str[3:].split("_")
-                if len(parts) == 2:
-                    major, minor = int(parts[0]), int(parts[1])
-                    return GPUTarget(
-                        backend="cuda",
-                        arch=(major, minor),
-                        warp_size=32,
-                    )
-        except (ValueError, TypeError):
-            pass
+        if arch_str.startswith("sm_"):
+            # GPUTarget.arch is the compute capability as a single int
+            # (e.g. 90 for sm_90), not a (major, minor) tuple. The string
+            # suffix may be 2 or 3 digits: sm_70, sm_90, sm_100, sm_120.
+            digits = arch_str[3:]
+            if digits.isdigit() and digits:
+                return gpu_target_cls(
+                    backend="cuda",
+                    arch=int(digits),
+                    warp_size=32,
+                )
         return arch_str if arch_str else "cuda"
 
     def _validate_ptx(self, ptx_text: str, kernel_name: str) -> bool:
@@ -414,6 +453,41 @@ class NvidiaBackend:
             return getattr(triton, "__version__", "unknown")
         except ImportError:
             return "unavailable"
+
+    def _verify_triton_version(self, version_str: str) -> None:
+        """Raise DependencyVersionMismatchError if triton is outside the
+        supported range.
+
+        Defined as a range (not a pin) per the drift strategy: the
+        ASTSource / GPUTarget APIs we depend on were stable from
+        3.0 onwards, and the upper bound is left open for a future
+        4.x without forcing a code change. Unparseable versions are
+        warned but do not raise — the user may be running a forked
+        build (e.g. nvidia internal triton) with a non-PEP-440 tag.
+        """
+        if not _PACKAGING_AVAILABLE or not version_str or version_str in {
+            "unknown", "unavailable",
+        }:
+            return
+        try:
+            parsed = Version(version_str)
+        except InvalidVersion:
+            log.warning(
+                "Triton version is not PEP-440 parseable; skipping range check",
+                version=version_str,
+            )
+            return
+        spec = SpecifierSet(self.SUPPORTED_TRITON_VERSIONS)
+        if parsed not in spec:
+            raise DependencyVersionMismatchError(
+                f"Installed triton {version_str} is outside the supported "
+                f"range {self.SUPPORTED_TRITON_VERSIONS}. The Nvidia AOT "
+                f"backend requires an in-range triton build.",
+                context={
+                    "installed": version_str,
+                    "supported": str(self.SUPPORTED_TRITON_VERSIONS),
+                },
+            )
 
     def supports_arch(self, arch: str) -> bool:
         try:

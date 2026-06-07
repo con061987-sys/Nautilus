@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.bridges.aot_packager.nvidia_backend import (
     NvidiaArch,
     NvidiaBackend,
@@ -61,7 +59,7 @@ class TestNvidiaBackend:
         backend = NvidiaBackend(cache_dir=str(tmp_path / "nvidia"))
         result = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
-            kernel_name="test_matmul",
+            kernel_name="sample_matmul",
         )
         assert isinstance(result, NvidiaCompilationResult)
         assert result.arch == "sm_90"
@@ -73,7 +71,7 @@ class TestNvidiaBackend:
         backend = NvidiaBackend(cache_dir=str(tmp_path / "nvidia"))
         result = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
-            kernel_name="ptx_test",
+            kernel_name="sample_matmul",
         )
         if result.ptx_text is not None:
             # Minimal PTX contains .version, .target, .entry
@@ -85,11 +83,11 @@ class TestNvidiaBackend:
         backend = NvidiaBackend(cache_dir=str(tmp_path / "nvidia"))
         result1 = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
-            kernel_name="cache_test",
+            kernel_name="sample_matmul",
         )
         result2 = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
-            kernel_name="cache_test",
+            kernel_name="sample_matmul",
         )
         assert result1.is_usable
         assert result2.is_usable

@@ -3,26 +3,40 @@
 Combines the per-vendor AOT-compiled kernels (PTX, HSACO, SPIR-V)
 plus the C runtime stub into a single "fat binary" ELF object.
 
-The fat binary format:
-┌─────────────────────────────────────┐
-│  ELF Header                         │
-├─────────────────────────────────────┤
-│  C Runtime Stub (code)              │
-│  - Detect CPU vendor (CPUID)        │
-│  - Detect GPU via /dev/kfd, /dev/dri│
-│  - Jump to matching backend         │
-├─────────────────────────────────────┤
-│  Section: .nv_kernel (PTX text)     │
-├─────────────────────────────────────┤
-│  Section: .amd_kernel (HSACO binary)│
-├─────────────────────────────────────┤
-│  Section: .intel_kernel (SPIR-V)    │
-├─────────────────────────────────────┤
-│  Section: .nautilus_metadata        │
-│  - Build timestamp                  │
-│  - Target architectures             │
-│  - Hash of source kernel            │
-└─────────────────────────────────────┘
+The fat binary format (post-collision-fix):
+
+┌─────────────────────────────────────────────────────────────┐
+│  ELF Header                                                 │
+├─────────────────────────────────────────────────────────────┤
+│  C Runtime Stub (code) — vendor detection + dispatch        │
+│  - /dev/nvidia*, /dev/kfd, /dev/dri/renderD* probing        │
+│  - Resolves kernel sections via .nautilus.index             │
+├─────────────────────────────────────────────────────────────┤
+│  Section: .nautilus.nvidia.<kernel_name>      (PTX text)    │
+│  Section: .nautilus.nvidia.cubin.<kernel_name> (CUBIN)      │
+│  Section: .nautilus.amd.<kernel_name>         (HSACO)       │
+│  Section: .nautilus.intel.<kernel_name>       (SPIR-V)      │
+│  Section: .nautilus.apple.<kernel_name>      (Metal AIR)    │
+│  …one section per kernel, never reused. Section names are   │
+│  unique per (vendor, kernel) pair so ld.lld -r cannot        │
+│  silently merge them.                                       │
+├─────────────────────────────────────────────────────────────┤
+│  Section: .nautilus.index (text)                            │
+│  - One record per kernel:                                   │
+│      kernel|vendor|arch|format|section_name|size\\n         │
+│  - Terminated by an empty line.                             │
+│  - The C runtime stub reads it via the                      │
+│    `nautilus_index_data` symbol emitted by the index        │
+│    holder object.                                           │
+└─────────────────────────────────────────────────────────────┘
+
+Section-name policy: every kernel byte blob lives in its own
+section named ``.nautilus.{vendor}.{kernel_name}`` (with an
+optional ``.{format}`` infix for the cubin/ptx ambiguity of the
+same vendor). The old ``.nv_kernel``/``.amd_kernel``/``.intel_kernel``
+generic names have been removed because ``ld.lld -r`` *silently
+merges* sections with identical names — that was the bug this
+module is fixing.
 
 This module invokes the LLVM linker (`lld`) to combine everything
 into a relocatable object that can be linked into a final executable.
@@ -32,6 +46,8 @@ Production features:
   - Support both PTX text and cubin binary for Nvidia
   - Persistent cache (skip re-linking when inputs unchanged)
   - Validation that the output is a valid ELF
+  - Per-kernel unique section names (no silent lld merge)
+  - Machine-parseable .nautilus.index section for runtime discovery
 """
 
 from __future__ import annotations
@@ -39,6 +55,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -65,6 +82,74 @@ _SHT_STRTAB = 3
 _SHT_NOBITS = 8
 _SHF_ALLOC = 0x2
 
+# Reserved prefix for every section this module produces. The C
+# runtime stub and the index parser key off this prefix — never
+# change it without updating both.
+_NAUTILUS_PREFIX = ".nautilus."
+
+_INDEX_SECTION = f"{_NAUTILUS_PREFIX}index"
+
+# Whitelist of characters safe for an ELF section name AND safe
+# to embed in the .nautilus.index pipe-delimited records.
+_SECTION_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
+
+def _sanitize_section_token(token: str) -> str:
+    """Replace any non-allowed character with ``_``; empty -> ``unnamed``."""
+    if not token:
+        return "unnamed"
+    out = "".join(c if c.isalnum() or c in "_.-" else "_" for c in token)
+    return out or "unnamed"
+
+
+def section_name_for(vendor: str, kernel_name: str, *, fmt_suffix: str = "") -> str:
+    """Return the canonical, unique section name for a kernel blob.
+
+    Format: ``.nautilus.{vendor}[.{fmt_suffix}].{kernel_name}``
+    """
+    v = _sanitize_section_token(vendor)
+    k = _sanitize_section_token(kernel_name)
+    if fmt_suffix:
+        f = _sanitize_section_token(fmt_suffix)
+        return f"{_NAUTILUS_PREFIX}{v}.{f}.{k}"
+    return f"{_NAUTILUS_PREFIX}{v}.{k}"
+
+
+def validate_section_name(name: str) -> str:
+    """Raise LinkingError if `name` is not a safe ELF section name.
+
+    Safe = 1-64 chars, drawn from ``[A-Za-z0-9_.-]`` only.
+    """
+    if not name or len(name) > 64:
+        raise LinkingError(
+            f"Invalid section name: {name!r} (must be 1-64 chars)",
+            context={"section_name": name},
+        )
+    if not _SECTION_NAME_RE.match(name):
+        raise LinkingError(
+            f"Invalid section name: {name!r} (only [A-Za-z0-9_.-] allowed)",
+            context={"section_name": name},
+        )
+    return name
+
+
+@dataclass
+class KernelBlob:
+    """One kernel binary for one (vendor, arch, format) triple.
+
+    Multiple ``KernelBlob``s with the same vendor but different
+    kernel names are allowed — the linker gives each its own
+    section named ``.nautilus.{vendor}.{kernel_name}`` and records
+    all of them in ``.nautilus.index`` so the runtime stub can
+    discover them at startup.
+    """
+    kernel_name: str
+    vendor: str          # "nvidia" / "amd" / "intel" / "apple"
+    arch: str            # "sm_90" / "gfx942" / "xe_hpg" — free-form identifier
+    fmt: str             # "ptx" / "cubin" / "hsaco" / "spv" / "metallib"
+    data: bytes
+    metadata: dict[str, str] = field(default_factory=dict)
+
 
 @dataclass
 class LinkingResult:
@@ -73,6 +158,8 @@ class LinkingResult:
     output_path: Path | None = None
     output_size: int = 0
     sections: dict[str, int] = field(default_factory=dict)  # section name → size
+    section_names: list[str] = field(default_factory=list)  # order-preserved unique names
+    index_text: str = ""  # human-readable rendering of the .nautilus.index contents
     error: str | None = None
     linking_time_s: float = 0.0
     cache_hit: bool = False
@@ -122,22 +209,14 @@ class FatBinaryLinker:
         runtime_stub_o: bytes | None = None,
         kernel_name: str = "kernel",
         output_path: Path | None = None,
+        kernels: list[KernelBlob] | None = None,
     ) -> LinkingResult:
-        """Link a fat binary from the per-vendor compiled kernels.
+        """Link a fat binary from one or more per-vendor compiled kernels.
 
-        Args:
-            nvidia_ptx: PTX text for Nvidia GPUs (bytes).
-            nvidia_cubin: Cubin binary for Nvidia GPUs (bytes).
-            amd_hsaco: HSACO binary for AMD GPUs (bytes).
-            intel_spv: SPIR-V binary for Intel GPUs (bytes).
-            runtime_stub_o: C runtime stub object file (bytes). If None,
-                bytes are loaded from self.default_stub_path (set in
-                __init__, defaulting to <repo>/build/runtime_stub.o).
-            kernel_name: Name of the kernel.
-            output_path: Where to write the fat binary (default: cache).
-
-        Returns:
-            LinkingResult with the fat binary path and metadata.
+        Each kernel lives in its own section named
+        ``.nautilus.{vendor}.{kernel_name}`` and is listed in
+        ``.nautilus.index``. Multi-kernel from the same vendor is
+        supported via the ``kernels`` argument.
         """
         import time
         start = time.perf_counter()
@@ -145,11 +224,30 @@ class FatBinaryLinker:
         if runtime_stub_o is None and self.default_stub_path.exists():
             runtime_stub_o = self.default_stub_path.read_bytes()
 
-        output_path = output_path or (self.cache_dir / f"{kernel_name}.fat.o")
+        blobs = self._normalise_kernels(
+            kernels=kernels,
+            nvidia_ptx=nvidia_ptx,
+            nvidia_cubin=nvidia_cubin,
+            amd_hsaco=amd_hsaco,
+            intel_spv=intel_spv,
+            default_kernel_name=kernel_name,
+        )
+        if not blobs and runtime_stub_o is None:
+            return LinkingResult(
+                success=False,
+                error="link_fat_binary called with no kernels and no runtime_stub_o",
+                linking_time_s=time.perf_counter() - start,
+            )
+
+        section_names, index_text = self._build_section_plan(blobs)
+
+        output_path = output_path or (
+            self.cache_dir / f"{blobs[0].kernel_name if blobs else 'stub'}.fat.o"
+        )
 
         # Check cache
         cache_key = self._compute_link_cache_key(
-            nvidia_ptx, nvidia_cubin, amd_hsaco, intel_spv, runtime_stub_o, kernel_name,
+            blobs, runtime_stub_o, section_names,
         )
         cached_path = self._cache_path_for(cache_key)
         if cached_path.exists() and cached_path.stat().st_size > 0:
@@ -158,21 +256,23 @@ class FatBinaryLinker:
                 success=True,
                 output_path=cached_path,
                 output_size=cached_path.stat().st_size,
+                section_names=list(section_names),
+                index_text=index_text,
                 linking_time_s=elapsed,
                 cache_hit=True,
                 linker_version=self._lld_version,
             )
 
-        # Write the input objects to temp files
-        temp_dir = self.cache_dir / f"tmp_{kernel_name}_{cache_key[:8]}"
+        temp_dir = self.cache_dir / f"tmp_link_{cache_key[:8]}"
         temp_dir.mkdir(exist_ok=True)
         try:
             section_files = self._write_input_sections(
-                temp_dir, nvidia_ptx, nvidia_cubin, amd_hsaco, intel_spv,
-                runtime_stub_o,
+                temp_dir, blobs, runtime_stub_o,
             )
-            # Link using lld
-            link_result = self._run_lld(temp_dir, section_files, output_path, kernel_name)
+            index_object = self._build_index_object(temp_dir, blobs, section_names, index_text)
+            if index_object is not None:
+                section_files["nautilus_index"] = index_object
+            link_result = self._run_lld(temp_dir, section_files, output_path)
         except Exception as exc:
             elapsed = time.perf_counter() - start
             logger.error(
@@ -204,27 +304,112 @@ class FatBinaryLinker:
             success=True,
             output_path=cached_path,
             output_size=cached_path.stat().st_size,
+            section_names=list(section_names),
+            index_text=index_text,
             sections=self._count_sections(cached_path),
             linking_time_s=elapsed,
             linker_version=self._lld_version,
         )
 
-    def _compute_link_cache_key(
+    def _normalise_kernels(
         self,
+        *,
+        kernels: list[KernelBlob] | None,
         nvidia_ptx: bytes | None,
         nvidia_cubin: bytes | None,
         amd_hsaco: bytes | None,
         intel_spv: bytes | None,
+        default_kernel_name: str,
+    ) -> list[KernelBlob]:
+        if kernels:
+            seen: set[tuple[str, str, str]] = set()
+            for b in kernels:
+                key = (b.vendor, b.kernel_name, b.fmt)
+                if key in seen:
+                    raise LinkingError(
+                        "Duplicate KernelBlob in input list",
+                        context={"vendor": b.vendor, "kernel_name": b.kernel_name, "fmt": b.fmt},
+                    )
+                seen.add(key)
+                validate_section_name(section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt))
+            return list(kernels)
+
+        blobs: list[KernelBlob] = []
+        if nvidia_ptx is not None:
+            blobs.append(KernelBlob(
+                kernel_name=default_kernel_name, vendor="nvidia",
+                arch="sm_90", fmt="ptx", data=nvidia_ptx,
+            ))
+        if nvidia_cubin is not None:
+            blobs.append(KernelBlob(
+                kernel_name=default_kernel_name, vendor="nvidia",
+                arch="sm_90", fmt="cubin", data=nvidia_cubin,
+            ))
+        if amd_hsaco is not None:
+            blobs.append(KernelBlob(
+                kernel_name=default_kernel_name, vendor="amd",
+                arch="gfx942", fmt="hsaco", data=amd_hsaco,
+            ))
+        if intel_spv is not None:
+            blobs.append(KernelBlob(
+                kernel_name=default_kernel_name, vendor="intel",
+                arch="xe_hpg", fmt="spv", data=intel_spv,
+            ))
+        return blobs
+
+    def _build_section_plan(
+        self, blobs: list[KernelBlob],
+    ) -> tuple[list[str], str]:
+        """Compute unique section names for every blob and the
+        text payload of the .nautilus.index section.
+        """
+        section_names: list[str] = []
+        for b in blobs:
+            name = section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt)
+            if name in section_names:
+                raise LinkingError(
+                    f"Internal section-name collision: {name!r} "
+                    "— section_name_for must produce unique output "
+                    "for every (vendor, kernel, fmt) triple",
+                    context={"vendor": b.vendor, "kernel": b.kernel_name, "fmt": b.fmt},
+                )
+            section_names.append(name)
+
+        # Pipe-delimited records. Field count is fixed: 6.
+        # kernel_name | vendor | arch | fmt | section_name | size
+        # Records are newline-terminated; the index is double-
+        # newline terminated (empty record) so the C parser can
+        # detect the end with a single strchr loop.
+        records = [
+            "|".join([
+                _sanitize_section_token(b.kernel_name),
+                _sanitize_section_token(b.vendor),
+                _sanitize_section_token(b.arch),
+                _sanitize_section_token(b.fmt),
+                section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
+                str(len(b.data)),
+            ])
+            for b in blobs
+        ]
+        index_text = "\n".join(records) + "\n\n"
+        return section_names, index_text
+
+    def _compute_link_cache_key(
+        self,
+        blobs: list[KernelBlob],
         runtime_stub_o: bytes | None,
-        kernel_name: str,
+        section_names: list[str],
     ) -> str:
         """Compute a cache key for the link operation."""
         payload = json.dumps({
-            "name": kernel_name,
-            "nv_ptx": nvidia_ptx.hex() if nvidia_ptx else "",
-            "nv_cubin": nvidia_cubin.hex() if nvidia_cubin else "",
-            "amd_hsaco": amd_hsaco.hex() if amd_hsaco else "",
-            "intel_spv": intel_spv.hex() if intel_spv else "",
+            "kernels": [
+                {
+                    "n": b.kernel_name, "v": b.vendor, "a": b.arch, "f": b.fmt,
+                    "d": b.data.hex(),
+                }
+                for b in blobs
+            ],
+            "section_names": list(section_names),
             "runtime_stub": runtime_stub_o.hex() if runtime_stub_o else "",
             "lld_version": self._lld_version,
         }, sort_keys=True)
@@ -236,38 +421,26 @@ class FatBinaryLinker:
     def _write_input_sections(
         self,
         temp_dir: Path,
-        nvidia_ptx: bytes | None,
-        nvidia_cubin: bytes | None,
-        amd_hsaco: bytes | None,
-        intel_spv: bytes | None,
+        blobs: list[KernelBlob],
         runtime_stub_o: bytes | None,
     ) -> dict[str, Path]:
-        """Write each input section to a temp file for lld to consume.
+        """Write each kernel blob to its own per-section object file.
 
-        Each per-vendor kernel gets its own object file. The linker
-        combines them with the runtime stub.
+        ``ld.lld -r`` silently merges sections that share a name;
+        every blob therefore goes into a section whose name is
+        unique per (vendor, kernel_name, fmt) — see
+        ``section_name_for``.
         """
         section_files: dict[str, Path] = {}
 
-        if nvidia_ptx:
-            ptx_o = temp_dir / "nvidia.ptx.o"
-            ptx_o.write_bytes(self._wrap_section_data(nvidia_ptx, ".nv_kernel", "PROGBITS"))
-            section_files["nvidia_ptx"] = ptx_o
-
-        if nvidia_cubin:
-            cubin_o = temp_dir / "nvidia.cubin.o"
-            cubin_o.write_bytes(self._wrap_section_data(nvidia_cubin, ".nv_kernel_cubin", "PROGBITS"))
-            section_files["nvidia_cubin"] = cubin_o
-
-        if amd_hsaco:
-            amd_o = temp_dir / "amd.hsaco.o"
-            amd_o.write_bytes(self._wrap_section_data(amd_hsaco, ".amd_kernel", "PROGBITS"))
-            section_files["amd"] = amd_o
-
-        if intel_spv:
-            spv_o = temp_dir / "intel.spv.o"
-            spv_o.write_bytes(self._wrap_section_data(intel_spv, ".intel_kernel", "PROGBITS"))
-            section_files["intel"] = spv_o
+        for idx, b in enumerate(blobs):
+            section_name = section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt)
+            validate_section_name(section_name)
+            o_path = temp_dir / f"kernel_{idx:03d}_{b.vendor}_{b.fmt}.o"
+            o_path.write_bytes(
+                self._wrap_section_data(b.data, section_name, "PROGBITS"),
+            )
+            section_files[f"kernel_{idx:03d}"] = o_path
 
         if runtime_stub_o:
             stub_path = temp_dir / "runtime_stub.o"
@@ -275,6 +448,77 @@ class FatBinaryLinker:
             section_files["runtime_stub"] = stub_path
 
         return section_files
+
+    def _build_index_object(
+        self,
+        temp_dir: Path,
+        blobs: list[KernelBlob],
+        section_names: list[str],
+        index_text: str,
+    ) -> Path | None:
+        if not blobs or not index_text:
+            return None
+
+        # Compile a tiny C source rather than hand-rolling an
+        # SHT_SYMTAB: gcc produces a spec-cleaner object for free.
+        # The payload is hex-encoded so the C source is immune to
+        # embedded quotes, backslashes, or non-ASCII bytes.
+        #
+        # Two symbols are emitted: ``nautilus_index_data`` carries
+        # the pipe-delimited records, ``nautilus_index_size`` is
+        # ``sizeof(nautilus_index_data)`` resolved at compile time
+        # so the runtime stub can address the buffer via a typed
+        # extern without ELF-header walking.
+        index_bytes = index_text.encode("utf-8")
+        hex_payload = ",".join(f"0x{b:02x}" for b in index_bytes)
+
+        holder_c = temp_dir / "nautilus_index_holder.c"
+        holder_c.write_text(
+            "/* Auto-generated by FatBinaryLinker._build_index_object. */\n"
+            "/* Hand-edit at your own risk — this file is rewritten on every link. */\n"
+            "__attribute__((section(\".nautilus.index\"), used))\n"
+            "const unsigned char nautilus_index_data[] = {\n"
+            f"    {hex_payload}\n"
+            "};\n"
+            "\n"
+            "__attribute__((section(\".nautilus.index\"), used))\n"
+            "const unsigned long nautilus_index_size = sizeof(nautilus_index_data);\n"
+        )
+
+        holder_o = temp_dir / "nautilus_index_holder.o"
+        gcc = shutil.which("gcc")
+        if not gcc:
+            raise LinkingError(
+                "gcc not found in PATH; cannot compile .nautilus.index holder",
+            )
+        cmd = [
+            gcc, "-c",
+            "-fPIC",
+            "-Wall", "-Wno-unused-but-set-variable",
+            "-o", str(holder_o),
+            str(holder_c),
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise LinkingError(
+                "gcc timed out compiling nautilus_index_holder.c",
+                cause=exc,
+            ) from exc
+        if result.returncode != 0 or not holder_o.exists():
+            raise LinkingError(
+                f"gcc failed to compile .nautilus.index holder: "
+                f"{result.stderr or '(no stderr)'}",
+                context={"cmd": cmd, "stdout": result.stdout, "stderr": result.stderr},
+            )
+        logger.debug(
+            "Built .nautilus.index holder",
+            section=section_names,
+            index_bytes=len(index_bytes),
+        )
+        return holder_o
 
     def _wrap_section_data(self, data: bytes, section_name: str, section_type: str) -> bytes:
         """Wrap raw bytes as a minimal ELF64 relocatable object with one section.
@@ -384,14 +628,12 @@ class FatBinaryLinker:
         temp_dir: Path,
         section_files: dict[str, Path],
         output_path: Path,
-        kernel_name: str,
     ) -> Result[Path, LinkingError]:
         """Invoke the LLVM linker to combine the section files.
 
         Returns ``Ok(output_path)`` on success and
         ``Err(LinkingError)`` on any failure (lld missing, subprocess
-        timeout, non-zero exit, missing output file). NEVER falls
-        back to a non-functional manual fat binary.
+        timeout, non-zero exit, missing output file).
         """
         if not self._lld_path:
             return Err(LinkingError(

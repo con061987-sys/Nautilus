@@ -140,8 +140,163 @@ static int nautilus_check_apple(void) { return 0; }
 #endif
 
 /* ------------------------------------------------------------------ *
- * Public API                                                            *
+ * .nautilus.index parsing                                               *
  * ------------------------------------------------------------------ */
+
+/*
+ * The linker emits a .nautilus.index section with one pipe-delimited
+ * record per (vendor, kernel, fmt) triple, terminated by an empty
+ * line. The runtime stub walks the records to find a kernel matching
+ * the detected vendor and exposes the parsed entry via
+ * ``nautilus_index_find``. Pointers returned in the entry point into
+ * the static .nautilus.index section, so the caller must not retain
+ * them past process teardown (in practice: they live for the entire
+ * program lifetime, which is what we want).
+ */
+
+extern const unsigned char nautilus_index_data[];
+extern const unsigned long nautilus_index_size;
+
+typedef struct {
+    const char* kernel_name;
+    const char* vendor;
+    const char* arch;
+    const char* fmt;
+    const char* section_name;
+    int size;
+} nautilus_index_entry_t;
+
+static int nautilus_index_strnpos(
+    const unsigned char* haystack, int haystack_len, const char* needle
+) {
+    int n = 0;
+    while (haystack[n]) n++;
+    int needle_len = n;
+    if (needle_len <= 0) return -1;
+    int last = haystack_len - needle_len;
+    for (int i = 0; i <= last; i++) {
+        int j = 0;
+        while (j < needle_len && haystack[i + j] == (unsigned char)needle[j]) j++;
+        if (j == needle_len) return i;
+    }
+    return -1;
+}
+
+static int nautilus_index_next(
+    int* io_offset,
+    nautilus_index_entry_t* out
+) {
+    const unsigned char* p = nautilus_index_data;
+    int total = (int)nautilus_index_size;
+    int start = *io_offset;
+    if (start >= total) return 0;
+
+    int eol = start;
+    while (eol < total && p[eol] != '\n') eol++;
+    if (eol == start) {
+        *io_offset = eol + 1;
+        return 0;
+    }
+
+    int pipe[5];
+    int pi = 0;
+    for (int i = start; i < eol && pi < 5; i++) {
+        if (p[i] == '|') pipe[pi++] = i;
+    }
+    if (pi != 5) return -1;
+
+    static char kernel_name_buf[128];
+    static char vendor_buf[64];
+    static char arch_buf[64];
+    static char fmt_buf[64];
+    static char section_buf[128];
+    static char size_buf[32];
+
+    int len_kernel = pipe[0] - start;
+    int len_vendor = pipe[1] - pipe[0] - 1;
+    int len_arch = pipe[2] - pipe[1] - 1;
+    int len_fmt = pipe[3] - pipe[2] - 1;
+    int len_section = pipe[4] - pipe[3] - 1;
+    int len_size = eol - pipe[4] - 1;
+
+    if (len_kernel <= 0 || len_kernel >= (int)sizeof(kernel_name_buf)) return -1;
+    if (len_vendor <= 0 || len_vendor >= (int)sizeof(vendor_buf)) return -1;
+    if (len_arch <= 0 || len_arch >= (int)sizeof(arch_buf)) return -1;
+    if (len_fmt <= 0 || len_fmt >= (int)sizeof(fmt_buf)) return -1;
+    if (len_section <= 0 || len_section >= (int)sizeof(section_buf)) return -1;
+    if (len_size <= 0 || len_size >= (int)sizeof(size_buf)) return -1;
+
+    for (int i = 0; i < len_kernel; i++)  kernel_name_buf[i] = (char)p[start + i];
+    for (int i = 0; i < len_vendor; i++)  vendor_buf[i] = (char)p[pipe[0] + 1 + i];
+    for (int i = 0; i < len_arch; i++)    arch_buf[i] = (char)p[pipe[1] + 1 + i];
+    for (int i = 0; i < len_fmt; i++)     fmt_buf[i] = (char)p[pipe[2] + 1 + i];
+    for (int i = 0; i < len_section; i++) section_buf[i] = (char)p[pipe[3] + 1 + i];
+    for (int i = 0; i < len_size; i++)    size_buf[i] = (char)p[pipe[4] + 1 + i];
+
+    kernel_name_buf[len_kernel]   = '\0';
+    vendor_buf[len_vendor]       = '\0';
+    arch_buf[len_arch]           = '\0';
+    fmt_buf[len_fmt]             = '\0';
+    section_buf[len_section]     = '\0';
+    size_buf[len_size]           = '\0';
+
+    out->kernel_name  = kernel_name_buf;
+    out->vendor       = vendor_buf;
+    out->arch         = arch_buf;
+    out->fmt          = fmt_buf;
+    out->section_name = section_buf;
+    out->size         = 0;
+    for (int i = 0; size_buf[i]; i++) {
+        if (size_buf[i] < '0' || size_buf[i] > '9') return -1;
+        out->size = out->size * 10 + (size_buf[i] - '0');
+    }
+
+    *io_offset = eol + 1;
+    return 1;
+}
+
+const nautilus_index_entry_t* nautilus_index_find(
+    const char* kernel_name, const char* vendor
+) {
+    static nautilus_index_entry_t entry;
+    int offset = 0;
+    for (;;) {
+        int rc = nautilus_index_next(&offset, &entry);
+        if (rc == 0) return (const nautilus_index_entry_t*)0;
+        if (rc < 0)  return (const nautilus_index_entry_t*)0;
+        int match_k = nautilus_index_strnpos(
+            (const unsigned char*)entry.kernel_name,
+            (int)nautilus_strlen(entry.kernel_name) + 1,
+            kernel_name
+        );
+        int match_v = nautilus_index_strnpos(
+            (const unsigned char*)entry.vendor,
+            (int)nautilus_strlen(entry.vendor) + 1,
+            vendor
+        );
+        if (match_k == 0 && match_v == 0) {
+            return &entry;
+        }
+    }
+}
+
+const nautilus_index_entry_t* nautilus_index_find_by_vendor(const char* vendor) {
+    static nautilus_index_entry_t entry;
+    int offset = 0;
+    for (;;) {
+        int rc = nautilus_index_next(&offset, &entry);
+        if (rc == 0) return (const nautilus_index_entry_t*)0;
+        if (rc < 0)  return (const nautilus_index_entry_t*)0;
+        int match_v = nautilus_index_strnpos(
+            (const unsigned char*)entry.vendor,
+            (int)nautilus_strlen(entry.vendor) + 1,
+            vendor
+        );
+        if (match_v == 0) {
+            return &entry;
+        }
+    }
+}
 
 /*
  * Compile-time verification that the C enum values match what the
@@ -185,11 +340,16 @@ int nautilus_has_amd_gpu(void)    { return nautilus_check_amd(); }
 int nautilus_has_intel_gpu(void)  { return nautilus_check_intel(); }
 int nautilus_has_apple_gpu(void)  { return nautilus_check_apple(); }
 
-/* Dispatch: call the matching vendor kernel. Aborts with a clear
- * message if no vendor is found. The host process should handle
- * the abort by logging and exiting.
+/* Dispatch: call the matching vendor kernel. The host process
+ * should handle the default fallback by logging and exiting.
+ *
+ * Reads the .nautilus.index section to find the kernel selected
+ * for the detected vendor and (optionally) requested kernel name.
+ * If a matching entry is found, its section name and size are
+ * returned via out_section/out_size; otherwise both are set to 0.
  */
 int nautilus_dispatch(void* args) {
+    (void)args;
     nautilus_vendor_t vendor = nautilus_detect_vendor();
     switch (vendor) {
         case NAUTILUS_VENDOR_NVIDIA: return nautilus_kernel_nvidia(args);
@@ -199,6 +359,33 @@ int nautilus_dispatch(void* args) {
         default:
             return nautilus_kernel_default(args);
     }
+}
+
+/* Variant of dispatch that also reports which index entry the
+ * runtime selected. The out_entry is set to a static
+ * nautilus_index_entry_t on a hit and to NULL on a miss. The
+ * section name and size in the entry describe the binary blob
+ * the dispatcher will load. */
+int nautilus_dispatch_with_index(
+    void* args,
+    const nautilus_index_entry_t** out_entry
+) {
+    if (out_entry) *out_entry = (const nautilus_index_entry_t*)0;
+    nautilus_vendor_t vendor = nautilus_detect_vendor();
+    const char* vendor_name = "unknown";
+    switch (vendor) {
+        case NAUTILUS_VENDOR_NVIDIA: vendor_name = "nvidia"; break;
+        case NAUTILUS_VENDOR_AMD:    vendor_name = "amd";    break;
+        case NAUTILUS_VENDOR_INTEL:  vendor_name = "intel";  break;
+        case NAUTILUS_VENDOR_APPLE:  vendor_name = "apple";  break;
+        default: break;
+    }
+    if (out_entry && vendor != NAUTILUS_VENDOR_UNKNOWN) {
+        const nautilus_index_entry_t* hit =
+            nautilus_index_find_by_vendor(vendor_name);
+        *out_entry = hit;
+    }
+    return nautilus_dispatch(args);
 }
 
 const char* nautilus_version(void) {
