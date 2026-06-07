@@ -4,9 +4,10 @@ Coordinates:
   1. AMD AOT compilation (AOTriton → .hsaco)
   2. Intel AOT compilation (oneAPI → .spv)
   3. Nvidia AOT compilation (Triton JIT → .ptx)
-  4. C runtime stub compilation
-  5. LLVM lld linking
-  6. Hardware validation
+  4. Apple AOT compilation (Triton metal / xcrun → .metallib)
+  5. C runtime stub compilation
+  6. LLVM lld linking
+  7. Hardware validation
 
 Production features:
   - Per-vendor circuit breakers (one vendor's failure doesn't block others)
@@ -39,6 +40,7 @@ from .fat_binary import FatBinary, KernelSection, SectionFormat
 from .hardware_validator import HardwareValidator, ValidationMode, ValidationResult
 from .intel_backend import IntelBackend, IntelCompilationResult, IntelTarget
 from .linker import FatBinaryLinker, LinkingResult
+from .metal_backend import MetalBackend, MetalCompilationResult, MetalTarget
 from .nvidia_backend import NvidiaArch, NvidiaBackend, NvidiaCompilationResult
 
 logger = get_logger(__name__)
@@ -54,6 +56,7 @@ class FatBinaryConfig:
     amd_arch: AMDArch = AMDArch.GFX942
     intel_target: IntelTarget = IntelTarget.XE_HPG
     nvidia_arch: NvidiaArch = NvidiaArch.SM_90
+    metal_target: MetalTarget = MetalTarget.APPLE_M2
 
     # Compilation options
     block_m: int = 128
@@ -72,6 +75,7 @@ class FatBinaryConfig:
     skip_amd: bool = False
     skip_intel: bool = False
     skip_nvidia: bool = False
+    skip_apple: bool = False
     skip_validation: bool = False
 
 
@@ -84,6 +88,7 @@ class FatBinaryResult:
     amd_result: AMDCompilationResult | None = None
     intel_result: IntelCompilationResult | None = None
     nvidia_result: NvidiaCompilationResult | None = None
+    apple_result: MetalCompilationResult | None = None
     linking_result: LinkingResult | None = None
     validation_results: list[ValidationResult] = field(default_factory=list)
     error: str | None = None
@@ -147,6 +152,10 @@ class FatBinaryBuilder:
         self.nvidia_backend = NvidiaBackend(
             target_arch=NvidiaArch.SM_90,
             cache_dir=str(self.cache_dir / "nvidia"),
+        )
+        self.metal_backend = MetalBackend(
+            target=MetalTarget.APPLE_M2,
+            cache_dir=str(self.cache_dir / "apple"),
         )
         self.linker = FatBinaryLinker(
             cache_dir=str(self.cache_dir / "link"),
@@ -220,6 +229,30 @@ class FatBinaryBuilder:
                     metadata={"compilation_time_s": nvidia_result.compilation_time_s},
                 ))
 
+        apple_result = None
+        if not config.skip_apple:
+            t0 = time.perf_counter()
+            apple_result = self._build_apple(config)
+            stage_times["apple"] = time.perf_counter() - t0
+            if apple_result.is_usable and apple_result.output_bytes is not None:
+                if apple_result.metallib_bytes is not None:
+                    apple_fmt = SectionFormat.METALLIB
+                elif apple_result.air_bytes is not None:
+                    apple_fmt = SectionFormat.AIR
+                else:
+                    apple_fmt = SectionFormat.METALLIB
+                fat_binary.add_section(KernelSection(
+                    vendor="apple",
+                    arch=apple_result.target,
+                    format=apple_fmt,
+                    data=apple_result.output_bytes,
+                    metadata={
+                        "compilation_time_s": apple_result.compilation_time_s,
+                        "used_triton_metal_target": apple_result.used_triton_metal_target,
+                        "xcrun_version": apple_result.xcrun_version,
+                    },
+                ))
+
         # Stage 2: Compile the C runtime stub
         t0 = time.perf_counter()
         runtime_stub_o = self._compile_runtime_stub(config)
@@ -236,6 +269,7 @@ class FatBinaryBuilder:
             nvidia_cubin=nvidia_result.cubin_bytes if nvidia_result and nvidia_result.cubin_bytes else None,
             amd_hsaco=amd_result.hsaco_bytes if amd_result and amd_result.hsaco_bytes else None,
             intel_spv=intel_result.spv_bytes if intel_result and intel_result.spv_bytes else None,
+            apple_metallib=self._apple_link_bytes(apple_result),
             runtime_stub_o=runtime_stub_o,
             kernel_name=config.kernel_name,
             output_path=output_path,
@@ -252,7 +286,12 @@ class FatBinaryBuilder:
             t0 = time.perf_counter()
             for section in fat_binary.sections:
                 binary_path = linking_result.output_path
-                if (section.format == SectionFormat.HSACO and amd_result) or (section.format == SectionFormat.SPV and intel_result) or (section.format == SectionFormat.PTX and nvidia_result):
+                if (
+                    (section.format == SectionFormat.HSACO and amd_result)
+                    or (section.format == SectionFormat.SPV and intel_result)
+                    or (section.format == SectionFormat.PTX and nvidia_result)
+                    or (section.format in (SectionFormat.METALLIB, SectionFormat.AIR) and apple_result)
+                ):
                     validation_results.append(self.validator.validate(
                         binary_path=binary_path,
                         vendor=section.vendor,
@@ -278,6 +317,7 @@ class FatBinaryBuilder:
             amd_result=amd_result,
             intel_result=intel_result,
             nvidia_result=nvidia_result,
+            apple_result=apple_result,
             linking_result=linking_result,
             validation_results=validation_results,
             total_time_s=total_elapsed,
@@ -342,6 +382,56 @@ class FatBinaryBuilder:
                 arch=config.nvidia_arch.value,
                 error=str(exc),
             )
+
+    def _build_apple(self, config: FatBinaryConfig) -> MetalCompilationResult:
+        """Compile the kernel for Apple Silicon (Metal).
+
+        On non-Apple hosts this returns a failed
+        ``MetalCompilationResult`` carrying the
+        ``E_HARDWARE_NOT_FOUND`` error code — never raises. The
+        caller (``build``) treats the failed result as "skip
+        this vendor" rather than aborting the whole build.
+        """
+        try:
+            return self.metal_backend.compile_kernel(
+                kernel_source=config.kernel_source,
+                kernel_name=config.kernel_name,
+                block_m=config.block_m,
+                block_n=config.block_n,
+                block_k=config.block_k,
+                num_warps=config.num_warps,
+                num_stages=config.num_stages,
+            )
+        except Exception as exc:
+            logger.error("Apple build failed: %s", exc)
+            return MetalCompilationResult(
+                success=False,
+                target=config.metal_target.value,
+                error=str(exc),
+                error_code="E_COMPILATION_FAILED",
+            )
+
+    def _apple_link_bytes(
+        self, apple_result: MetalCompilationResult | None,
+    ) -> bytes | None:
+        """Choose which Apple artifact bytes to embed in the fat binary.
+
+        Preference order:
+
+          1. ``metallib_bytes`` (preferred — what the runtime
+             loader wants).
+          2. ``air_bytes`` (still loadable via
+             ``newLibraryWithData:``).
+          3. ``msl_text`` bytes (last-resort — the runtime
+             loader will refuse; useful for debugging).
+
+        Returns ``None`` if the Apple build failed or produced
+        no bytes, in which case the linker is invoked without an
+        Apple section.
+        """
+        if apple_result is None or not apple_result.success:
+            return None
+        return apple_result.output_bytes
 
     def _compile_runtime_stub(self, config: FatBinaryConfig) -> bytes:
         """Compile the C runtime stub into an object file.
