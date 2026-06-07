@@ -51,6 +51,7 @@ clear message about how to build it.
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import os
 from ctypes import (
@@ -250,7 +251,7 @@ def _set_function_signatures(lib: CDLL) -> None:
 # --- Pythonic wrappers that raise on error ---
 
 
-class CApiUnavailable(DependencyMissingError):
+class CApiUnavailableError(DependencyMissingError):
     """Raised when the C-API shared library is not built."""
 
     code = ErrorCode.DEPENDENCY_MISSING
@@ -414,10 +415,8 @@ class TritonKernelHandle:
         self.release()
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.release()
-        except Exception:
-            pass
 
 
 def compile(
@@ -500,10 +499,8 @@ class TIRModuleHandle:
         self.release()
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.release()
-        except Exception:
-            pass
 
 
 class TuningRecordHandle:
@@ -553,10 +550,8 @@ class TuningRecordHandle:
         self.release()
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.release()
-        except Exception:
-            pass
 
 
 def tir_parse(text: str, target: str) -> TIRModuleHandle:
@@ -672,10 +667,8 @@ class StableHLOHandle:
         self.release()
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.release()
-        except Exception:
-            pass
 
 
 class MeshHandle:
@@ -706,10 +699,8 @@ class MeshHandle:
         self.release()
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.release()
-        except Exception:
-            pass
 
 
 class ShardingSpecHandle:
@@ -740,10 +731,8 @@ class ShardingSpecHandle:
         self.release()
 
     def __del__(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.release()
-        except Exception:
-            pass
 
 
 def stablehlo_from_fx(fx_graph_json: str, function_name: str) -> StableHLOHandle:
@@ -944,7 +933,7 @@ __all__ = [
     # Triton vendor / arch constants
     "VENDOR_NVIDIA",
     # Errors
-    "CApiUnavailable",
+    "CApiUnavailableError",
     "MeshHandle",
     "ShardingSpecHandle",
     # XLA C-API

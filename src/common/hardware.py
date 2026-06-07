@@ -17,7 +17,7 @@ Critical rules (enforced by tests):
     independently. A system with only AMD GPUs is a first-class case.
   * Bandwidth is MEASURED when tools allow (nvidia-smi pcie link
     queries, rocm-smi --showlinkinfo) and falls back to a PCIe
-    gen × width calculation from sysfs when measurement is not
+    gen x width calculation from sysfs when measurement is not
     possible. 0-GPU systems return a valid empty topology.
   * NUMA-aware ordering: when NUMA topology is discoverable, devices
     are ordered so co-resident NUMA devices are adjacent in the list
@@ -31,6 +31,7 @@ phantom devices.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import platform
@@ -211,15 +212,15 @@ class DeviceTopology:
             ],
             "links": [
                 {
-                    "source_id": l.source_id,
-                    "target_id": l.target_id,
-                    "bandwidth_gbps": l.bandwidth_gbps,
-                    "link_type": l.link_type.value,
-                    "pcie_gen": l.pcie_gen,
-                    "pcie_width": l.pcie_width,
-                    "measured": l.measured,
+                    "source_id": link.source_id,
+                    "target_id": link.target_id,
+                    "bandwidth_gbps": link.bandwidth_gbps,
+                    "link_type": link.link_type.value,
+                    "pcie_gen": link.pcie_gen,
+                    "pcie_width": link.pcie_width,
+                    "measured": link.measured,
                 }
-                for l in self.links
+                for link in self.links
             ],
             "numa_nodes": dict(self.numa_nodes),
         }
@@ -362,11 +363,11 @@ def get_host_info() -> HostInfo:
 
 
 # Gbps per lane, full-duplex, for each PCIe generation.
-# Gen1: 2.5 GT/s × 8b/10b = 2 Gbps/lane
-# Gen2: 5   GT/s × 8b/10b = 4 Gbps/lane
-# Gen3: 8   GT/s × 128b/130b ≈ 7.877, rounded to 8 Gbps/lane
-# Gen4: 16  GT/s × 128b/130b ≈ 15.754, rounded to 16 Gbps/lane
-# Gen5: 32  GT/s × 128b/130b ≈ 31.508, rounded to 32 Gbps/lane
+# Gen1: 2.5 GT/s x 8b/10b = 2 Gbps/lane
+# Gen2: 5   GT/s x 8b/10b = 4 Gbps/lane
+# Gen3: 8   GT/s x 128b/130b ≈ 7.877, rounded to 8 Gbps/lane
+# Gen4: 16  GT/s x 128b/130b ≈ 15.754, rounded to 16 Gbps/lane
+# Gen5: 32  GT/s x 128b/130b ≈ 31.508, rounded to 32 Gbps/lane
 PCIE_GBPS_PER_LANE: dict[int, float] = {
     1: 2.0,
     2: 4.0,
@@ -378,7 +379,7 @@ PCIE_GBPS_PER_LANE: dict[int, float] = {
 
 
 def pcie_bandwidth_gbps(gen: int, width: int) -> float:
-    """Compute PCIe bandwidth in Gbps (full-duplex) for a gen×width link.
+    """Compute PCIe bandwidth in Gbps (full-duplex) for a genxwidth link.
 
     Returns 0.0 for unknown (gen<=0 or width<=0) values. This is the
     fallback bandwidth when no tool-side measurement is available.
@@ -1082,31 +1083,19 @@ def invalidate_enumeration_cache() -> None:
 
 
 def has_nvidia_gpu() -> bool:
-    for d in enumerate_devices():
-        if d.vendor == GpuVendor.NVIDIA:
-            return True
-    return False
+    return any(d.vendor == GpuVendor.NVIDIA for d in enumerate_devices())
 
 
 def has_amd_gpu() -> bool:
-    for d in enumerate_devices():
-        if d.vendor == GpuVendor.AMD:
-            return True
-    return False
+    return any(d.vendor == GpuVendor.AMD for d in enumerate_devices())
 
 
 def has_intel_gpu() -> bool:
-    for d in enumerate_devices():
-        if d.vendor == GpuVendor.INTEL:
-            return True
-    return False
+    return any(d.vendor == GpuVendor.INTEL for d in enumerate_devices())
 
 
 def has_apple_gpu() -> bool:
-    for d in enumerate_devices():
-        if d.vendor == GpuVendor.APPLE:
-            return True
-    return False
+    return any(d.vendor == GpuVendor.APPLE for d in enumerate_devices())
 
 
 def detect_gpu_vendors() -> set[Vendor]:
@@ -1209,10 +1198,8 @@ def _amd_pcie_link_query() -> dict[int, tuple[int, int]]:
         gen_match = re.search(r"PCIe Gen[^\d]*(\d+)", line, re.IGNORECASE)
         width_match = re.search(r"Width[^\d]*(\d+)", line, re.IGNORECASE)
         if gen_match and width_match:
-            try:
+            with contextlib.suppress(ValueError):
                 result[len(result)] = (int(gen_match.group(1)), int(width_match.group(1)))
-            except ValueError:
-                pass
     return result
 
 
@@ -1243,7 +1230,7 @@ def _nvidia_nvlink_topology() -> dict[tuple[int, int], float]:
     if not lines:
         return {}
     # First non-empty line is the header. Find GPU indices.
-    header = next((l for l in lines if "GPU" in l and any(c.isdigit() for c in l)), "")
+    header = next((line for line in lines if "GPU" in line and any(c.isdigit() for c in line)), "")
     if not header:
         return {}
     cols = [c for c in re.split(r"\s+", header.strip()) if c.startswith("GPU")]
@@ -1258,7 +1245,7 @@ def _nvidia_nvlink_topology() -> dict[tuple[int, int], float]:
 
     # NVLink bandwidths in nvidia-smi topo are listed in a unit-less form.
     # Common pattern: "NV1", "NV2", "NV12", "NVLink" with no numeric bandwidth.
-    # When the matrix reports "NV#" we treat it as 25 Gbps/lane × #lanes,
+    # When the matrix reports "NV#" we treat it as 25 Gbps/lane x #lanes,
     # but more conservatively we report 25.0 Gbps per "NV1" link and skip
     # ambiguous entries. 0 (no link) is reported as 0 Gbps.
     result: dict[tuple[int, int], float] = {}
@@ -1304,7 +1291,7 @@ def _bandwidth_for_pair(
 
     Priority:
       1. Measured NVLink / vendor-specific link (if provided).
-      2. PCIe gen×width fallback (whichever device has lower gen/width).
+      2. PCIe genxwidth fallback (whichever device has lower gen/width).
     """
     measured_nvlink = measured_nvlink or {}
 
@@ -1344,7 +1331,7 @@ def _sort_numa_first(devices: list[DeviceInfo]) -> list[DeviceInfo]:
     Devices with unknown NUMA (numa_node == -1) are grouped at the end.
     """
 
-    def key(d: DeviceInfo) -> tuple[int, int, int]:
+    def key(d: DeviceInfo) -> tuple[int, str, int]:
         # unknown NUMA at the end: use 10**9 as the sort key
         numa_key = d.numa_node if d.numa_node >= 0 else 10**9
         return (numa_key, d.vendor.value, d.device_id)

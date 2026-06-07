@@ -289,7 +289,7 @@ class AsyncCheckpointer:
                 continue
 
             result = self._save_checkpoint_sync(model, optimizer)
-            if result.is_err():
+            if isinstance(result, Err):
                 log.warning(
                     "Async checkpoint failed",
                     error=str(result.error),
@@ -323,7 +323,7 @@ class AsyncCheckpointer:
             model,
             optimizer if self.config.save_optimizer_state else None,
         )
-        if result.is_ok():
+        if isinstance(result, Ok):
             return result.unwrap()
         raise result.error
 
@@ -362,7 +362,7 @@ class AsyncCheckpointer:
                     model,
                     model_path,
                 )
-                if model_save.is_err():
+                if isinstance(model_save, Err):
                     return Err(model_save.error)
                 model_size, model_sha = model_save.unwrap()
                 optim_size, optim_sha = 0, ""
@@ -372,7 +372,7 @@ class AsyncCheckpointer:
                         optimizer,
                         optim_path,
                     )
-                    if optim_save.is_err():
+                    if isinstance(optim_save, Err):
                         return Err(optim_save.error)
                     optim_size, optim_sha = optim_save.unwrap()
 

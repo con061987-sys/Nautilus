@@ -248,36 +248,43 @@ class FatBinaryBuilder:
             if apple_result.is_usable and apple_result.output_bytes is not None:
                 if apple_result.metallib_bytes is not None:
                     apple_fmt = SectionFormat.METALLIB
+                    apple_bytes_for_section = apple_result.metallib_bytes
                 elif apple_result.air_bytes is not None:
                     apple_fmt = SectionFormat.AIR
+                    apple_bytes_for_section = apple_result.air_bytes
                 else:
-                    # Only MSL text is available. The linker only
-                    # embeds metallib / air binaries, so we must skip
-                    # the Apple section to avoid putting unparseable
-                    # source into the fat binary.
-                    logger.warning(
+                    # MSL text is the only Apple artifact. The linker
+                    # embeds only metallib/AIR binaries, so embedding
+                    # raw MSL would produce an unparseable section and
+                    # crash on macOS. Fail loudly rather than silently.
+                    raise CompilationError(
                         "Apple backend produced only MSL text; "
                         "no metallib or AIR bytes available. "
-                        "Skipping the Apple section. To embed an Apple "
-                        "section, install the Xcode Command Line Tools "
-                        "and ensure `xcrun metallib` is on PATH.",
-                        target=apple_result.target,
-                        kernel=config.kernel_name,
+                        "Install the Xcode Command Line Tools "
+                        "(`xcode-select --install`) and ensure "
+                        "`xcrun metallib` is on PATH so the Apple "
+                        "backend can produce a loadable .metallib.",
+                        context={
+                            "target": apple_result.target,
+                            "kernel": config.kernel_name,
+                            "msl_lines": (
+                                apple_result.msl_text.count("\n") if apple_result.msl_text else 0
+                            ),
+                        },
                     )
-                if apple_result.metallib_bytes is not None or apple_result.air_bytes is not None:
-                    fat_binary.add_section(
-                        KernelSection(
-                            vendor="apple",
-                            arch=apple_result.target,
-                            format=apple_fmt,
-                            data=apple_result.output_bytes,
-                            metadata={
-                                "compilation_time_s": apple_result.compilation_time_s,
-                                "used_triton_metal_target": apple_result.used_triton_metal_target,
-                                "xcrun_version": apple_result.xcrun_version,
-                            },
-                        )
+                fat_binary.add_section(
+                    KernelSection(
+                        vendor="apple",
+                        arch=apple_result.target,
+                        format=apple_fmt,
+                        data=apple_bytes_for_section,
+                        metadata={
+                            "compilation_time_s": apple_result.compilation_time_s,
+                            "used_triton_metal_target": apple_result.used_triton_metal_target,
+                            "xcrun_version": apple_result.xcrun_version,
+                        },
                     )
+                )
 
         # Stage 2: Compile the C runtime stub
         t0 = time.perf_counter()

@@ -20,13 +20,16 @@ StableHLO is:
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import subprocess
 import tempfile
 import time
 import warnings
-from typing import Any
+from enum import Enum
+from enum import auto as _auto
+from typing import Any, Protocol
 
 from src.common.errors import StableHLOExportError
 from src.common.logging import get_logger, span, stage
@@ -263,7 +266,7 @@ class _TVMScriptExporter:
             from tvm.relax.frontend.torch import from_pytorch
 
             scripted = torch.jit.script(graph_module)
-            mod, params = from_pytorch(scripted, example_inputs)
+            mod, _params = from_pytorch(scripted, example_inputs)
         except Exception as jit_err:
             # Manual fallback: emit TVMScript from FX node walk
             mod = cls._build_relax_from_fx(graph_module, example_inputs)
@@ -308,9 +311,7 @@ class _TVMScriptExporter:
         """
         try:
             import torch
-            import tvm
             import tvm.relax as relax
-            from tvm.relax.dpl import PatternContext
 
         except ImportError:
             return None
@@ -542,7 +543,22 @@ class _TVMScriptExporter:
 
 # ── Public exporter class ──────────────────────────────────────────────
 
-_EXPORT_TIERS = [
+class _ExporterProtocol(Protocol):
+    """Protocol for StableHLO exporter tiers."""
+
+    @staticmethod
+    def is_available() -> bool: ...
+
+    @classmethod
+    def export(
+        cls,
+        graph_module: Any,
+        example_inputs: tuple[Any, ...],
+        function_name: str = "forward",
+    ) -> StableHLOModule: ...
+
+
+_EXPORT_TIERS: list[tuple[str, type[_ExporterProtocol]]] = [
     ("torch_xla", _TorchXLAExporter),
     ("onnx_bridge", _ONNXBridgeExporter),
     ("tvmscript", _TVMScriptExporter),
@@ -675,10 +691,8 @@ class StableHLOExporter:
                         st.set(status="failed", error=str(exc))
                         # Record failure in circuit breaker
                         if tier_name in self._breakers:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self._breakers[tier_name]._record_failure(exc)
-                            except Exception:
-                                pass
 
         # All three paths failed
         raise StableHLOExportError(
@@ -715,9 +729,6 @@ class StableHLOExporter:
 
 
 # ── Deprecated (backward-compatible) API surface ───────────────────────
-
-from enum import Enum  # noqa: E402
-from enum import auto as _auto
 
 
 class ExportMethod(Enum):

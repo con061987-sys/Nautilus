@@ -487,7 +487,7 @@ class Pipeline:
             raise KernelNotFoundError(
                 f"No @triton.jit function in {path} and torch is not "
                 f"available for model capture ({exc}).",
-            )
+            ) from exc
 
         module = _import_user_module(path)
         model = None
@@ -556,7 +556,7 @@ class Pipeline:
         # missing or any other dependency is unavailable, log a
         # warning and produce a single-shard plan.
         try:
-            from src.bridges.pytorch_xla import AutoShardingBridge, DeviceMesh
+            from src.bridges.pytorch_xla import DeviceMesh
             from src.bridges.pytorch_xla.device_mesh import (
                 DeviceVendor,
                 InterconnectType,
@@ -731,7 +731,7 @@ class Pipeline:
             mapped = bridge._tuning_chain(
                 metadata,
                 target.to_tvm_target(),
-            )
+            ).unwrap()
             return TuningConfig(
                 block_m=mapped.block_m,
                 block_n=mapped.block_n,
@@ -787,7 +787,6 @@ class Pipeline:
         try:
             from src.bridges.aot_packager.builder import (
                 FatBinaryBuilder,
-                FatBinaryConfig,
             )
         except ImportError as exc:
             raise DependencyMissingError(
@@ -873,8 +872,7 @@ class Pipeline:
                 # The builder result exposes the per-vendor
                 # compilation result; if it failed, mark skipped.
                 sub = getattr(result, f"{vendor_str}_result", None)
-                if sub is not None and not getattr(sub, "success", True):
-                    if vendor_str not in self.ctx.skipped_vendors:
+                if sub is not None and not getattr(sub, "success", True) and vendor_str not in self.ctx.skipped_vendors:
                         self.ctx.skipped_vendors.append(vendor_str)
         return {
             "output_path": (str(result.output_path) if result.output_path else None),

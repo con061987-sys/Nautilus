@@ -40,7 +40,7 @@ def _extract_kernel_from_source(source: str) -> tuple[str, str]:
         raise KernelNotFoundError(
             f"Failed to parse source: {exc}",
             context={"line": exc.lineno, "offset": exc.offset},
-        )
+        ) from exc
     lines = source.splitlines(keepends=True)
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -248,7 +248,7 @@ def _tune_impl(
             MetadataExtractor,
         )
 
-        extractor = MetadataExtractor()
+        MetadataExtractor()
         # Synthesize a metadata record. We use the source's signature
         # to get a default block size; the real TVM tuning pass will
         # override it.
@@ -267,13 +267,14 @@ def _tune_impl(
         # convert it to the vendor-neutral TuningConfig for output.
         sp.set(kernel=final_name, target=target, trials=trials)
         try:
-            mapped = bridge._tuning_chain(metadata, hardware.to_tvm_target())
+            result = bridge._tuning_chain(metadata, hardware.to_tvm_target())
+            mapped = result.unwrap()
         except Exception as exc:
             log.error("tuning failed", error=str(exc))
             raise CompilationError(
                 f"TVM MetaSchedule tuning failed: {exc}",
                 cause=exc,
-            )
+            ) from exc
         config = TuningConfig(
             block_m=mapped.block_m,
             block_n=mapped.block_n,

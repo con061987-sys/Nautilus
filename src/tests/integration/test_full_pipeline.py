@@ -24,11 +24,13 @@ installed, the test should pass; when not, it should fail loudly
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import sys
 import textwrap
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -403,7 +405,7 @@ class TestFullPipelineE2E:
         restored = FBSerializer.from_bytes(blob)
         assert restored.kernel_name == fat_binary.kernel_name
         assert len(restored.sections) == len(fat_binary.sections)
-        for orig, rest in zip(fat_binary.sections, restored.sections):
+        for orig, rest in zip(fat_binary.sections, restored.sections, strict=True):
             assert orig.data == rest.data
             assert orig.vendor == rest.vendor
             assert orig.arch == rest.arch
@@ -483,7 +485,7 @@ class TestFullPipelineE2E:
                     ext="bin",
                 )
 
-        assert build_result.success or True
+        assert True
 
     def test_pipeline_with_cross_vendor_output(
         self,
@@ -522,9 +524,9 @@ class TestFullPipelineE2E:
         assert "nvidia" in vendor_set or len(fat.sections) > 0
         assert fat.kernel_name == "multi_vendor_kernel"
         blob = fat.to_bytes()
-        from src.common.types import FatBinary as FB
+        from src.common import FatBinary
 
-        restored = FB.from_bytes(blob)
+        restored = FatBinary.from_bytes(blob)
         assert len(restored.sections) == len(fat.sections)
 
 
@@ -812,13 +814,12 @@ class TestPartialPipelines:
 
         fat = build_result.fat_binary
 
+        from src.common import Arch, Vendor
+
         handles: list[KernelHandle] = []
         for section in fat.sections:
-            from src.common.primitives import Arch as A
-            from src.common.primitives import Vendor as V
-
-            vendor = V(section.vendor) if isinstance(section.vendor, str) else section.vendor
-            arch = A(section.arch) if isinstance(section.arch, str) else section.arch
+            vendor = Vendor(section.vendor) if isinstance(section.vendor, str) else section.vendor
+            arch = Arch(section.arch) if isinstance(section.arch, str) else section.arch
             handle = KernelHandle(
                 kernel_name=fat.kernel_name,
                 vendor=vendor,
@@ -838,9 +839,9 @@ class TestPartialPipelines:
             assert sym.startswith("nautilus_kernel_")
 
         blob = fat.to_bytes()
-        from src.common.types import FatBinary as FB
+        from src.common import FatBinary
 
-        restored = FB.from_bytes(blob)
+        restored = FatBinary.from_bytes(blob)
         assert restored.kernel_name == "dispatch_test"
 
     def test_cuda_ingest_to_tune(
@@ -858,15 +859,13 @@ class TestPartialPipelines:
         the tuning bridge can consume without type errors.
         """
         # compile_source exercises the parser mock through the compiler's pipeline
-        try:
-            results = cuda_ingestor.compile_source(
+        with contextlib.suppress(Exception):
+            cuda_ingestor.compile_source(
                 "__global__ void vec_add(float* a, float* b, float* c, int n) {"
                 "  int idx = blockIdx.x * blockDim.x + threadIdx.x;"
                 "  if (idx < n) c[idx] = a[idx] + b[idx];"
                 "}"
             )
-        except Exception:
-            results = []
 
         if hasattr(cuda_ingestor, "_mock_parse"):
             cuda_ingestor._mock_parse.assert_called()
@@ -1247,10 +1246,8 @@ class TestFailureModes:
         )
 
         # Trigger the breaker by failing once
-        try:
+        with contextlib.suppress(Exception):
             breaker.call(_always_fail)
-        except Exception:
-            pass
 
         # The breaker should now be open
         assert breaker.state == CircuitState.OPEN, f"Expected OPEN, got {breaker.state}"
@@ -1399,11 +1396,11 @@ class TestCrossArchitecture:
 
         # Verify the sections serialize/deserialize correctly
         blob = fat.to_bytes()
-        from src.common.types import FatBinary as FB
+        from src.common import FatBinary
 
-        restored = FB.from_bytes(blob)
+        restored = FatBinary.from_bytes(blob)
         assert len(restored.sections) == len(fat.sections)
-        for orig, rest in zip(fat.sections, restored.sections):
+        for orig, rest in zip(fat.sections, restored.sections, strict=True):
             assert orig.sha256 == rest.sha256
 
     @pytest.mark.parametrize(
@@ -1469,17 +1466,17 @@ class TestCrossArchitecture:
         """DeviceMesh correctly represents heterogeneous clusters."""
         from src.bridges.pytorch_xla.device_mesh import (
             DeviceMesh,
+            DeviceVendor,
             InterconnectType,
             MeshDevice,
         )
-        from src.bridges.pytorch_xla.device_mesh import DeviceVendor as DV
 
         # Create a mixed-vendor mesh: 2 Nvidia + 2 AMD
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
                     device_id=0,
-                    vendor=DV.NVIDIA,
+                    vendor=DeviceVendor.NVIDIA,
                     arch="sm_90",
                     memory_gb=80.0,
                     compute_tflops=989.0,
@@ -1487,7 +1484,7 @@ class TestCrossArchitecture:
                 ),
                 MeshDevice(
                     device_id=1,
-                    vendor=DV.NVIDIA,
+                    vendor=DeviceVendor.NVIDIA,
                     arch="sm_90",
                     memory_gb=80.0,
                     compute_tflops=989.0,
@@ -1495,7 +1492,7 @@ class TestCrossArchitecture:
                 ),
                 MeshDevice(
                     device_id=2,
-                    vendor=DV.AMD,
+                    vendor=DeviceVendor.AMD,
                     arch="gfx942",
                     memory_gb=128.0,
                     compute_tflops=653.0,
@@ -1503,7 +1500,7 @@ class TestCrossArchitecture:
                 ),
                 MeshDevice(
                     device_id=3,
-                    vendor=DV.AMD,
+                    vendor=DeviceVendor.AMD,
                     arch="gfx942",
                     memory_gb=128.0,
                     compute_tflops=653.0,
@@ -1515,8 +1512,8 @@ class TestCrossArchitecture:
 
         assert len(mesh.devices) == 4
         # Device 0 and 1 should be Nvidia
-        nvidia_devices = [d for d in mesh.devices if d.vendor == DV.NVIDIA]
-        amd_devices = [d for d in mesh.devices if d.vendor == DV.AMD]
+        nvidia_devices = [d for d in mesh.devices if d.vendor == DeviceVendor.NVIDIA]
+        amd_devices = [d for d in mesh.devices if d.vendor == DeviceVendor.AMD]
         assert len(nvidia_devices) == 2
         assert len(amd_devices) == 2
         assert nvidia_devices[0].arch == "sm_90"

@@ -219,11 +219,12 @@ class TestSectionNamingConvention:
     def test_section_name_length_limit(self) -> None:
         """Section names must be 1-64 characters."""
         from src.bridges.aot_packager.linker import validate_section_name
+        from src.common.errors import LinkingError
 
         validate_section_name(".nautilus.nvidia.matmul")  # should not raise
-        with pytest.raises(Exception):
+        with pytest.raises(LinkingError):
             validate_section_name("")
-        with pytest.raises(Exception):
+        with pytest.raises(LinkingError):
             validate_section_name("." * 65)
 
 
@@ -253,7 +254,7 @@ class TestRuntimeStubCompilation:
                 "-Werror",
                 "-std=c11",
                 "-I",
-                str(stub_src.parent.parent.parent),  # so it finds c_api/
+                str(stub_src.parent.parent.parent / "c_api"),  # so it finds triton_c_api.h
                 "-o",
                 str(stub_o),
                 str(stub_src),
@@ -687,6 +688,8 @@ class TestRuntimeVendorDetection:
                 str(stub_dir),
                 "-I",
                 str(repo_root / "src"),
+                "-I",
+                str(repo_root / "src" / "c_api"),
                 "-o",
                 str(binary),
                 str(test_c),

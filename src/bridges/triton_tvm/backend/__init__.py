@@ -21,9 +21,16 @@ Architecture:
 # All three MUST use the same format or the bridge can never find what
 # was written. The format embeds the project name (for disambiguation
 # in shared dicts), the stage, the source hash, and the kernel name.
-CAPTURE_KEY_FMT = "nautilus:ttgir:{source_hash}:{kernel_name}"
-
-from .compiler import TVMBackend
+# Imported from .compiler to break the circular import:
+#   compiler.py needs CAPTURE_KEY_FMT at line 298 (within a function)
+#   __init__.py needs TVMBackend from compiler.py
+# Defining the constant here would force compiler.py to import a partially
+# initialized package. Keeping the definition in compiler.py and re-exporting
+# from here lets both __init__.py consumers and ir_capture.py get it cleanly.
+from .compiler import (
+    CAPTURE_KEY_FMT,
+    TVMBackend,
+)
 from .driver import TVMDriver
 from .options import TVMOptions
 

@@ -211,7 +211,7 @@ class MemoryReclaimer:
                     )
                 )
 
-            if reclaim_result.is_err():
+            if isinstance(reclaim_result, Err):
                 log.warning(
                     "reclaim returned Err",
                     device=device_id,
@@ -409,7 +409,7 @@ class MemoryReclaimer:
                 for device_id in devices:
                     if self.should_reclaim(device_id):
                         result = self.reclaim(device_id)
-                        if result.is_err():
+                        if isinstance(result, Err):
                             log.warning(
                                 "auto-reclaim failed",
                                 device=device_id,

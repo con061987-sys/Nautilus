@@ -40,42 +40,8 @@ from src.common.primitives import (
     HardwareTarget,
     Ok,
     Result,
+    Vendor,
 )
-from src.common.primitives import (
-    Vendor as _PrimitiveVendor,
-)
-
-# Re-export so ``from src.common.types import Vendor`` keeps working.
-Vendor = _PrimitiveVendor
-
-
-# Vendor.from_string raises ConfigError, so it lives here (not in
-# primitives) to avoid an errors→primitives dependency.
-@classmethod  # type: ignore[misc]
-def _vendor_from_string(cls, s: str, strict: bool = True) -> Vendor:
-    """Parse a vendor name into a Vendor.
-
-    Args:
-        s: Input string. Case-insensitive.
-        strict: If True, raise ConfigError on unknown input.
-            If False, return Vendor.UNKNOWN (legacy behavior).
-
-    Defaults to strict=True so that typos surface at config-load
-    time rather than as silent Vendor.UNKNOWN at runtime.
-    """
-    try:
-        return cls(s.lower())
-    except ValueError:
-        if strict:
-            raise ConfigError(
-                f"Unknown vendor: {s!r}",
-                context={"input": s, "valid": [v.value for v in cls]},
-            ) from None
-        return cls.UNKNOWN
-
-
-_PrimitiveVendor.from_string = _vendor_from_string  # type: ignore[attr-defined]
-
 
 # --- Fat binary ---
 

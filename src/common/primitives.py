@@ -34,7 +34,7 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar
 
 # ---------------------------------------------------------------------------
 # Vendor / architecture enums
@@ -56,6 +56,30 @@ class Vendor(str, Enum):
     INTEL = "intel"
     APPLE = "apple"
     UNKNOWN = "unknown"
+
+    @classmethod
+    def from_string(cls, s: str, strict: bool = True) -> Vendor:
+        """Parse a vendor name into a Vendor.
+
+        Args:
+            s: Input string. Case-insensitive.
+            strict: If True, raise ConfigError on unknown input.
+                If False, return Vendor.UNKNOWN.
+
+        Defaults to strict=True so that typos surface at config-load
+        time rather than as silent Vendor.UNKNOWN at runtime.
+        """
+        try:
+            return cls(s.lower())
+        except ValueError:
+            if strict:
+                from src.common.errors import ConfigError
+
+                raise ConfigError(
+                    f"Unknown vendor: {s!r}",
+                    context={"input": s, "valid": [v.value for v in cls]},
+                ) from None
+            return cls.UNKNOWN
 
 
 class Arch(str, Enum):
@@ -387,7 +411,7 @@ class Err(Generic[E]):
 
 
 # Type alias for the union; spelled out so type checkers accept both arms.
-Result = Union[Ok[T], Err[E]]
+Result = Ok[T] | Err[E]
 
 
 # ---------------------------------------------------------------------------

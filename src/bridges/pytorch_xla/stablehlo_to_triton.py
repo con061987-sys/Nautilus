@@ -751,7 +751,7 @@ def _handle_slice(result_var: str, operands: list[str], op: ParsedOp, _) -> str:
         stride_list = [1] * len(start_list)
     # We emit a tuple of slice tuples. Triton accepts
     #   x[start0:limit0:stride0, start1:limit1:stride1, ...]
-    slices = ", ".join(f"{s}:{l}:{st}" for s, l, st in zip(start_list, limit_list, stride_list))
+    slices = ", ".join(f"{s}:{lim}:{st}" for s, lim, st in zip(start_list, limit_list, stride_list, strict=True))
     return f"    {result_var} = {x}[{slices}]\n"
 
 

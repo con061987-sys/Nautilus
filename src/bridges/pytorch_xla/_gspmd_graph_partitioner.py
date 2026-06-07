@@ -349,7 +349,7 @@ def _emit_sharded_arg_collectives(
     happens at the start of a sharded forward pass.
     """
     new_body = body
-    for arg_match in _FUNC_ARG_RE.finditer(body[:200]):  # Only the signature
+    for _arg_match in _FUNC_ARG_RE.finditer(body[:200]):  # Only the signature
         break  # we use _FUNC_SIG_RE below
 
     # Find the function signature
@@ -374,7 +374,7 @@ def _emit_sharded_arg_collectives(
     insert_at = sig_match.end()
 
     insertions: list[str] = []
-    for ssa_name, type_str, _, axes in arg_infos:
+    for ssa_name, type_str, _, _axes in arg_infos:
         ssa_counter[0] += 1
         reduced_ssa = f"%_shard_reduce_{ssa_counter[0]}"
         insertions.append(_emit_all_reduce(reduced_ssa, ssa_name, type_str, replica_groups))
@@ -490,8 +490,6 @@ def partition_mlir_with_collectives(
     body_start, body_end = body_match
 
     body = mlir_text[body_start:body_end]
-    prefix = mlir_text[:body_start]
-    suffix = mlir_text[body_end:]
 
     # Extract return type
     return_type = ""

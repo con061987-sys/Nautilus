@@ -27,14 +27,14 @@ from src.common.logging import get_logger
 try:
     import tvm
     import tvm.tir as tir
-    from tvm.script import tir as T
+    from tvm.script import tir as _tir
 
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
 
-    class T:  # type: ignore
-        class prim_func:
+    class T:
+        class PrimFunc:
             pass
 
         class Buffer:
@@ -96,17 +96,17 @@ class TIRTemplateBuilder:
         k: int,
         dtype: str = "float32",
     ) -> tvm.IRModule:
-        @T.prim_func
+        @_tir.prim_func
         def matmul_kernel(
-            A: T.Buffer[(m, k), dtype],
-            B: T.Buffer[(k, n), dtype],
-            C: T.Buffer[(m, n), dtype],
+            A: _tir.Buffer[(m, k), dtype],
+            B: _tir.Buffer[(k, n), dtype],
+            C: _tir.Buffer[(m, n), dtype],
         ) -> None:
-            for i, j, kk in T.grid(m, n, k):
-                with T.block("C"):
-                    vi, vj, vk = T.axis.remap("SSR", [i, j, kk])
-                    with T.init():
-                        C[vi, vj] = T.cast(T.float32(0), dtype)
+            for i, j, kk in _tir.grid(m, n, k):
+                with _tir.block("C"):
+                    vi, vj, vk = _tir.axis.remap("SSR", [i, j, kk])
+                    with _tir.init():
+                        C[vi, vj] = _tir.cast(_tir.float32(0), dtype)
                     C[vi, vj] = C[vi, vj] + A[vi, vk] * B[vk, vj]
 
         return tvm.IRModule({"main": matmul_kernel})
@@ -121,24 +121,24 @@ class TIRTemplateBuilder:
         assert len(shape) == 2, "Only 2D reduction templates supported"
         d0, d1 = shape
 
-        @T.prim_func
+        @_tir.prim_func
         def reduce_kernel(
-            inp: T.Buffer[(d0, d1), dtype],
-            out: T.Buffer[(d0,), dtype],
+            inp: _tir.Buffer[(d0, d1), dtype],
+            out: _tir.Buffer[(d0,), dtype],
         ) -> None:
-            for i in T.grid(d0):
-                with T.block("reduce"):
-                    vi = T.axis.spatial(d0, i)
-                    with T.init():
+            for i in _tir.grid(d0):
+                with _tir.block("reduce"):
+                    vi = _tir.axis.spatial(d0, i)
+                    with _tir.init():
                         if op == "max":
-                            out[vi] = T.cast(T.float32(-1e38), dtype)
+                            out[vi] = _tir.cast(_tir.float32(-1e38), dtype)
                         else:
-                            out[vi] = T.cast(T.float32(0), dtype)
-                    for k in T.grid(d1):
-                        with T.block("reduce_inner"):
-                            vk = T.axis.reduce(d1, k)
+                            out[vi] = _tir.cast(_tir.float32(0), dtype)
+                    for k in _tir.grid(d1):
+                        with _tir.block("reduce_inner"):
+                            vk = _tir.axis.reduce(d1, k)
                             if op == "max":
-                                out[vi] = T.max(out[vi], inp[vi, vk])
+                                out[vi] = _tir.max(out[vi], inp[vi, vk])
                             else:
                                 out[vi] = out[vi] + inp[vi, vk]
 
@@ -150,21 +150,21 @@ class TIRTemplateBuilder:
         dtype: str = "float32",
         op: str = "add",
     ) -> tvm.IRModule:
-        @T.prim_func
+        @_tir.prim_func
         def elem_kernel(
-            A: T.Buffer[shape, dtype],
-            B: T.Buffer[shape, dtype],
-            C: T.Buffer[shape, dtype],
+            A: _tir.Buffer[shape, dtype],
+            B: _tir.Buffer[shape, dtype],
+            C: _tir.Buffer[shape, dtype],
         ) -> None:
-            for idx in T.grid(*shape):
-                with T.block("elem"):
-                    vi = [T.axis.spatial(s, i) for s, i in zip(shape, idx)]
+            for idx in _tir.grid(*shape):
+                with _tir.block("elem"):
+                    vi = [_tir.axis.spatial(s, i) for s, i in zip(shape, idx, strict=True)]
                     if op == "add":
                         C[vi] = A[vi] + B[vi]
                     elif op == "mul":
                         C[vi] = A[vi] * B[vi]
                     elif op == "max":
-                        C[vi] = T.max(A[vi], B[vi])
+                        C[vi] = _tir.max(A[vi], B[vi])
                     else:
                         C[vi] = A[vi] + B[vi]
 
@@ -219,7 +219,6 @@ class TIRTemplateBuilder:
         resulting PrimFunc is wrapped in an IRModule.
         """
         import tvm
-        from tvm.script import tir as T
 
         # Build a namespace for the TVMScript to evaluate in
         namespace: dict[str, Any] = {
