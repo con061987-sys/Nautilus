@@ -27,6 +27,8 @@ _LAZY_EXPORTS = {
     "FusionAnalyzer": "src.bridges.triton_tvm.fusion_analyzer",
     "PatternMatch": "src.bridges.triton_tvm.fusion_analyzer",
     "ConfigCache": "src.bridges.triton_tvm.config_cache",
+    "PerformanceDB": "src.bridges.triton_tvm.performance_db",
+    "Measurement": "src.bridges.triton_tvm.performance_db",
     "ConfigMapper": "src.bridges.triton_tvm.config_mapper",
     "MappedTuningConfig": "src.bridges.triton_tvm.config_mapper",
     "ExternMatmulBuilder": "src.bridges.triton_tvm.extern_bridge",
@@ -51,6 +53,10 @@ _LAZY_EXPORTS = {
     "list_strategies": "src.bridges.triton_tvm.search_strategy",
     "save_strategy_report": "src.bridges.triton_tvm.search_strategy",
     "strategy_to_tune_kwargs": "src.bridges.triton_tvm.search_strategy",
+    # transfer learning
+    "TransferEngine": "src.bridges.triton_tvm.transfer_learning",
+    "TransferredConfig": "src.bridges.triton_tvm.transfer_learning",
+    "transfer_config": "src.bridges.triton_tvm.transfer_learning",
     # kernel fusion engine
     "FusionPlanner": "src.bridges.triton_tvm.kernel_fusion",
     "FusionPlan": "src.bridges.triton_tvm.kernel_fusion",
