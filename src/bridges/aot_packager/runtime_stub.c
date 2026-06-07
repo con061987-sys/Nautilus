@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../c_api/triton_c_api.h"
+#include "triton_c_api.h"  // resolved via -I flag at build time
 
 /* Avoid pulling in <stdio.h> for nostdlib builds; we implement what we need.
  * These are kept available for future expansion (e.g. a debug logger)

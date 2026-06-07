@@ -502,10 +502,14 @@ class FatBinaryBuilder:
                 "Install gcc (apt install gcc / brew install gcc).",
             )
         try:
+            # Add -I flag so #include "../../c_api/triton_c_api.h" resolves
+            # even when runtime_stub.c is compiled from a temp cache dir.
+            c_api_include = str(Path(__file__).resolve().parent.parent.parent / "c_api")
             cmd = [
                 "gcc",
                 "-c",
                 "-fPIC",
+                f"-I{c_api_include}",
                 "-o",
                 str(output_path),
                 str(stub_path),
