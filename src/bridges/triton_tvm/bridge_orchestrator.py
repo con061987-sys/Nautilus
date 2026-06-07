@@ -25,6 +25,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
+from src.bridges.triton_tvm.config_cache import ConfigCache
 from src.bridges.triton_tvm.config_mapper import ConfigMapper, MappedTuningConfig
 from src.bridges.triton_tvm.metadata_extractor import (
     KernelMetadata,
@@ -142,6 +143,11 @@ class TritonTVMBridge:
         self._lru_order: list[str] = []
         self._max_cache_entries = 256
 
+        # Persistent config cache (separate from the in-memory + disk
+        # bridge cache above).  Keyed by sha256(IR_hash + vendor + arch)
+        # so kernel edits invalidate automatically.
+        self.config_cache = ConfigCache()
+
         # Stage timing
         self._stages: dict[str, float] = {}
 
@@ -187,7 +193,7 @@ class TritonTVMBridge:
         )
         self._stages["extract"] = (time.perf_counter() - t0) * 1000
 
-        # Step 2: Check cache
+        # Step 2: Check cache (in-memory + bridge disk + ConfigCache)
         if self.enable_cache and not force_retune:
             t0 = time.perf_counter()
             cached = self._get_cached(metadata.cache_key, target)
@@ -195,6 +201,21 @@ class TritonTVMBridge:
                 elapsed = (time.perf_counter() - start) * 1000
                 return TuningResult(
                     config=cached,
+                    fallback_tier=FallbackTier.L3_DISK_CACHE,
+                    total_duration_ms=elapsed,
+                    cache_hit=True,
+                    stages=self._stages,
+                )
+
+            # Step 2b: Check persistent ConfigCache
+            vendor, arch = self._vendor_arch_from_target(target)
+            cc_cached = self.config_cache.get(metadata.cache_key, vendor, arch)
+            if cc_cached is not None:
+                config = MappedTuningConfig(**cc_cached)
+                self._set_cache(metadata.cache_key, target, config)
+                elapsed = (time.perf_counter() - start) * 1000
+                return TuningResult(
+                    config=config,
                     fallback_tier=FallbackTier.L3_DISK_CACHE,
                     total_duration_ms=elapsed,
                     cache_hit=True,
@@ -212,9 +233,11 @@ class TritonTVMBridge:
                 error=tune_result.error.message,
             )
 
-        # Cache the result
+        # Cache the result (bridge cache + ConfigCache)
         if self.enable_cache:
             self._set_cache(metadata.cache_key, target, mapped)
+            vendor, arch = self._vendor_arch_from_target(target)
+            self.config_cache.set(metadata.cache_key, vendor, arch, mapped.__dict__)
 
         elapsed = (time.perf_counter() - start) * 1000
         return TuningResult(
@@ -333,7 +356,7 @@ class TritonTVMBridge:
                 st.metadata["ops"] = len(captured.ops_seen)
                 self._stages["ir_capture"] = st.duration_ms
 
-            # Stage 2: Cache check
+            # Stage 2: Cache check (bridge cache + ConfigCache)
             cache_key = captured.cache_key
             if self.enable_cache and not force_retune:
                 with stage_ctx(sp, "cache_check") as st:
@@ -348,6 +371,23 @@ class TritonTVMBridge:
                             cache_hit=True,
                             stages=self._stages,
                         )
+
+                    # Stage 2b: Persistent ConfigCache check
+                    vendor, arch = self._vendor_arch_from_target(target)
+                    cc_cached = self.config_cache.get(cache_key, vendor, arch)
+                    if cc_cached is not None:
+                        config = MappedTuningConfig(**cc_cached)
+                        self._set_cache(cache_key, target, config)
+                        elapsed = (time.perf_counter() - start) * 1000
+                        st.metadata["cache_hit"] = True
+                        return TuningResult(
+                            config=config,
+                            fallback_tier=FallbackTier.L3_DISK_CACHE,
+                            total_duration_ms=elapsed,
+                            cache_hit=True,
+                            stages=self._stages,
+                        )
+
                     st.metadata["cache_hit"] = False
 
             # Stage 3: Build TIR template from REAL bounds
@@ -401,9 +441,11 @@ class TritonTVMBridge:
                     st.metadata["handled"] = True
                     self._stages["extern_bridge"] = st.duration_ms
 
-            # Stage 6: Cache the result
+            # Stage 6: Cache the result (bridge cache + ConfigCache)
             if self.enable_cache:
                 self._set_cache(cache_key, target, mapped)
+                vendor, arch = self._vendor_arch_from_target(target)
+                self.config_cache.set(cache_key, vendor, arch, mapped.__dict__)
 
             elapsed = (time.perf_counter() - start) * 1000
             self.timeout_manager.check_total_budget()
@@ -741,6 +783,12 @@ class TritonTVMBridge:
         cached = None
         if self.enable_cache:
             cached = self._get_cached(metadata.cache_key, target)
+            if cached is None:
+                vendor, arch = self._vendor_arch_from_target(target)
+                cc_cached = self.config_cache.get(metadata.cache_key, vendor, arch)
+                if cc_cached is not None:
+                    cached = MappedTuningConfig(**cc_cached)
+                    self._set_cache(metadata.cache_key, target, cached)
         if cached is not None:
             elapsed = (time.perf_counter() - start) * 1000
             return TuningResult(
@@ -763,6 +811,8 @@ class TritonTVMBridge:
             )
         if self.enable_cache:
             self._set_cache(metadata.cache_key, target, mapped)
+            vendor, arch = self._vendor_arch_from_target(target)
+            self.config_cache.set(metadata.cache_key, vendor, arch, mapped.__dict__)
         elapsed = (time.perf_counter() - start) * 1000
         return TuningResult(
             config=mapped,
@@ -1052,6 +1102,63 @@ class TritonTVMBridge:
     # ------------------------------------------------------------------
     # Grid resolution
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # ConfigCache integration helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _vendor_arch_from_target(target: str) -> tuple[str, str]:
+        """Extract (vendor, arch) from a TVM target string for cache keying.
+
+        Examples::
+
+            "nvidia/nvidia-h100"      → ("nvidia", "sm_90")
+            "rocm/gfx942"             → ("amd", "gfx942")
+            "intel/gaudi-2"           → ("intel", "gaudi2")
+            "cuda"                    → ("nvidia", "generic")
+        """
+        t = target.lower()
+        if any(x in t for x in ("nvidia", "cuda")):
+            vendor = "nvidia"
+            arch = "generic"
+            for a in ("sm_90", "sm_80", "sm_70", "h100", "h200", "a100"):
+                if a in t:
+                    arch = f"sm_{a.split('_')[-1]}" if a.startswith("sm_") else a
+                    break
+        elif any(x in t for x in ("amd", "rocm")):
+            vendor = "amd"
+            # Extract gfxXXX from target
+            arch = "generic"
+            for part in t.replace("/", " ").split():
+                if part.startswith("gfx"):
+                    arch = part
+                    break
+        elif any(x in t for x in ("intel", "gaudi", "spirv", "xe")):
+            vendor = "intel"
+            if "gaudi2" in t or "gaudi-2" in t:
+                arch = "gaudi2"
+            elif "gaudi3" in t or "gaudi-3" in t:
+                arch = "gaudi3"
+            else:
+                # Try to extract xe_* or other arch markers
+                arch = "generic"
+                for part in t.replace("/", " ").split():
+                    if part.startswith("xe") or part.startswith("intel"):
+                        arch = part
+                        break
+        elif "apple" in t or "metal" in t:
+            vendor = "apple"
+            for m in ("m4", "m3", "m2", "m1"):
+                if m in t:
+                    arch = f"apple_{m}"
+                    break
+            else:
+                arch = "apple_generic"
+        else:
+            vendor = "unknown"
+            arch = "generic"
+        return vendor, arch
 
     @staticmethod
     def _resolve_grid(grid: tuple[int, ...] | Callable) -> tuple[int, int, int]:
