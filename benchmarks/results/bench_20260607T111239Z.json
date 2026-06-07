@@ -1,0 +1,38 @@
+{
+  "run_id": "20260607T111239Z",
+  "started_at": "2026-06-07T11:12:39.369619+00:00",
+  "finished_at": "2026-06-07T11:12:40.590280+00:00",
+  "git_sha": "59448640322b0a397b6135fbc8846f00d87608a0",
+  "git_branch": "main",
+  "host": "codespaces-341700",
+  "nautilus_version": "",
+  "schema_version": 1,
+  "results": [
+    {
+      "benchmark": "kernels/matmul",
+      "vendor": "amd/gfx942",
+      "status": "skipped",
+      "error": "rocm device not available on this host",
+      "compile_time_s": null,
+      "exec_time_s": null,
+      "memory_mb": 333.76953125,
+      "binary_size_b": null,
+      "params": {},
+      "extras": {},
+      "timestamp": "2026-06-07T11:12:40.590053+00:00"
+    },
+    {
+      "benchmark": "kernels/matmul",
+      "vendor": "intel/xe_hpg",
+      "status": "skipped",
+      "error": "xpu device not available on this host",
+      "compile_time_s": null,
+      "exec_time_s": null,
+      "memory_mb": 333.76953125,
+      "binary_size_b": null,
+      "params": {},
+      "extras": {},
+      "timestamp": "2026-06-07T11:12:40.590230+00:00"
+    }
+  ]
+}

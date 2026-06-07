@@ -1,0 +1,158 @@
+============================= test session starts ==============================
+collecting ... collected 559 items / 2 errors
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting src/bridges/aot_packager/tests ________________
+Defining 'pytest_plugins' in a non-top-level conftest is no longer supported:
+It affects the entire test suite instead of just below the conftest as expected.
+  /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/conftest.py
+Please move it to a top level conftest file at the rootdir:
+  /workspaces/NVINDIA_CUD
+For more information, visit:
+  https://docs.pytest.org/en/stable/deprecations.html#pytest-plugins-in-non-top-level-conftest-files
+________________ ERROR collecting src/bridges/pytorch_xla/tests ________________
+
+self = <_pytest.config.PytestPluginManager object at 0x7b7e4a413770>
+plugin = <module 'src.bridges.pytorch_xla.tests.conftest' from '/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/conftest.py'>
+name = 'pytest_addoption'
+
+    def register(self, plugin: _Plugin, name: str | None = None) -> str | None:
+        """Register a plugin and return its name.
+    
+        :param name:
+            The name under which to register the plugin. If not specified, a
+            name is generated using :func:`get_canonical_name`.
+    
+        :returns:
+            The plugin name. If the name is blocked from registering, returns
+            ``None``.
+    
+        If the plugin is already registered, raises a :exc:`ValueError`.
+        """
+        plugin_name = name or self.get_canonical_name(plugin)
+    
+        if plugin_name in self._name2plugin:
+            if self._name2plugin.get(plugin_name, -1) is None:
+                return None  # blocked plugin, return None to indicate no registration
+            raise ValueError(
+                "Plugin name already registered: "
+                f"{plugin_name}={plugin}\n{self._name2plugin}"
+            )
+    
+        if plugin in self._name2plugin.values():
+            raise ValueError(
+                "Plugin already registered under a different name: "
+                f"{plugin_name}={plugin}\n{self._name2plugin}"
+            )
+    
+        # XXX if an error happens we should make sure no state has been
+        # changed at point of return
+        self._name2plugin[plugin_name] = plugin
+    
+        # register matching hook implementations of the plugin
+        for name in dir(plugin):
+            hookimpl_opts = self.parse_hookimpl_opts(plugin, name)
+            if hookimpl_opts is not None:
+                normalize_hookimpl_opts(hookimpl_opts)
+                method: _HookImplFunction[object] = getattr(plugin, name)
+                hookimpl = HookImpl(plugin, plugin_name, method, hookimpl_opts)
+                name = hookimpl_opts.get("specname") or name
+                hook: HookCaller | None = getattr(self.hook, name, None)
+                if hook is None:
+                    hook = HookCaller(name, self._hookexec)
+                    setattr(self.hook, name, hook)
+                elif hook.has_spec():
+                    self._verify_hook(hook, hookimpl)
+>                   hook._maybe_apply_history(hookimpl)
+
+/usr/local/python/3.12.1/lib/python3.12/site-packages/pluggy/_manager.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <HookCaller 'pytest_addoption'>
+method = <HookImpl plugin_name='/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/conftest.py', plugin=<module 'src.bridges.pytorch_xla.tests.conftest' from '/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/conftest.py'>>
+
+    def _maybe_apply_history(self, method: HookImpl) -> None:
+        """Apply call history to a new hookimpl if it is marked as historic."""
+        if self.is_historic():
+            assert self._call_history is not None
+            for kwargs, result_callback in self._call_history:
+>               res = self._hookexec(self.name, [method], kwargs, False)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/usr/local/python/3.12.1/lib/python3.12/site-packages/pluggy/_hooks.py:580: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_pytest.config.PytestPluginManager object at 0x7b7e4a413770>
+hook_name = 'pytest_addoption'
+methods = [<HookImpl plugin_name='/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/conftest.py', plugin=<module 'src.bridges.pytorch_xla.tests.conftest' from '/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/conftest.py'>>]
+kwargs = {'parser': <_pytest.config.argparsing.Parser object at 0x7b7e4a1e46b0>, 'pluginmanager': <_pytest.config.PytestPluginManager object at 0x7b7e4a413770>}
+firstresult = False
+
+    def _hookexec(
+        self,
+        hook_name: str,
+        methods: Sequence[HookImpl],
+        kwargs: Mapping[str, object],
+        firstresult: bool,
+    ) -> object | list[object]:
+        # called from all hookcaller instances.
+        # enable_tracing will set its own wrapping function at self._inner_hookexec
+>       return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/usr/local/python/3.12.1/lib/python3.12/site-packages/pluggy/_manager.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+parser = <_pytest.config.argparsing.Parser object at 0x7b7e4a1e46b0>
+
+    def pytest_addoption(parser: pytest.Parser) -> None:
+        """Register CLI options used by the project-level bridge fixtures."""
+        group = parser.getgroup("harness", "Bridge harness options")
+>       group.addoption(
+            "--evidence-dir",
+            action="store",
+            default=None,
+            help="Directory to write evidence files.",
+        )
+
+src/bridges/pytorch_xla/tests/conftest.py:14: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_pytest.config.argparsing.OptionGroup object at 0x7b7e488d4f20>
+opts = ('--evidence-dir',)
+attrs = {'action': 'store', 'default': None, 'help': 'Directory to write evidence files.'}
+conflict = {'--evidence-dir'}
+
+    def addoption(self, *opts: str, **attrs: Any) -> None:
+        """Add an option to this group.
+    
+        If a shortened version of a long option is specified, it will
+        be suppressed in the help. ``addoption('--twowords', '--two-words')``
+        results in help showing ``--two-words`` only, but ``--twowords`` gets
+        accepted **and** the automatic destination is in ``args.twowords``.
+    
+        :param opts:
+            Option names, can be short or long options.
+        :param attrs:
+            Same attributes as the argparse library's :meth:`add_argument()
+            <argparse.ArgumentParser.add_argument>` function accepts.
+        """
+        conflict = set(opts).intersection(
+            name for opt in self.options for name in opt.names()
+        )
+        if conflict:
+>           raise ValueError(f"option names {conflict} already added")
+E           ValueError: option names {'--evidence-dir'} already added
+
+/usr/local/python/3.12.1/lib/python3.12/site-packages/_pytest/config/argparsing.py:405: ValueError
+=============================== warnings summary ===============================
+src/bridges/pytorch_xla/pipeline_orchestrator.py:37
+  /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/pipeline_orchestrator.py:37: DeprecationWarning: ExportMethod enum is deprecated; use StableHLOModule.export_method string field instead
+    from .stablehlo_export import StableHLOExporter, StableHLOModule
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR src/bridges/aot_packager/tests - Failed: Defining 'pytest_plugins' in a...
+ERROR src/bridges/pytorch_xla/tests - ValueError: option names {'--evidence-d...
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+========================= 1 warning, 2 errors in 8.80s =========================

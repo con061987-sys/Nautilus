@@ -1,0 +1,22 @@
+Usage: nautilus bench [OPTIONS] COMMAND [ARGS]...
+
+  Benchmark suite for Nautilus. The suite measures auto-tuning speedups, fat-
+  binary compile times, and end-to-end model latency across vendors.
+
+  Each benchmark records four metrics per (benchmark, vendor) pair:   -
+  compile_time_s   wall-clock compile / fat-binary link time   - exec_time_s
+  median kernel or forward-pass time   - memory_mb        peak RSS during
+  execution   - binary_size_b    size of the per-vendor binary blob
+
+  A regression is flagged when BOTH the fractional threshold (default 5% exec
+  / 10% compile / 20% binary size / 15% memory) AND the minimum absolute delta
+  are exceeded. This avoids noise on small absolute values.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  compare  Compare two result sets and flag regressions
+  history  Show trend over the last N runs of a metric
+  list     List discovered benchmarks
+  run      Run the benchmark suite and write a result set

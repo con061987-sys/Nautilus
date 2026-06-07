@@ -1,0 +1,30 @@
+Usage: nautilus bench run [OPTIONS]
+
+  Discover all benchmarks (any module ending in ``_bench.py`` exporting a
+  ``BENCHMARK`` instance) and execute each against its supported targets.
+  Results are written to ``<NAUTILUS_BENCH_DIR>/bench_<id>.json`` (default:
+  ``benchmarks/results/``).
+
+  Per-benchmark failures are recorded as ``status="error"`` or
+  ``status="skipped"`` rather than aborting the whole run; the run only aborts
+  early if ``--fail-fast`` is set.
+
+Options:
+  -b, --benchmark TEXT          Run only these benchmarks (e.g.
+                                'kernels/matmul'). Repeatable.
+  -t, --target TEXT             Run only these targets (e.g. 'nvidia/sm_90').
+                                Repeatable.
+  -o, --output-dir DIRECTORY    Where to write the result set JSON. Default:
+                                $NAUTILUS_BENCH_DIR or
+                                /workspaces/NVINDIA_CUD/benchmarks/results.
+  -n, --trials INTEGER RANGE    Number of timed trials per benchmark (after
+                                warmup).  [default: 10; 1<=x<=10000]
+  --warmup INTEGER RANGE        Untimed warmup runs before the timed trials.
+                                [default: 3; 0<=x<=100]
+  --timeout FLOAT RANGE         Per-benchmark timeout in seconds.  [default:
+                                300.0; 1.0<=x<=86400.0]
+  --fail-fast / --no-fail-fast  Abort the whole run on the first benchmark
+                                error.
+  --json                        Print the result set as JSON to stdout in
+                                addition to writing it.
+  -h, --help                    Show this message and exit.

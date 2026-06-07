@@ -1,0 +1,43 @@
+{"ts": "2026-06-07T11:12:39.369666+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark start", "benchmark": "kernels/matmul", "targets": ["amd/gfx942", "intel/xe_hpg"], "span_id": "35d8de30-8b1c-41ab-9571-8999e726ef73"}
+{"ts": "2026-06-07T11:12:40.590094+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark done", "benchmark": "kernels/matmul", "target": "amd/gfx942", "status": "skipped", "exec_time_s": null, "compile_time_s": null, "memory_mb": 333.76953125, "binary_size_b": null, "span_id": "35d8de30-8b1c-41ab-9571-8999e726ef73"}
+{"ts": "2026-06-07T11:12:40.590245+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark done", "benchmark": "kernels/matmul", "target": "intel/xe_hpg", "status": "skipped", "exec_time_s": null, "compile_time_s": null, "memory_mb": 333.76953125, "binary_size_b": null, "span_id": "35d8de30-8b1c-41ab-9571-8999e726ef73"}
+{"ts": "2026-06-07T11:12:40.590877+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "result set written", "path": "/workspaces/NVINDIA_CUD/benchmarks/results/bench_20260607T111239Z.json", "count": 2, "span_id": "35d8de30-8b1c-41ab-9571-8999e726ef73"}
+{"ts": "2026-06-07T11:12:40.591688+00:00", "level": "info", "logger": "nautilus.span", "msg": "span_finished", "span_id": "35d8de30-8b1c-41ab-9571-8999e726ef73", "operation": "bench_run", "duration_ms": 1286.4161179997027, "error": null, "metadata": {"trials": 1, "warmup": 0, "timeout": 30.0}, "stages": []}
+{
+  "run_id": "20260607T111239Z",
+  "started_at": "2026-06-07T11:12:39.369619+00:00",
+  "finished_at": "2026-06-07T11:12:40.590280+00:00",
+  "git_sha": "59448640322b0a397b6135fbc8846f00d87608a0",
+  "git_branch": "main",
+  "host": "codespaces-341700",
+  "nautilus_version": "",
+  "schema_version": 1,
+  "results": [
+    {
+      "benchmark": "kernels/matmul",
+      "vendor": "amd/gfx942",
+      "status": "skipped",
+      "error": "rocm device not available on this host",
+      "compile_time_s": null,
+      "exec_time_s": null,
+      "memory_mb": 333.76953125,
+      "binary_size_b": null,
+      "params": {},
+      "extras": {},
+      "timestamp": "2026-06-07T11:12:40.590053+00:00"
+    },
+    {
+      "benchmark": "kernels/matmul",
+      "vendor": "intel/xe_hpg",
+      "status": "skipped",
+      "error": "xpu device not available on this host",
+      "compile_time_s": null,
+      "exec_time_s": null,
+      "memory_mb": 333.76953125,
+      "binary_size_b": null,
+      "params": {},
+      "extras": {},
+      "timestamp": "2026-06-07T11:12:40.590230+00:00"
+    }
+  ]
+}

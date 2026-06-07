@@ -1,0 +1,35 @@
+{
+  "run_id": "20260607T111119Z",
+  "started_at": "2026-06-07T11:11:19.306882+00:00",
+  "finished_at": "2026-06-07T11:11:20.360914+00:00",
+  "git_sha": "59448640322b0a397b6135fbc8846f00d87608a0",
+  "git_branch": "main",
+  "host": "codespaces-341700",
+  "nautilus_version": "",
+  "schema_version": 1,
+  "results": [
+    {
+      "benchmark": "kernels/layer_norm",
+      "vendor": "cpu",
+      "status": "ok",
+      "error": null,
+      "compile_time_s": 0.0,
+      "exec_time_s": 0.21947269400016012,
+      "memory_mb": 314.7890625,
+      "binary_size_b": 0,
+      "params": {
+        "rows": 1024,
+        "cols": 4096,
+        "eps": 1e-05,
+        "backend": "numpy"
+      },
+      "extras": {
+        "gbs": 0.30577318197019554,
+        "exec_time_min_s": 0.21947269400016012,
+        "exec_time_max_s": 0.21947269400016012,
+        "exec_time_stdev_s": 0.0
+      },
+      "timestamp": "2026-06-07T11:11:20.358846+00:00"
+    }
+  ]
+}

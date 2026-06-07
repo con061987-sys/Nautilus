@@ -1,0 +1,6 @@
+{"ts": "2026-06-07T11:10:43.353209+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark start", "benchmark": "kernels/matmul", "targets": ["cpu"], "span_id": "7426de2a-fe6e-4d69-9590-f054a354386c"}
+{"ts": "2026-06-07T11:10:44.289462+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark done", "benchmark": "kernels/matmul", "target": "cpu", "status": "ok", "exec_time_s": 0.25737952200006475, "compile_time_s": 0.0, "memory_mb": 284.60546875, "binary_size_b": 0, "span_id": "7426de2a-fe6e-4d69-9590-f054a354386c"}
+{"ts": "2026-06-07T11:10:44.297862+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "result set written", "path": "/workspaces/NVINDIA_CUD/benchmarks/results/bench_20260607T111043Z.json", "count": 1, "span_id": "7426de2a-fe6e-4d69-9590-f054a354386c"}
+{"ts": "2026-06-07T11:10:44.298081+00:00", "level": "info", "logger": "nautilus.span", "msg": "span_finished", "span_id": "7426de2a-fe6e-4d69-9590-f054a354386c", "operation": "bench_run", "duration_ms": 1062.8973830007017, "error": null, "metadata": {"trials": 1, "warmup": 0, "timeout": 30.0}, "stages": []}
+
+ResultSet 20260607T111043Z written: 1 ok, 0 skipped, 0 errors (total 1).

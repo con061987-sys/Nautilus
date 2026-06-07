@@ -1,0 +1,6 @@
+{"ts": "2026-06-07T11:11:39.145105+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark start", "benchmark": "kernels/attention", "targets": ["cpu"], "span_id": "1daa6be4-bc71-4dad-99fa-f7f79c3d10a9"}
+{"ts": "2026-06-07T11:11:39.221715+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark done", "benchmark": "kernels/attention", "target": "cpu", "status": "ok", "exec_time_s": 0.026421055999890086, "compile_time_s": 0.0, "memory_mb": 270.9921875, "binary_size_b": 0, "span_id": "1daa6be4-bc71-4dad-99fa-f7f79c3d10a9"}
+{"ts": "2026-06-07T11:11:39.231780+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "result set written", "path": "/workspaces/NVINDIA_CUD/benchmarks/results/bench_20260607T111139Z.json", "count": 1, "span_id": "1daa6be4-bc71-4dad-99fa-f7f79c3d10a9"}
+{"ts": "2026-06-07T11:11:39.232875+00:00", "level": "info", "logger": "nautilus.span", "msg": "span_finished", "span_id": "1daa6be4-bc71-4dad-99fa-f7f79c3d10a9", "operation": "bench_run", "duration_ms": 133.8319369996898, "error": null, "metadata": {"trials": 1, "warmup": 0, "timeout": 30.0}, "stages": []}
+
+ResultSet 20260607T111139Z written: 1 ok, 0 skipped, 0 errors (total 1).

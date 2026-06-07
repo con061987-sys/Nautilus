@@ -1,0 +1,5 @@
+kernels/attention               targets=nvidia/sm_90,amd/gfx942,intel/xe_hpg,cpu
+kernels/layer_norm              targets=nvidia/sm_90,amd/gfx942,intel/xe_hpg,cpu
+kernels/matmul                  targets=nvidia/sm_90,amd/gfx942,intel/xe_hpg,cpu
+models/llama_tiny               targets=nvidia/sm_90,amd/gfx942,cpu
+models/resnet50                 targets=nvidia/sm_90,amd/gfx942,cpu

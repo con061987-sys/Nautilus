@@ -1,0 +1,888 @@
+============================= test session starts ==============================
+collecting ... collected 509 items
+
+src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_amd_backend_init PASSED [  0%]
+src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_amd_backend_custom_arch PASSED [  0%]
+src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_compile_kernel_returns_result FAILED [  0%]
+src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_compile_kernel_caches_result FAILED [  0%]
+src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_supports_arch PASSED [  0%]
+src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_get_version PASSED [  1%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_builder_init PASSED [  1%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_all_vendors FAILED [  1%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_skip_amd FAILED [  1%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_records_stage_times FAILED [  1%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_produces_output_path FAILED [  2%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_fat_binary_has_sections FAILED [  2%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_total_size_positive FAILED [  2%]
+src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_records_per_vendor_results FAILED [  2%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestKernelSection::test_section_creation PASSED [  2%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestKernelSection::test_section_size PASSED [  3%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestKernelSection::test_section_sha256 PASSED [  3%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestKernelSection::test_section_to_dict PASSED [  3%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_fat_binary_creation PASSED [  3%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_add_section PASSED [  3%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_add_section_replaces_existing PASSED [  4%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_get_section PASSED [  4%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_total_size PASSED [  4%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_vendors PASSED [  4%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_to_json_and_back PASSED [  4%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_to_bytes_and_back PASSED [  5%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_save_and_load PASSED [  5%]
+src/bridges/aot_packager/tests/test_fat_binary.py::TestFatBinary::test_from_bytes_invalid_magic PASSED [  5%]
+src/bridges/aot_packager/tests/test_integration.py::TestSectionNamingConvention::test_section_name_for_nvidia PASSED [  5%]
+src/bridges/aot_packager/tests/test_integration.py::TestSectionNamingConvention::test_section_name_for_amd PASSED [  5%]
+src/bridges/aot_packager/tests/test_integration.py::TestSectionNamingConvention::test_section_name_for_intel PASSED [  6%]
+src/bridges/aot_packager/tests/test_integration.py::TestSectionNamingConvention::test_section_name_sanitizes_tokens PASSED [  6%]
+src/bridges/aot_packager/tests/test_integration.py::TestSectionNamingConvention::test_section_name_unique_per_vendor_kernel_fmt PASSED [  6%]
+src/bridges/aot_packager/tests/test_integration.py::TestSectionNamingConvention::test_section_name_length_limit PASSED [  6%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeStubCompilation::test_stub_compiles_without_errors PASSED [  6%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeStubCompilation::test_stub_exports_dispatch_symbols PASSED [  7%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeStubCompilation::test_stub_exports_index_symbols PASSED [  7%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeStubCompilation::test_stub_references_external_symbols PASSED [  7%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeStubCompilation::test_stub_references_per_vendor_kernels PASSED [  7%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeStubCompilation::test_host_arch_compatible PASSED [  7%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerFatBinaryStructure::test_linked_output_is_valid_elf PASSED [  8%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerFatBinaryStructure::test_linked_sections_include_nautilus_nvidia PASSED [  8%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerFatBinaryStructure::test_section_names_are_unique PASSED [  8%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerFatBinaryStructure::test_nautilus_index_section_exists_and_has_content PASSED [  8%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerFatBinaryStructure::test_linked_output_with_multiple_kernels PASSED [  8%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerFatBinaryStructure::test_linker_cache_hit PASSED [  9%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryWrapper::test_wrapped_section_is_valid_elf PASSED [  9%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryWrapper::test_wrapped_section_has_correct_name PASSED [  9%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryWrapper::test_wrapped_section_data_integrity PASSED [  9%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryWrapper::test_wrapped_section_with_metadata_symbols PASSED [  9%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeVendorDetection::test_detect_no_gpu_returns_unknown_on_ci PASSED [ 10%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeVendorDetection::test_vendor_c_api_header_matches_stub PASSED [ 10%]
+src/bridges/aot_packager/tests/test_integration.py::TestRuntimeVendorDetection::test_runtime_dispatch_logic PASSED [ 10%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_all_vendors_calls_all_backends ERROR [ 10%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_with_skip_amd ERROR [ 10%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_with_skip_all_but_nvidia ERROR [ 11%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_fat_binary_has_correct_sections ERROR [ 11%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_records_linking_result ERROR [ 11%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_records_all_stage_times ERROR [ 11%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_total_time_is_positive ERROR [ 11%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_output_path_exists ERROR [ 11%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_to_dict_serializable ERROR [ 12%]
+src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_error_when_no_vendors_succeed ERROR [ 12%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryRoundTrips::test_fat_binary_to_bytes_and_back PASSED [ 12%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryRoundTrips::test_fat_binary_to_json_and_back PASSED [ 12%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryRoundTrips::test_fat_binary_save_and_load PASSED [ 12%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryRoundTrips::test_fat_binary_total_size PASSED [ 13%]
+src/bridges/aot_packager/tests/test_integration.py::TestFatBinaryRoundTrips::test_fat_binary_vendors_dedup PASSED [ 13%]
+src/bridges/aot_packager/tests/test_integration.py::TestKernelSectionProperties::test_section_size_property PASSED [ 13%]
+src/bridges/aot_packager/tests/test_integration.py::TestKernelSectionProperties::test_section_sha256_stable PASSED [ 13%]
+src/bridges/aot_packager/tests/test_integration.py::TestKernelSectionProperties::test_section_to_dict PASSED [ 13%]
+src/bridges/aot_packager/tests/test_integration.py::TestKernelSectionProperties::test_section_add_section_replaces PASSED [ 14%]
+src/bridges/aot_packager/tests/test_integration.py::TestKernelSectionProperties::test_section_get_section_nonexistent PASSED [ 14%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerErrorHandling::test_link_with_no_kernels_and_no_stub PASSED [ 14%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerErrorHandling::test_link_with_duplicate_kernels PASSED [ 14%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerErrorHandling::test_linker_cache_isolated PASSED [ 14%]
+src/bridges/aot_packager/tests/test_integration.py::TestLinkerErrorHandling::test_section_name_with_special_chars PASSED [ 15%]
+src/bridges/aot_packager/tests/test_integration.py::TestCApiConsistency::test_c_api_vendor_enum_values PASSED [ 15%]
+src/bridges/aot_packager/tests/test_integration.py::TestCApiConsistency::test_c_api_arch_enum_values PASSED [ 15%]
+src/bridges/aot_packager/tests/test_integration.py::TestCApiConsistency::test_c_api_compile_signature PASSED [ 15%]
+src/bridges/aot_packager/tests/test_integration.py::TestCApiConsistency::test_runtime_stub_static_asserts_match_c_api PASSED [ 15%]
+src/bridges/aot_packager/tests/test_integration.py::TestHardwareValidator::test_skip_mode_always_passes PASSED [ 16%]
+src/bridges/aot_packager/tests/test_integration.py::TestHardwareValidator::test_local_mode_no_binary PASSED [ 16%]
+src/bridges/aot_packager/tests/test_integration.py::TestHardwareValidator::test_local_mode_empty_binary PASSED [ 16%]
+src/bridges/aot_packager/tests/test_integration.py::TestHardwareValidator::test_local_mode_unknown_vendor PASSED [ 16%]
+src/bridges/aot_packager/tests/test_integration.py::TestHardwareValidator::test_cloud_mode_no_endpoint PASSED [ 16%]
+src/bridges/aot_packager/tests/test_intel_backend.py::TestIntelBackend::test_intel_backend_init PASSED [ 17%]
+src/bridges/aot_packager/tests/test_intel_backend.py::TestIntelBackend::test_intel_backend_custom_target PASSED [ 17%]
+src/bridges/aot_packager/tests/test_intel_backend.py::TestIntelBackend::test_compile_kernel_returns_result PASSED [ 17%]
+src/bridges/aot_packager/tests/test_intel_backend.py::TestIntelBackend::test_compile_kernel_caches_result PASSED [ 17%]
+src/bridges/aot_packager/tests/test_intel_backend.py::TestIntelBackend::test_supports_target PASSED [ 17%]
+src/bridges/aot_packager/tests/test_intel_backend.py::TestIntelBackend::test_get_version PASSED [ 18%]
+src/bridges/aot_packager/tests/test_linker.py::TestFatBinaryLinker::test_linker_init PASSED [ 18%]
+src/bridges/aot_packager/tests/test_linker.py::TestFatBinaryLinker::test_link_fat_binary PASSED [ 18%]
+src/bridges/aot_packager/tests/test_linker.py::TestFatBinaryLinker::test_link_fat_binary_caches_result PASSED [ 18%]
+src/bridges/aot_packager/tests/test_linker.py::TestFatBinaryLinker::test_link_with_runtime_stub PASSED [ 18%]
+src/bridges/aot_packager/tests/test_linker.py::TestFatBinaryLinker::test_link_with_minimal_input PASSED [ 19%]
+src/bridges/aot_packager/tests/test_linker.py::TestFatBinaryLinker::test_get_version PASSED [ 19%]
+src/bridges/aot_packager/tests/test_linker.py::TestUniqueSectionNaming::test_section_name_format PASSED [ 19%]
+src/bridges/aot_packager/tests/test_linker.py::TestUniqueSectionNaming::test_section_name_is_unique_per_blob PASSED [ 19%]
+src/bridges/aot_packager/tests/test_linker.py::TestUniqueSectionNaming::test_readelf_shows_unique_sections PASSED [ 19%]
+src/bridges/aot_packager/tests/test_linker.py::TestUniqueSectionNaming::test_lld_silent_on_multi_kernels PASSED [ 20%]
+src/bridges/aot_packager/tests/test_linker.py::TestNautilusIndex::test_index_text_contains_all_blobs PASSED [ 20%]
+src/bridges/aot_packager/tests/test_linker.py::TestNautilusIndex::test_index_record_round_trip PASSED [ 20%]
+src/bridges/aot_packager/tests/test_linker.py::TestNautilusIndex::test_runtime_stub_has_index_api PASSED [ 20%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_init PASSED [ 20%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_custom_target PASSED [ 21%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_each_target[apple_m1] PASSED [ 21%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_each_target[apple_m2] PASSED [ 21%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_each_target[apple_m3] PASSED [ 21%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_each_target[apple_m4] PASSED [ 21%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalBackendInit::test_metal_backend_each_target[generic_metal] PASSED [ 22%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestAppleSiliconDetection::test_detection_returns_dict PASSED [ 22%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestAppleSiliconDetection::test_detection_consistent_with_platform PASSED [ 22%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestAppleSiliconDetection::test_detection_linux_returns_false PASSED [ 22%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetallibValidation::test_validate_metallib_accepts_real_magic PASSED [ 22%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetallibValidation::test_validate_metallib_rejects_short PASSED [ 22%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetallibValidation::test_validate_metallib_rejects_wrong_magic PASSED [ 23%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetallibValidation::test_validate_air_accepts_real_magic PASSED [ 23%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetallibValidation::test_validate_air_rejects_short PASSED [ 23%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompileKernel::test_compile_kernel_returns_result PASSED [ 23%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompileKernel::test_compile_kernel_fails_on_non_apple_host PASSED [ 23%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompileKernel::test_strict_raises_on_non_apple_host PASSED [ 24%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompileKernel::test_compile_kernel_strict_returns_result_on_success PASSED [ 24%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompilationResultShape::test_output_bytes_prefers_metallib PASSED [ 24%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompilationResultShape::test_output_bytes_falls_back_to_air PASSED [ 24%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompilationResultShape::test_output_bytes_falls_back_to_msl PASSED [ 24%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalCompilationResultShape::test_output_bytes_none_on_failure PASSED [ 25%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestFatBinarySectionFormat::test_metallib_format_exists FAILED [ 25%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestFatBinarySectionFormat::test_air_format_exists FAILED [ 25%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestFatBinarySectionFormat::test_section_name_for_apple PASSED [ 25%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalTargetEnum::test_targets_are_apple_families PASSED [ 25%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestMetalTargetEnum::test_target_supports_target PASSED [ 26%]
+src/bridges/aot_packager/tests/test_metal_backend.py::TestGetVersion::test_get_version_returns_string PASSED [ 26%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_nvidia_backend_init PASSED [ 26%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_nvidia_backend_custom_arch PASSED [ 26%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_compile_kernel_returns_result PASSED [ 26%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_compile_kernel_produces_ptx PASSED [ 27%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_compile_kernel_caches_result PASSED [ 27%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_supports_arch PASSED [ 27%]
+src/bridges/aot_packager/tests/test_nvidia_backend.py::TestNvidiaBackend::test_get_version PASSED [ 27%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveType::test_values_match_stablehlo_ops PASSED [ 27%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveType::test_member_count PASSED [ 28%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorShapeParsing::test_parse_valid[tensor<128x256xf32>-expected_shape0-f32] PASSED [ 28%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorShapeParsing::test_parse_valid[tensor<4xi64>-expected_shape1-i64] PASSED [ 28%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorShapeParsing::test_parse_valid[tensor<f32>-expected_shape2-f32] PASSED [ 28%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorShapeParsing::test_parse_valid[tensor<2x2xbf16>-expected_shape3-bf16] PASSED [ 28%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorShapeParsing::test_parse_valid[tensor<1x1x1xi8>-expected_shape4-i8] PASSED [ 29%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorShapeParsing::test_parse_invalid_raises PASSED [ 29%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape0-f32-65536] PASSED [ 29%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape1-f16-8192] PASSED [ 29%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape2-bf16-2048] PASSED [ 29%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape3-i64-64] PASSED [ 30%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape4-i1-1] PASSED [ 30%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape5-f32-4] PASSED [ 30%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestTensorBytes::test_tensor_bytes[shape6-unknown_dtype-40000] PASSED [ 30%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_all_reduce_volume PASSED [ 30%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_all_gather_volume PASSED [ 31%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_reduce_scatter_volume PASSED [ 31%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_all_to_all_volume PASSED [ 31%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_single_device_is_zero[CollectiveType.ALL_REDUCE] PASSED [ 31%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_single_device_is_zero[CollectiveType.ALL_GATHER] PASSED [ 31%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_single_device_is_zero[CollectiveType.REDUCE_SCATTER] PASSED [ 32%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_single_device_is_zero[CollectiveType.ALL_TO_ALL] PASSED [ 32%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_volume_scales_with_tensor_bytes PASSED [ 32%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveVolume::test_volume_scales_with_num_devices PASSED [ 32%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestExtractFuncArgTypes::test_extracts_args PASSED [ 32%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestExtractFuncArgTypes::test_no_func_returns_empty PASSED [ 33%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPlanCollectives::test_replicated_no_collectives PASSED [ 33%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPlanCollectives::test_data_parallel_emits_four_collectives PASSED [ 33%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPlanCollectives::test_tensor_parallel_2d_mesh PASSED [ 33%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPlanCollectives::test_volume_scales_with_shape PASSED [ 33%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPlanCollectives::test_dtype_falls_back_to_f32 PASSED [ 33%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommLibrarySelection::test_nvidia_mesh_uses_nccl PASSED [ 34%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommLibrarySelection::test_amd_mesh_uses_rccl PASSED [ 34%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommLibrarySelection::test_intel_mesh_uses_oneccl PASSED [ 34%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommLibrarySelection::test_heterogeneous_mesh_uses_mixed PASSED [ 34%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommLibrarySelection::test_no_mesh_falls_back_to_nccl PASSED [ 34%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_inserts_all_four_collectives PASSED [ 35%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_preserves_function_signature PASSED [ 35%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_carries_channel_handle PASSED [ 35%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_carries_replica_groups PASSED [ 35%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_replicated_module_is_unchanged PASSED [ 35%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_total_bytes_matches_sum PASSED [ 36%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_with_bf16_dtype PASSED [ 36%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestEmitCollectives::test_emit_with_return_inside_function PASSED [ 36%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommBackendWiring::test_heterogeneous_mesh_backend_usage PASSED [ 36%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCommBackendWiring::test_homogeneous_nvidia_backend_usage PASSED [ 36%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveInserterClass::test_default_construction PASSED [ 37%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveInserterClass::test_custom_channel_id_base PASSED [ 37%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveInserterClass::test_invalid_module_returns_error_result PASSED [ 37%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveInserterClass::test_unusable_module_returns_error_result PASSED [ 37%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveInserterClass::test_empty_spec_passes_through PASSED [ 37%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestCollectiveInserterClass::test_inserted_collective_is_frozen PASSED [ 38%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCollectivePlan::test_plan_count_matches_axes PASSED [ 38%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCollectivePlan::test_plan_covers_all_four_collective_types PASSED [ 38%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCollectivePlan::test_each_collective_has_valid_comm_library PASSED [ 38%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCollectivePlan::test_estimated_bytes_are_computed_from_shape PASSED [ 38%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCollectivePlan::test_emit_produces_parseable_mlir PASSED [ 39%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCollectivePlan::test_total_bytes_equals_sum_of_inserted PASSED [ 39%]
+src/bridges/pytorch_xla/tests/test_collective_insertion.py::TestPropertyCommBackend::test_backend_selection_by_vendor PASSED [ 39%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_homogeneous_mesh_no_bridges PASSED [ 39%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_heterogeneous_mesh_has_bridges PASSED [ 39%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_select_library_for_vendor PASSED [ 40%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_select_library_for_op_homogeneous PASSED [ 40%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_select_library_for_op_mixed PASSED [ 40%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_select_library_for_op_empty PASSED [ 40%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_get_stats PASSED [ 40%]
+src/bridges/pytorch_xla/tests/test_comm_backend.py::TestCommBackend::test_bridge_is_marked_cross_vendor PASSED [ 41%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_same_device_is_full PASSED [ 41%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_same_vendor_nvlink_is_full PASSED [ 41%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_same_vendor_infinity_fabric_is_full PASSED [ 41%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_different_host_is_host_staged PASSED [ 41%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_cross_vendor_ualink_is_full PASSED [ 42%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_cross_vendor_pcie_is_host_staged PASSED [ 42%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_cross_vendor_mixed_qualifiers_is_host_staged PASSED [ 42%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_same_vendor_pcie_is_full PASSED [ 42%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestP2PCapability::test_symmetric PASSED [ 42%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_nccl_backend_identity PASSED [ 43%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_rccl_backend_identity PASSED [ 43%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_oneccl_backend_identity PASSED [ 43%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_describe_contains_key_fields PASSED [ 43%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_is_available_caches PASSED [ 43%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_negative_device_id_rejected PASSED [ 44%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestBackendMetadata::test_abstract_cannot_be_instantiated PASSED [ 44%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestAvailabilityProbes::test_nccl_probe_false_without_backend PASSED [ 44%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestAvailabilityProbes::test_nccl_probe_requires_cuda PASSED [ 44%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestAvailabilityProbes::test_rccl_probe_handles_missing_cuda PASSED [ 44%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestAvailabilityProbes::test_oneccl_probe_handles_missing_xpu PASSED [ 44%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestMakeBackend::test_factory_returns_nccl PASSED [ 45%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestMakeBackend::test_factory_returns_rccl PASSED [ 45%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestMakeBackend::test_factory_returns_oneccl PASSED [ 45%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestMakeBackend::test_factory_rejects_gloo PASSED [ 45%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestMakeBackend::test_factory_rejects_mixed PASSED [ 45%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestMakeBackend::test_factory_rejects_ualink PASSED [ 46%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_construction_assigns_backends PASSED [ 46%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_library_is_mixed PASSED [ 46%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_vendor_reports_source PASSED [ 46%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_is_available_requires_both PASSED [ 46%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_uses_host_staging_default_for_cross_vendor PASSED [ 47%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_uses_host_staging_skipped_for_ualink PASSED [ 47%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_force_host_staging_overrides_p2p PASSED [ 47%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_describe_includes_p2p_metadata PASSED [ 47%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridge::test_rejects_same_backend_twice PASSED [ 47%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridgePrimitives::test_all_reduce_uses_host_staging PASSED [ 48%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridgePrimitives::test_send_stages_to_host PASSED [ 48%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridgePrimitives::test_recv_stages_from_host PASSED [ 48%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestCrossVendorBridgePrimitives::test_missing_torch_raises_dependency_error PASSED [ 48%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestVendorBackendPrimitives::test_nccl_init_process_group_uses_nccl PASSED [ 48%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestVendorBackendPrimitives::test_oneccl_init_uses_xccl PASSED [ 49%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestVendorBackendPrimitives::test_all_reduce_passes_through PASSED [ 49%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestRealCollectives::test_all_reduce_identity PASSED [ 49%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestRealCollectives::test_all_gather_concatenates PASSED [ 49%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestRealCollectives::test_reduce_scatter_returns_chunk PASSED [ 49%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestRealCollectives::test_all_to_all_identity_on_world_1 PASSED [ 50%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestRealCollectives::test_send_recv_methods_exist PASSED [ 50%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestTorchlessImport::test_module_can_be_imported PASSED [ 50%]
+src/bridges/pytorch_xla/tests/test_comm_bridge.py::TestTorchlessImport::test_torchless_path_does_not_crash PASSED [ 50%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshDevice::test_mesh_device_creation PASSED [ 50%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshDevice::test_mesh_device_metadata PASSED [ 51%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_topology_uniform PASSED [ 51%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_topology_non_uniform PASSED [ 51%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_uniform_3x3_with_zero_diagonal_regression PASSED [ 51%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_uniform_2x2 PASSED [ 51%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_uniform_4x4 PASSED [ 52%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_single_device_is_uniform PASSED [ 52%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_empty_topology_is_uniform PASSED [ 52%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_only_latency_is_uniform PASSED [ 52%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_jagged_rows_are_not_uniform PASSED [ 52%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_non_square_matrix_is_not_uniform PASSED [ 53%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_non_uniform_two_tiers PASSED [ 53%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_tolerance_boundary_uniform PASSED [ 53%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_tolerance_boundary_non_uniform PASSED [ 53%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_random_uniform_meshes_match_manual_check PASSED [ 53%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestMeshTopology::test_random_non_uniform_meshes_match_manual_check PASSED [ 54%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestDeviceMesh::test_device_mesh_creation PASSED [ 54%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestDeviceMesh::test_homogeneous_mesh PASSED [ 54%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestDeviceMesh::test_get_devices_by_vendor PASSED [ 54%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestDeviceMesh::test_vendor_mesh_shape PASSED [ 54%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestDeviceMesh::test_total_devices PASSED [ 55%]
+src/bridges/pytorch_xla/tests/test_device_mesh.py::TestDeviceMesh::test_to_dict PASSED [ 55%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorPlan::test_plan_creation PASSED [ 55%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorPlan::test_plan_default PASSED [ 55%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorApplier::test_applier_init PASSED [ 55%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorApplier::test_apply_sharding_creates_plan PASSED [ 55%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorApplier::test_placement_for_sharded_tensor PASSED [ 56%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorApplier::test_placement_for_replicated_tensor PASSED [ 56%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorApplier::test_placement_for_unknown_tensor PASSED [ 56%]
+src/bridges/pytorch_xla/tests/test_dtensor_apply.py::TestDTensorApplier::test_plan_includes_collectives PASSED [ 56%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestCaptureMode::test_three_modes_present PASSED [ 56%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestCaptureMode::test_modes_are_distinct PASSED [ 57%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphMetadata::test_cache_key_changes_with_shape PASSED [ 57%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphMetadata::test_cache_key_stable_for_same_content PASSED [ 57%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_default_mode_is_torch_export PASSED [ 57%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_capture_mlp_produces_usable_graph PASSED [ 57%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_capture_records_source_hash PASSED [ 58%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_capture_accepts_explicit_model_name PASSED [ 58%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_capture_default_model_name_uses_class PASSED [ 58%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_capture_timing_recorded PASSED [ 58%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureWithMLP::test_capture_generates_readable_text PASSED [ 58%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureModes::test_manual_fx_mode PASSED [ 59%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureModes::test_torch_export_mode PASSED [ 59%]
+src/bridges/pytorch_xla/tests/test_graph_capture.py::TestGraphCaptureFailureHandling::test_capture_with_bad_inputs_returns_unusable PASSED [ 59%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_returns_bridge ERROR [ 59%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_disables_circuit_breakers ERROR [ 59%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_has_mock_gspmd ERROR [ 60%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_has_mock_graph ERROR [ 60%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_has_mock_stablehlo ERROR [ 60%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_uses_mocked_graph_capture ERROR [ 60%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_uses_mocked_stablehlo_export ERROR [ 60%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_uses_mocked_gspmd ERROR [ 61%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_returns_sharding_result ERROR [ 61%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_success_with_mocked_path ERROR [ 61%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_records_all_stage_durations ERROR [ 61%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_mock_gspmd_called_with_correct_args ERROR [ 61%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_comm_backend_set_per_mesh ERROR [ 62%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_executor_set_per_mesh ERROR [ 62%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_gspmd_failure_propagates ERROR [ 62%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_graph_capture_failure_propagates ERROR [ 62%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_stablehlo_export_failure_propagates ERROR [ 62%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_with_different_meshes ERROR [ 63%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_with_2d_mesh ERROR [ 63%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_with_heterogeneous_mesh ERROR [ 63%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_mocks_restored_after_shard ERROR [ 63%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_sharding_config_holds_all_fields PASSED [ 63%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_shard_with_real_model_and_skip_flags ERROR [ 64%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_shard_result_dict_contains_all_keys ERROR [ 64%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_shard_result_is_usable_when_successful ERROR [ 64%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_total_duration_recorded ERROR [ 64%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_pipeline_with_skip_sharding_only ERROR [ 64%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_three_tiers_defined PASSED [ 65%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_tier_availability_checks_exist PASSED [ 65%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_torch_xla_tier_not_available_without_torch_xla PASSED [ 65%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_openxla_pjrt_tier_not_available_without_torch_xla PASSED [ 65%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_graph_partition_tier_always_available PASSED [ 65%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_falls_through_to_graph_partition PASSED [ 66%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_with_invalid_module PASSED [ 66%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_with_wrong_module_type PASSED [ 66%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_diagnostics_on_success PASSED [ 66%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_caches_results PASSED [ 66%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_data_parallel_strategy PASSED [ 66%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_replicated_strategy PASSED [ 67%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_model_parallel_strategy PASSED [ 67%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_tensor_parallel_2d_mesh PASSED [ 67%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_custom_shardings_override_strategy PASSED [ 67%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_inserts_collectives PASSED [ 67%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_graph_partition_tier_shards PASSED [ 68%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_graph_partition_tier_inserts_collective_ops PASSED [ 68%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestGSPMDFallbackTiers::test_gspmd_runner_with_empty_module PASSED [ 68%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_three_export_tiers_defined PASSED [ 68%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_torch_xla_exporter_not_available PASSED [ 68%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_onnx_exporter_not_available_without_onnx PASSED [ 69%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_tvm_exporter_not_available_without_tvm PASSED [ 69%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_exporter_raises_when_all_tiers_unavailable PASSED [ 69%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_exporter_disabled_tvm_path PASSED [ 69%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestStableHLOExportFallbackTiers::test_exporter_raises_on_none_captured PASSED [ 69%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_reduce_zero_for_single_device PASSED [ 70%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_reduce_formula PASSED [ 70%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_reduce_large_tensor PASSED [ 70%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_gather_zero_for_single_device PASSED [ 70%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_gather_formula PASSED [ 70%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_reduce_scatter_formula PASSED [ 71%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_to_all_zero_for_single_device PASSED [ 71%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_all_to_all_formula PASSED [ 71%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_estimate_tensor_bytes PASSED [ 71%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_estimate_tensor_bytes_empty_shape PASSED [ 71%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCommCostModel::test_estimate_tensor_bytes_float64 PASSED [ 72%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_no_collectives_for_replicated PASSED [ 72%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_collectives_for_sharded_tensor PASSED [ 72%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_collectives_contain_estimated_bytes PASSED [ 72%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_collectives_contain_tensor_name PASSED [ 72%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_collectives_2d_mesh PASSED [ 73%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_collectives_multiple_tensors PASSED [ 73%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_collectives_estimated_bytes_match_cost_model PASSED [ 73%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCollectiveInsertion::test_comm_volume_aggregation PASSED [ 73%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_homogeneous_nvidia_no_bridges PASSED [ 73%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_homogeneous_amd_no_bridges PASSED [ 74%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_heterogeneous_nvidia_amd_has_bridge PASSED [ 74%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_heterogeneous_three_vendors PASSED [ 74%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_cross_vendor_bridge_uses_mixed_library PASSED [ 74%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_cross_vendor_bridge_bandwidth_pcie PASSED [ 74%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_select_library_homogeneous_nvidia PASSED [ 75%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_select_library_homogeneous_amd PASSED [ 75%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_select_library_mixed_vendor PASSED [ 75%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_select_library_empty_devices PASSED [ 75%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_select_library_single_device PASSED [ 75%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_get_group_homogeneous PASSED [ 76%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_get_group_cross_vendor PASSED [ 76%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_get_group_returns_comm_group_type PASSED [ 76%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_stats_include_bridge_count PASSED [ 76%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_stats_include_group_details PASSED [ 76%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_stats_include_bridge_details PASSED [ 77%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_library_selection_per_vendor PASSED [ 77%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestCrossVendorCommunication::test_bandwidth_estimation_per_vendor PASSED [ 77%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_uniform_bandwidth PASSED [ 77%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_non_uniform_bandwidth PASSED [ 77%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_uniform_within_threshold PASSED [ 77%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_empty_matrices_uniform PASSED [ 78%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_single_device_uniform PASSED [ 78%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_nvlink_island_non_uniform_with_pcie PASSED [ 78%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_topology_detects_nvlink_bandwidth PASSED [ 78%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_uniform_topology_with_same_interconnect PASSED [ 78%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestMeshTopologyUniformity::test_heterogeneous_mesh_default_topology PASSED [ 79%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_inserts_real_attribute PASSED [ 79%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_replicated_keyword PASSED [ 79%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_model_parallel_format PASSED [ 79%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_tensor_parallel_2d PASSED [ 79%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_idempotent PASSED [ 80%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_empty_inputs PASSED [ 80%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_unknown_arg PASSED [ 80%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_preserves_body PASSED [ 80%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_multiple_args PASSED [ 80%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_insert_sharding_attr_preserves_return_type PASSED [ 81%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_sharding_spec_to_string_replicated PASSED [ 81%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_sharding_spec_to_string_maximal PASSED [ 81%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_sharding_spec_to_string_data_parallel PASSED [ 81%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_sharding_spec_to_string_tensor_parallel PASSED [ 81%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_sharding_spec_to_string_no_partition_shape PASSED [ 82%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_with_arg0_name PASSED [ 82%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardingAnnotationMLIR::test_annotate_does_not_add_comments PASSED [ 82%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_dtensor_plan_defaults PASSED [ 82%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_dtensor_plan_not_usable PASSED [ 82%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_dtensor_applier_creation PASSED [ 83%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_apply_sharding_with_spec PASSED [ 83%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_apply_sharding_produces_placements PASSED [ 83%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_placement_for_unknown_tensor PASSED [ 83%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_placement_for_replicated_tensor PASSED [ 83%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_collectives_carried_to_plan PASSED [ 84%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_apply_to_model_noop_without_placements PASSED [ 84%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_sharding_spec_to_lite_conversion PASSED [ 84%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_tensor_sharding_to_lite PASSED [ 84%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDTensorApplication::test_tensor_sharding_from_lite PASSED [ 84%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_shard_execution_result_defaults PASSED [ 85%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_shard_execution_result_is_usable_with_binary PASSED [ 85%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_shard_execution_result_success_requires_binary PASSED [ 85%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_exeuctor_creation PASSED [ 85%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_execute_all_shards_returns_list PASSED [ 85%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_execute_all_shards_returns_one_per_device PASSED [ 86%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestShardExecution::test_shard_result_contains_vendor_info PASSED [ 86%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_single_vendor_not_heterogeneous PASSED [ 86%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_dual_vendor_heterogeneous PASSED [ 86%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_get_devices_by_vendor PASSED [ 86%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_vendor_mesh_shape PASSED [ 87%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_to_dict_includes_vendors PASSED [ 87%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_mesh_device_display_name PASSED [ 87%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_num_devices_property PASSED [ 87%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_mesh_shape_different_from_num_devices PASSED [ 87%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_amd_device_detection PASSED [ 88%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_intel_device_detection PASSED [ 88%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_vendor_in_target_inference PASSED [ 88%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestDeviceMeshHeterogeneity::test_list_mesh_falls_back_to_llvm PASSED [ 88%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_empty_device_mesh PASSED [ 88%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_single_device_mesh PASSED [ 88%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_zero_size_mesh_shape PASSED [ 89%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_spec_with_no_tensors PASSED [ 89%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_spec_cache_key_with_no_tensors PASSED [ 89%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_collectives_with_zero_devices PASSED [ 89%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_cost_model_with_huge_device_count PASSED [ 89%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_cost_model_with_zero_tensor PASSED [ 90%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_annotate_with_malformed_mlir PASSED [ 90%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_annotate_with_no_func_func PASSED [ 90%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_config_with_empty_example_inputs PASSED [ 90%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_result_is_usable_without_dtensor PASSED [ 90%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_comm_group_properties PASSED [ 91%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_tensor_sharding_default_replicate_true PASSED [ 91%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_gspmd_result_is_usable PASSED [ 91%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_strategy_enum_values PASSED [ 91%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_gspmd_result_with_tier_info PASSED [ 91%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_all_to_all_with_many_devices PASSED [ 92%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_reduce_scatter_matches_all_reduce PASSED [ 92%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_gspmd_cache_key_uses_tier_info PASSED [ 92%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_dtensor_plan_collectives_empty_default PASSED [ 92%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_gspmd_result_diagnostics_defaults PASSED [ 92%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_comm_backend_with_no_devices PASSED [ 93%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_config_custom_strategy PASSED [ 93%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_num_devices_on_axes_computation PASSED [ 93%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_total_devices_helper PASSED [ 93%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_sharding_result_error_none_by_default PASSED [ 93%]
+src/bridges/pytorch_xla/tests/test_integration.py::TestEdgeCases::test_gspmd_runner_cache_lifecycle PASSED [ 94%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestShardingConfig::test_config_defaults PASSED [ 94%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_bridge_init PASSED [ 94%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_bridge_init_without_circuit_breakers PASSED [ 94%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_shard_with_no_real_model PASSED [ 94%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_shard_records_stage_durations PASSED [ 95%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_shard_to_dict PASSED [ 95%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_shard_sets_comm_backend PASSED [ 95%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestAutoShardingBridge::test_shard_sets_executor PASSED [ 95%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_config_holds_real_model_and_inputs PASSED [ 95%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_with_real_model_returns_sharding_result FAILED [ 96%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_with_skip_flags_returns_usable_result FAILED [ 96%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_records_total_duration FAILED [ 96%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_with_real_model_sets_infrastructure FAILED [ 96%]
+src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_to_dict_for_real_run FAILED [ 96%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestTorchXLAExporterTier::test_is_available_contract PASSED [ 97%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestTorchXLAExporterTier::test_export_produces_stablehlomodule_or_raises SKIPPED [ 97%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestONNXBridgeExporterTier::test_is_available_contract PASSED [ 97%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestONNXBridgeExporterTier::test_export_with_onnx_mlir SKIPPED [ 97%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestONNXBridgeExporterTier::test_onnx_module_present_even_if_mlir_binary_missing SKIPPED [ 97%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestTVMScriptExporterTier::test_is_available_contract PASSED [ 98%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestTVMScriptExporterTier::test_export_with_tvm_installed SKIPPED [ 98%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestTVMScriptExporterTier::test_fallback_emits_stablehlo_like_wrapper SKIPPED [ 98%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestStableHLOExporterOrchestrator::test_export_from_captured_with_real_capture PASSED [ 98%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestStableHLOExporterOrchestrator::test_export_from_captured_rejects_unusable_capture PASSED [ 98%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestStableHLOExporterOrchestrator::test_export_from_captured_rejects_none_capture PASSED [ 99%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestStableHLOExporterOrchestrator::test_tvm_path_can_be_disabled PASSED [ 99%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestCheckIsRealStableHLO::test_real_stablehlo_detected PASSED [ 99%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestCheckIsRealStableHLO::test_mhlo_only_not_real_stablehlo PASSED [ 99%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestCheckIsRealStableHLO::test_empty_mlir_not_stablehlo PASSED [ 99%]
+src/bridges/pytorch_xla/tests/test_stablehlo_export.py::TestCheckIsRealStableHLO::test_arbitrary_text_not_stablehlo PASSED [100%]
+
+==================================== ERRORS ====================================
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_all_vendors_calls_all_backends _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 680
+      def test_build_all_vendors_calls_all_backends(
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:680
+____ ERROR at setup of TestFullPipelineWithHarness.test_build_with_skip_amd ____
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 700
+      def test_build_with_skip_amd(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:700
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_with_skip_all_but_nvidia _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 718
+      def test_build_with_skip_all_but_nvidia(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:718
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_fat_binary_has_correct_sections _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 740
+      def test_build_fat_binary_has_correct_sections(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:740
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_records_linking_result _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 762
+      def test_build_records_linking_result(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:762
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_records_all_stage_times _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 777
+      def test_build_records_all_stage_times(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:777
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_total_time_is_positive _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 792
+      def test_build_total_time_is_positive(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:792
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_output_path_exists __
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 805
+      def test_build_output_path_exists(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:805
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_to_dict_serializable _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 820
+      def test_build_to_dict_serializable(self, aot_packager: Any, tmp_path: Path) -> None:
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:820
+_ ERROR at setup of TestFullPipelineWithHarness.test_build_error_when_no_vendors_succeed _
+file /workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py, line 842
+      def test_build_error_when_no_vendors_succeed(
+E       fixture 'aot_packager' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/aot_packager/tests/test_integration.py::<event_loop>, src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::<event_loop>, src/bridges::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_integration.py:842
+___ ERROR at setup of TestShardingBridgeFixture.test_fixture_returns_bridge ____
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 162
+      def test_fixture_returns_bridge(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:162
+_ ERROR at setup of TestShardingBridgeFixture.test_fixture_disables_circuit_breakers _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 166
+      def test_fixture_disables_circuit_breakers(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:166
+___ ERROR at setup of TestShardingBridgeFixture.test_fixture_has_mock_gspmd ____
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 171
+      def test_fixture_has_mock_gspmd(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:171
+___ ERROR at setup of TestShardingBridgeFixture.test_fixture_has_mock_graph ____
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 176
+      def test_fixture_has_mock_graph(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:176
+_ ERROR at setup of TestShardingBridgeFixture.test_fixture_has_mock_stablehlo __
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 181
+      def test_fixture_has_mock_stablehlo(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:181
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_uses_mocked_graph_capture _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 186
+      def test_shard_uses_mocked_graph_capture(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:186
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_uses_mocked_stablehlo_export _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 192
+      def test_shard_uses_mocked_stablehlo_export(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:192
+___ ERROR at setup of TestShardingBridgeFixture.test_shard_uses_mocked_gspmd ___
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 198
+      def test_shard_uses_mocked_gspmd(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:198
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_returns_sharding_result _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 204
+      def test_shard_returns_sharding_result(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:204
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_success_with_mocked_path _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 210
+      def test_shard_success_with_mocked_path(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:210
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_records_all_stage_durations _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 223
+      def test_shard_records_all_stage_durations(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:223
+_ ERROR at setup of TestShardingBridgeFixture.test_mock_gspmd_called_with_correct_args _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 234
+      def test_mock_gspmd_called_with_correct_args(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:234
+__ ERROR at setup of TestShardingBridgeFixture.test_comm_backend_set_per_mesh __
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 248
+      def test_comm_backend_set_per_mesh(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:248
+____ ERROR at setup of TestShardingBridgeFixture.test_executor_set_per_mesh ____
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 255
+      def test_executor_set_per_mesh(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:255
+__ ERROR at setup of TestShardingBridgeFixture.test_gspmd_failure_propagates ___
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 261
+      def test_gspmd_failure_propagates(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:261
+_ ERROR at setup of TestShardingBridgeFixture.test_graph_capture_failure_propagates _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 272
+      def test_graph_capture_failure_propagates(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:272
+_ ERROR at setup of TestShardingBridgeFixture.test_stablehlo_export_failure_propagates _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 282
+      def test_stablehlo_export_failure_propagates(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:282
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_with_different_meshes _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 292
+      def test_shard_with_different_meshes(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:292
+_____ ERROR at setup of TestShardingBridgeFixture.test_shard_with_2d_mesh ______
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 305
+      def test_shard_with_2d_mesh(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:305
+_ ERROR at setup of TestShardingBridgeFixture.test_shard_with_heterogeneous_mesh _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 315
+      def test_shard_with_heterogeneous_mesh(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:315
+_ ERROR at setup of TestShardingBridgeFixture.test_mocks_restored_after_shard __
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 325
+      def test_mocks_restored_after_shard(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:325
+_ ERROR at setup of TestFullPipelineEndToEnd.test_shard_with_real_model_and_skip_flags _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 371
+      def test_shard_with_real_model_and_skip_flags(
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:371
+_ ERROR at setup of TestFullPipelineEndToEnd.test_shard_result_dict_contains_all_keys _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 391
+      def test_shard_result_dict_contains_all_keys(
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:391
+_ ERROR at setup of TestFullPipelineEndToEnd.test_shard_result_is_usable_when_successful _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 406
+      def test_shard_result_is_usable_when_successful(
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:406
+___ ERROR at setup of TestFullPipelineEndToEnd.test_total_duration_recorded ____
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 419
+      def test_total_duration_recorded(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:419
+_ ERROR at setup of TestFullPipelineEndToEnd.test_pipeline_with_skip_sharding_only _
+file /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py, line 429
+      def test_pipeline_with_skip_sharding_only(self, sharding_bridge: Any) -> None:
+E       fixture 'sharding_bridge' not found
+>       available fixtures: _session_event_loop, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, cov, doctest_namespace, event_loop, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, src/bridges/pytorch_xla/tests/test_integration.py::<event_loop>, src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::<event_loop>, testrun_uid, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory, worker_id
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/tests/test_integration.py:429
+=================================== FAILURES ===================================
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/amd_backend.py:151: src.common.errors.CompilationError: AMD AOT compilation failed (AOTriton + Triton fallback): AMD fallback requires amdclang++ or hipcc in PATH (AOTriton also unavailable). Install ROCm or AOTriton.
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/amd_backend.py:151: src.common.errors.CompilationError: AMD AOT compilation failed (AOTriton + Triton fallback): AMD fallback requires amdclang++ or hipcc in PATH (AOTriton also unavailable). Install ROCm or AOTriton.
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_all_vendors0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_skip_amd0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_records_stage_times0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_produces_output_pat0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_fat_binary_has_sect0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_total_size_positive0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/builder.py:479: src.common.errors.CompilationError: gcc failed to compile runtime_stub.c: /tmp/pytest-of-codespace/pytest-9/test_build_records_per_vendor_0/fb/runtime_stub.c:30:10: fatal error: ../../c_api/triton_c_api.h: No such file or directory
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_metal_backend.py:215: AttributeError: type object 'SectionFormat' has no attribute 'METALLIB'
+/workspaces/NVINDIA_CUD/src/bridges/aot_packager/tests/test_metal_backend.py:218: AttributeError: type object 'SectionFormat' has no attribute 'AIR'
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/stablehlo_export.py:689: src.common.errors.StableHLOExportError: All StableHLO export paths failed for 'Linear'. Attempt history:
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/stablehlo_export.py:689: src.common.errors.StableHLOExportError: All StableHLO export paths failed for 'Linear'. Attempt history:
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/stablehlo_export.py:689: src.common.errors.StableHLOExportError: All StableHLO export paths failed for 'Linear'. Attempt history:
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/stablehlo_export.py:689: src.common.errors.StableHLOExportError: All StableHLO export paths failed for 'Linear'. Attempt history:
+/workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/stablehlo_export.py:689: src.common.errors.StableHLOExportError: All StableHLO export paths failed for 'Linear'. Attempt history:
+=============================== warnings summary ===============================
+src/bridges/pytorch_xla/pipeline_orchestrator.py:37
+  /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/pipeline_orchestrator.py:37: DeprecationWarning: ExportMethod enum is deprecated; use StableHLOModule.export_method string field instead
+    from .stablehlo_export import StableHLOExporter, StableHLOModule
+
+src/bridges/pytorch_xla/tests/test_collective_insertion.py: 28 warnings
+src/bridges/pytorch_xla/tests/test_integration.py: 22 warnings
+  <string>:12: UserWarning: StableHLOModule is_usable=True but is_real_stablehlo=False; this is a fallback representation, not actual StableHLO. GSPMD will not produce real sharding.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] src/bridges/pytorch_xla/tests/test_stablehlo_export.py:82: torch_xla is not installed; primary tier unavailable
+SKIPPED [1] src/bridges/pytorch_xla/tests/test_stablehlo_export.py:115: onnx-mlir binary not on PATH; secondary tier unavailable
+SKIPPED [1] src/bridges/pytorch_xla/tests/test_stablehlo_export.py:134: python `onnx` package not installed
+SKIPPED [1] src/bridges/pytorch_xla/tests/test_stablehlo_export.py:156: tvm is not installed; tertiary tier unavailable
+SKIPPED [1] src/bridges/pytorch_xla/tests/test_stablehlo_export.py:171: tvm is not installed
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_all_vendors_calls_all_backends
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_with_skip_amd
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_with_skip_all_but_nvidia
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_fat_binary_has_correct_sections
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_records_linking_result
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_records_all_stage_times
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_total_time_is_positive
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_output_path_exists
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_to_dict_serializable
+ERROR src/bridges/aot_packager/tests/test_integration.py::TestFullPipelineWithHarness::test_build_error_when_no_vendors_succeed
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_returns_bridge
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_disables_circuit_breakers
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_has_mock_gspmd
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_has_mock_graph
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_fixture_has_mock_stablehlo
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_uses_mocked_graph_capture
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_uses_mocked_stablehlo_export
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_uses_mocked_gspmd
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_returns_sharding_result
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_success_with_mocked_path
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_records_all_stage_durations
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_mock_gspmd_called_with_correct_args
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_comm_backend_set_per_mesh
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_executor_set_per_mesh
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_gspmd_failure_propagates
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_graph_capture_failure_propagates
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_stablehlo_export_failure_propagates
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_with_different_meshes
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_with_2d_mesh
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_shard_with_heterogeneous_mesh
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestShardingBridgeFixture::test_mocks_restored_after_shard
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_shard_with_real_model_and_skip_flags
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_shard_result_dict_contains_all_keys
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_shard_result_is_usable_when_successful
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_total_duration_recorded
+ERROR src/bridges/pytorch_xla/tests/test_integration.py::TestFullPipelineEndToEnd::test_pipeline_with_skip_sharding_only
+FAILED src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_compile_kernel_returns_result
+FAILED src/bridges/aot_packager/tests/test_amd_backend.py::TestAMDBackend::test_compile_kernel_caches_result
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_all_vendors
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_skip_amd
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_records_stage_times
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_produces_output_path
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_fat_binary_has_sections
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_total_size_positive
+FAILED src/bridges/aot_packager/tests/test_builder.py::TestFatBinaryBuilder::test_build_records_per_vendor_results
+FAILED src/bridges/aot_packager/tests/test_metal_backend.py::TestFatBinarySectionFormat::test_metallib_format_exists
+FAILED src/bridges/aot_packager/tests/test_metal_backend.py::TestFatBinarySectionFormat::test_air_format_exists
+FAILED src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_with_real_model_returns_sharding_result
+FAILED src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_with_skip_flags_returns_usable_result
+FAILED src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_records_total_duration
+FAILED src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_with_real_model_sets_infrastructure
+FAILED src/bridges/pytorch_xla/tests/test_pipeline_orchestrator.py::TestPipelineHappyPath::test_shard_to_dict_for_real_run
+====== 16 failed, 452 passed, 5 skipped, 51 warnings, 36 errors in 59.31s ======

@@ -1,0 +1,36 @@
+{
+  "run_id": "20260607T111043Z",
+  "started_at": "2026-06-07T11:10:43.353164+00:00",
+  "finished_at": "2026-06-07T11:10:44.289574+00:00",
+  "git_sha": "59448640322b0a397b6135fbc8846f00d87608a0",
+  "git_branch": "main",
+  "host": "codespaces-341700",
+  "nautilus_version": "",
+  "schema_version": 1,
+  "results": [
+    {
+      "benchmark": "kernels/matmul",
+      "vendor": "cpu",
+      "status": "ok",
+      "error": null,
+      "compile_time_s": 0.0,
+      "exec_time_s": 0.25737952200006475,
+      "memory_mb": 284.60546875,
+      "binary_size_b": 0,
+      "params": {
+        "M": 1024,
+        "N": 1024,
+        "K": 1024,
+        "dtype": "float32",
+        "backend": "numpy"
+      },
+      "extras": {
+        "gflops": 8.343646111828042,
+        "exec_time_min_s": 0.25737952200006475,
+        "exec_time_max_s": 0.25737952200006475,
+        "exec_time_stdev_s": 0.0
+      },
+      "timestamp": "2026-06-07T11:10:44.289416+00:00"
+    }
+  ]
+}

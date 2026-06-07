@@ -1,0 +1,27 @@
+============================= test session starts ==============================
+collecting ... collected 16 items
+
+tests/test_stablehlo_to_triton.py::TestParseMLIR::test_parse_simple_func PASSED [  6%]
+tests/test_stablehlo_to_triton.py::TestParseMLIR::test_parse_empty_raises PASSED [ 12%]
+tests/test_stablehlo_to_triton.py::TestParseMLIR::test_parse_no_func_def_raises PASSED [ 18%]
+tests/test_stablehlo_to_triton.py::TestParseMLIR::test_parse_dot_op PASSED [ 25%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_translate_elementwise_add PASSED [ 31%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_translate_dot PASSED [ 37%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_translate_elementwise_pipeline PASSED [ 43%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_translate_reduce PASSED [ 50%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_translate_broadcast_reshape PASSED [ 56%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_translate_linear_model PASSED [ 62%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_generated_source_is_valid_python PASSED [ 68%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_triton_source_dataclass PASSED [ 75%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_unsupported_op_raises PASSED [ 81%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_elementwise_sub PASSED [ 87%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_compare_select_pattern PASSED [ 93%]
+tests/test_stablehlo_to_triton.py::TestTranslate::test_negate_op PASSED  [100%]
+
+=============================== warnings summary ===============================
+src/bridges/pytorch_xla/pipeline_orchestrator.py:37
+  /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/pipeline_orchestrator.py:37: DeprecationWarning: ExportMethod enum is deprecated; use StableHLOModule.export_method string field instead
+    from .stablehlo_export import StableHLOExporter, StableHLOModule
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 16 passed, 1 warning in 6.17s =========================

@@ -1,0 +1,29 @@
+{"ts": "2026-06-07T11:12:09.768693+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark start", "benchmark": "kernels/matmul", "targets": ["nvidia/sm_90"], "span_id": "a590581b-0e40-4f07-8de5-fcadbf409457"}
+{"ts": "2026-06-07T11:12:11.819472+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark done", "benchmark": "kernels/matmul", "target": "nvidia/sm_90", "status": "skipped", "exec_time_s": null, "compile_time_s": null, "memory_mb": 333.0078125, "binary_size_b": null, "span_id": "a590581b-0e40-4f07-8de5-fcadbf409457"}
+{"ts": "2026-06-07T11:12:11.824264+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "result set written", "path": "/workspaces/NVINDIA_CUD/benchmarks/results/bench_20260607T111209Z.json", "count": 1, "span_id": "a590581b-0e40-4f07-8de5-fcadbf409457"}
+{"ts": "2026-06-07T11:12:11.824364+00:00", "level": "info", "logger": "nautilus.span", "msg": "span_finished", "span_id": "a590581b-0e40-4f07-8de5-fcadbf409457", "operation": "bench_run", "duration_ms": 2086.0105469999835, "error": null, "metadata": {"trials": 1, "warmup": 0, "timeout": 30.0}, "stages": []}
+{
+  "run_id": "20260607T111209Z",
+  "started_at": "2026-06-07T11:12:09.768654+00:00",
+  "finished_at": "2026-06-07T11:12:11.819571+00:00",
+  "git_sha": "59448640322b0a397b6135fbc8846f00d87608a0",
+  "git_branch": "main",
+  "host": "codespaces-341700",
+  "nautilus_version": "",
+  "schema_version": 1,
+  "results": [
+    {
+      "benchmark": "kernels/matmul",
+      "vendor": "nvidia/sm_90",
+      "status": "skipped",
+      "error": "cuda device not available on this host",
+      "compile_time_s": null,
+      "exec_time_s": null,
+      "memory_mb": 333.0078125,
+      "binary_size_b": null,
+      "params": {},
+      "extras": {},
+      "timestamp": "2026-06-07T11:12:11.819431+00:00"
+    }
+  ]
+}

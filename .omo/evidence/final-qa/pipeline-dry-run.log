@@ -1,0 +1,24 @@
+{"ts": "2026-06-07T11:08:14.464575+00:00", "level": "info", "logger": "nautilus.cli.pipeline", "msg": "pipeline invoked", "input": "benchmarks/kernels/matmul.py", "targets": ["nvidia/nvidia-h100"], "mesh": [], "strategy": "auto", "output_dir": "nautilus-out", "resume_from": null, "dry_run": true, "parallel": true}
+nautilus pipeline: input=matmul.py targets=['nvidia/nvidia-h100'] mesh=[] strategy=auto (dry-run)
+{"ts": "2026-06-07T11:08:14.464903+00:00", "level": "info", "logger": "nautilus.cli.pipeline", "msg": "pipeline starting", "start_stage": "capture", "stages": ["capture", "shard", "extract", "tune", "build", "dispatch"], "targets": ["nvidia/nvidia-h100"], "dry_run": true}
+[OK ] capture       0.0 ms (dry-run) would_run=<lambda>
+[OK ] shard         0.0 ms (dry-run) would_run=<lambda>
+[OK ] extract       0.0 ms (dry-run) would_run=<lambda>
+[OK ] tune          0.0 ms (dry-run) would_run=<lambda>
+[OK ] build         0.0 ms (dry-run) would_run=<lambda>
+{"ts": "2026-06-07T11:08:14.465154+00:00", "level": "info", "logger": "nautilus.cli.pipeline", "msg": "dispatch stage", "shards": 1, "span_id": "eef1a0f9-eddb-4f15-a20c-50a9079c2f55"}
+{"ts": "2026-06-07T11:08:14.465228+00:00", "level": "info", "logger": "nautilus.stage", "msg": "stage_finished", "span_id": "eef1a0f9-eddb-4f15-a20c-50a9079c2f55", "duration_ms": 0.06852800026535988, "metadata": {"kernel_name": "", "shards": 1, "sharding_cache_key": "", "dry_run": true}, "error": null}
+[OK ] dispatch      0.1 ms shards=1
+{"ts": "2026-06-07T11:08:14.465320+00:00", "level": "info", "logger": "nautilus.span", "msg": "span_finished", "span_id": "eef1a0f9-eddb-4f15-a20c-50a9079c2f55", "operation": "nautilus_pipeline", "duration_ms": 0.3092669998295605, "error": null, "metadata": {"start_stage": "capture", "dry_run": true, "targets": ["nvidia/nvidia-h100"]}, "stages": [{"name": "dispatch", "duration_ms": 0.06852800026535988, "metadata": {"kernel_name": "", "shards": 1, "sharding_cache_key": "", "dry_run": true}, "error": null}]}
+
+============================================================
+PIPELINE SUMMARY
+============================================================
+  [OK  ] capture       0.0 ms (dry-run)
+  [OK  ] shard         0.0 ms (dry-run)
+  [OK  ] extract       0.0 ms (dry-run)
+  [OK  ] tune          0.0 ms (dry-run)
+  [OK  ] build         0.0 ms (dry-run)
+  [OK  ] dispatch      0.1 ms
+
+Summary written to nautilus-out/pipeline_summary.json

@@ -1,0 +1,93 @@
+{
+  "input": "benchmarks/kernels/matmul.py",
+  "output_dir": "nautilus-out",
+  "dry_run": true,
+  "stages": [
+    {
+      "stage": "capture",
+      "success": true,
+      "duration_ms": 0.0,
+      "dry_run": true,
+      "skipped": false,
+      "summary": {
+        "dry_run": true,
+        "would_run": "<lambda>"
+      }
+    },
+    {
+      "stage": "shard",
+      "success": true,
+      "duration_ms": 0.0,
+      "dry_run": true,
+      "skipped": false,
+      "summary": {
+        "dry_run": true,
+        "would_run": "<lambda>"
+      }
+    },
+    {
+      "stage": "extract",
+      "success": true,
+      "duration_ms": 0.0,
+      "dry_run": true,
+      "skipped": false,
+      "summary": {
+        "dry_run": true,
+        "would_run": "<lambda>"
+      }
+    },
+    {
+      "stage": "tune",
+      "success": true,
+      "duration_ms": 0.0,
+      "dry_run": true,
+      "skipped": false,
+      "summary": {
+        "dry_run": true,
+        "would_run": "<lambda>"
+      }
+    },
+    {
+      "stage": "build",
+      "success": true,
+      "duration_ms": 0.0,
+      "dry_run": true,
+      "skipped": false,
+      "summary": {
+        "dry_run": true,
+        "would_run": "<lambda>"
+      }
+    },
+    {
+      "stage": "dispatch",
+      "success": true,
+      "duration_ms": 0.13977099979456398,
+      "dry_run": false,
+      "skipped": false,
+      "summary": {
+        "kernel_name": "",
+        "shards": 1,
+        "mesh_axes": [],
+        "tuning": {},
+        "fat_binaries": {},
+        "skipped_vendors": [],
+        "sharding_cache_key": "",
+        "dry_run": true
+      }
+    }
+  ],
+  "kernel_name": "",
+  "mesh_axes": [],
+  "shard_count": 1,
+  "fat_binary_paths": {},
+  "dispatch_plan": {
+    "kernel_name": "",
+    "shards": 1,
+    "mesh_axes": [],
+    "tuning": {},
+    "fat_binaries": {},
+    "skipped_vendors": [],
+    "sharding_cache_key": "",
+    "dry_run": true
+  }
+}

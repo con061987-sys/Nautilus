@@ -1,0 +1,6 @@
+{"ts": "2026-06-07T11:11:19.306957+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark start", "benchmark": "kernels/layer_norm", "targets": ["cpu"], "span_id": "b0e22966-ac25-4ce8-911b-0de6e6df459a"}
+{"ts": "2026-06-07T11:11:20.358893+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "benchmark done", "benchmark": "kernels/layer_norm", "target": "cpu", "status": "ok", "exec_time_s": 0.21947269400016012, "compile_time_s": 0.0, "memory_mb": 314.7890625, "binary_size_b": 0, "span_id": "b0e22966-ac25-4ce8-911b-0de6e6df459a"}
+{"ts": "2026-06-07T11:11:20.376754+00:00", "level": "info", "logger": "nautilus.bench.runner", "msg": "result set written", "path": "/workspaces/NVINDIA_CUD/benchmarks/results/bench_20260607T111119Z.json", "count": 1, "span_id": "b0e22966-ac25-4ce8-911b-0de6e6df459a"}
+{"ts": "2026-06-07T11:11:20.376895+00:00", "level": "info", "logger": "nautilus.span", "msg": "span_finished", "span_id": "b0e22966-ac25-4ce8-911b-0de6e6df459a", "operation": "bench_run", "duration_ms": 1232.9528970001265, "error": null, "metadata": {"trials": 1, "warmup": 0, "timeout": 30.0}, "stages": []}
+
+ResultSet 20260607T111119Z written: 1 ok, 0 skipped, 0 errors (total 1).

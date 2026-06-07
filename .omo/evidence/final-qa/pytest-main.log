@@ -1,0 +1,764 @@
+============================= test session starts ==============================
+collecting ... collected 483 items / 2 deselected / 481 selected
+
+src/tests/integration/test_c_api.py::TestCApiModuleImport::test_imports_without_crash PASSED [  0%]
+src/tests/integration/test_c_api.py::TestCApiModuleImport::test_exposes_public_api PASSED [  0%]
+src/tests/integration/test_c_api.py::TestCApiModuleImport::test_exposes_vendor_constants PASSED [  0%]
+src/tests/integration/test_c_api.py::TestCApiModuleImport::test_exposes_arch_constants PASSED [  0%]
+src/tests/integration/test_c_api.py::TestCApiAvailability::test_is_available_returns_bool PASSED [  1%]
+src/tests/integration/test_c_api.py::TestCApiAvailability::test_is_available_does_not_raise PASSED [  1%]
+src/tests/integration/test_c_api.py::TestCApiCompile::test_compile_raises_clear_error_when_unavailable SKIPPED [  1%]
+src/tests/integration/test_c_api.py::TestCApiCompile::test_triton_version_raises_when_unavailable SKIPPED [  1%]
+src/tests/integration/test_c_api.py::TestTritonKernelHandle::test_handle_class_exists PASSED [  1%]
+src/tests/integration/test_c_api.py::TestTritonKernelHandle::test_handle_destructor_swallows_lib_missing SKIPPED [  2%]
+src/tests/integration/test_c_api.py::TestCApiLibrarySearch::test_search_paths_listed PASSED [  2%]
+src/tests/integration/test_c_api.py::TestCApiLibrarySearch::test_loader_handles_missing_env_var FAILED [  2%]
+src/tests/integration/test_c_api.py::TestCApiLibrarySearch::test_loader_handles_nonexistent_env_path FAILED [  2%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_common_imports PASSED [  2%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_fat_binary_serialization_roundtrip PASSED [  3%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_hardware_detection_does_not_lie PASSED [  3%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_example_matmul_parses PASSED [  3%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_bridge_module_imports PASSED [  3%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_aot_nvidia_round_trip SKIPPED [  3%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_cli_help PASSED [  4%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_c_api_stub_loads PASSED [  4%]
+src/tests/integration/test_full_pipeline.py::TestFullPipeline::test_verify_env_script PASSED [  4%]
+src/tests/integration/test_full_pipeline.py::TestFullPipelineE2E::test_full_end_to_end_pipeline PASSED [  4%]
+src/tests/integration/test_full_pipeline.py::TestFullPipelineE2E::test_full_pipeline_with_evidence PASSED [  4%]
+src/tests/integration/test_full_pipeline.py::TestFullPipelineE2E::test_pipeline_with_cross_vendor_output PASSED [  5%]
+src/tests/integration/test_full_pipeline.py::TestPartialPipelines::test_capture_to_shard PASSED [  5%]
+src/tests/integration/test_full_pipeline.py::TestPartialPipelines::test_capture_to_shard_with_skip_sharding PASSED [  5%]
+src/tests/integration/test_full_pipeline.py::TestPartialPipelines::test_shard_to_tune PASSED [  5%]
+src/tests/integration/test_full_pipeline.py::TestPartialPipelines::test_tune_to_build PASSED [  6%]
+src/tests/integration/test_full_pipeline.py::TestPartialPipelines::test_build_to_dispatch PASSED [  6%]
+src/tests/integration/test_full_pipeline.py::TestPartialPipelines::test_cuda_ingest_to_tune PASSED [  6%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_missing_compiler_lld SKIPPED [  6%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_missing_compiler_gcc SKIPPED [  6%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_malformed_model_none PASSED [  7%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_malformed_kernel_source_empty PASSED [  7%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_malformed_kernel_source_invalid_warps PASSED [  7%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_invalid_target_string PASSED [  7%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_timeout_during_tuning PASSED [  7%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_invalid_fat_binary_magic PASSED [  8%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_fat_binary_version_mismatch PASSED [  8%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_mesh_shape_validation PASSED [  8%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_tensor_sharding_validation PASSED [  8%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_sharding_spec_lite_validates_axes PASSED [  8%]
+src/tests/integration/test_full_pipeline.py::TestFailureModes::test_circuit_breaker_open PASSED [  9%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[nvidia-sm_90-nvidia/nvidia-h100] PASSED [  9%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[nvidia-sm_80-nvidia/nvidia-a100] PASSED [  9%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[nvidia-sm_70-nvidia/sm_70] PASSED [  9%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[nvidia-sm_100-nvidia/sm_100] PASSED [  9%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[amd-gfx942-rocm/gfx942] PASSED [ 10%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[amd-gfx90a-rocm/gfx90a] PASSED [ 10%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[amd-gfx908-rocm/gfx908] PASSED [ 10%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[amd-gfx950-rocm/gfx950] PASSED [ 10%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[intel-intel_gpu_xehpg-intel/intel_gpu_xehpg] PASSED [ 11%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[intel-intel_gpu_xehpc-intel/intel_gpu_xehpc] PASSED [ 11%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[intel-intel_gaudi2-intel/gaudi-2] PASSED [ 11%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[intel-intel_gaudi3-intel/intel_gaudi3] PASSED [ 11%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[apple-apple_m2-cuda] PASSED [ 11%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_conversion[apple-apple_m3-cuda] PASSED [ 12%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_hardware_target_vendor_detection PASSED [ 12%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_multi_vendor_fat_binary_sections PASSED [ 12%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[SM_90-nvidia] PASSED [ 12%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[SM_80-nvidia] PASSED [ 12%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[GFX942-amd] PASSED [ 13%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[GFX90A-amd] PASSED [ 13%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[XE_HPG-intel] PASSED [ 13%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[GAUDI2-intel] PASSED [ 13%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_arch_vendor_association[APPLE_M2-apple] PASSED [ 13%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_all_archs_have_vendor PASSED [ 14%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_vendor_from_string PASSED [ 14%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_mixed_mesh_construction PASSED [ 14%]
+src/tests/integration/test_full_pipeline.py::TestCrossArchitecture::test_mesh_device_display_name PASSED [ 14%]
+src/tests/integration/test_harness_check.py::TestHarnessCliOptions::test_evidence_dir_option_registered PASSED [ 14%]
+src/tests/integration/test_harness_check.py::TestHarnessCliOptions::test_use_real_backend_option_registered PASSED [ 15%]
+src/tests/integration/test_harness_check.py::TestEvidenceCaptureFixture::test_evidence_disabled_when_no_dir FAILED [ 15%]
+src/tests/integration/test_harness_check.py::TestEvidenceCaptureFixture::test_evidence_attaches_text PASSED [ 15%]
+src/tests/integration/test_harness_check.py::TestEvidenceCaptureFixture::test_evidence_attach_json_and_bytes PASSED [ 15%]
+src/tests/integration/test_harness_check.py::TestEvidenceCaptureFixture::test_evidence_captures_warnings PASSED [ 16%]
+src/tests/integration/test_harness_check.py::TestEvidenceCaptureFixture::test_evidence_finalize_is_idempotent PASSED [ 16%]
+src/tests/integration/test_harness_check.py::TestAutoTuningBridgeFixture::test_yields_real_bridge_instance PASSED [ 16%]
+src/tests/integration/test_harness_check.py::TestAutoTuningBridgeFixture::test_tvm_adapter_patches_are_installed PASSED [ 16%]
+src/tests/integration/test_harness_check.py::TestAotPackagerFixture::test_yields_real_builder_instance PASSED [ 16%]
+src/tests/integration/test_harness_check.py::TestAotPackagerFixture::test_vendor_mocks_are_installed PASSED [ 17%]
+src/tests/integration/test_harness_check.py::TestAotPackagerFixture::test_build_produces_synthetic_fat_binary PASSED [ 17%]
+src/tests/integration/test_harness_check.py::TestShardingBridgeFixture::test_yields_real_bridge_instance PASSED [ 17%]
+src/tests/integration/test_harness_check.py::TestShardingBridgeFixture::test_gspmd_mocks_are_installed PASSED [ 17%]
+src/tests/integration/test_harness_check.py::TestShardingBridgeFixture::test_circuit_breakers_disabled_in_mocked_mode PASSED [ 17%]
+src/tests/integration/test_harness_check.py::TestCudaIngestorFixture::test_yields_real_compiler_instance PASSED [ 18%]
+src/tests/integration/test_harness_check.py::TestCudaIngestorFixture::test_parser_mock_is_installed PASSED [ 18%]
+src/tests/integration/test_harness_check.py::TestUseRealBackendMarker::test_marker_marks_node PASSED [ 18%]
+src/tests/integration/test_harness_check.py::TestUseRealBackendMarker::test_auto_tuning_bridge_skips_without_tvm SKIPPED [ 18%]
+src/tests/integration/test_harness_check.py::TestUseRealBackendMarker::test_aot_packager_skips_without_lld PASSED [ 18%]
+src/tests/integration/test_pipeline.py::TestPipelineStage::test_values PASSED [ 19%]
+src/tests/integration/test_pipeline.py::TestPipelineStage::test_from_str_valid PASSED [ 19%]
+src/tests/integration/test_pipeline.py::TestPipelineStage::test_from_str_invalid PASSED [ 19%]
+src/tests/integration/test_pipeline.py::TestPipelineStage::test_stages_from PASSED [ 19%]
+src/tests/integration/test_pipeline.py::TestPipelineContext::test_round_trip PASSED [ 19%]
+src/tests/integration/test_pipeline.py::TestHelpers::test_parse_mesh_empty PASSED [ 20%]
+src/tests/integration/test_pipeline.py::TestHelpers::test_parse_mesh_1d PASSED [ 20%]
+src/tests/integration/test_pipeline.py::TestHelpers::test_parse_mesh_2d PASSED [ 20%]
+src/tests/integration/test_pipeline.py::TestHelpers::test_parse_mesh_invalid PASSED [ 20%]
+src/tests/integration/test_pipeline.py::TestHelpers::test_parse_targets_empty_returns_defaults PASSED [ 20%]
+src/tests/integration/test_pipeline.py::TestHelpers::test_parse_targets_explicit PASSED [ 21%]
+src/tests/integration/test_pipeline.py::TestCliRegistration::test_pipeline_in_cli PASSED [ 21%]
+src/tests/integration/test_pipeline.py::TestCliRegistration::test_pipeline_help PASSED [ 21%]
+src/tests/integration/test_pipeline.py::TestCliRegistration::test_pipeline_subcommand_help PASSED [ 21%]
+src/tests/integration/test_pipeline.py::TestPipelineDryRun::test_dry_run_all_stages PASSED [ 22%]
+src/tests/integration/test_pipeline.py::TestPipelineResume::test_resume_without_state_fails PASSED [ 22%]
+src/tests/integration/test_pipeline.py::TestPipelineResume::test_resume_with_state FAILED [ 22%]
+src/tests/integration/test_pipeline.py::TestPipelineStageFailure::test_capture_failure_on_missing_file PASSED [ 22%]
+src/tests/integration/test_pipeline.py::TestPipelineStageFailure::test_click_command_propagates_error PASSED [ 22%]
+src/tests/integration/test_pipeline.py::TestPipelineGracefulDegradation::test_pipeline_runs_with_deps_missing PASSED [ 23%]
+src/tests/integration/test_pipeline.py::TestPipelineHappyPath::test_kernel_pipeline_runs_to_completion FAILED [ 23%]
+src/tests/integration/test_pipeline.py::TestPipelineHappyPath::test_dry_run_via_click PASSED [ 23%]
+src/tests/integration/test_pipeline.py::TestHandlerRegistration::test_all_stages_have_handlers PASSED [ 23%]
+src/common/tests/test_common.py::test_result_ok_unwrap PASSED            [ 23%]
+src/common/tests/test_common.py::test_result_err_unwrap_raises PASSED    [ 24%]
+src/common/tests/test_common.py::test_result_map PASSED                  [ 24%]
+src/common/tests/test_common.py::test_result_and_then PASSED             [ 24%]
+src/common/tests/test_common.py::test_error_codes_unique PASSED          [ 24%]
+src/common/tests/test_common.py::test_error_context_is_chainable PASSED  [ 24%]
+src/common/tests/test_common.py::test_error_to_dict PASSED               [ 25%]
+src/common/tests/test_common.py::test_vendor_from_arch PASSED            [ 25%]
+src/common/tests/test_common.py::test_hardware_target_to_tvm PASSED      [ 25%]
+src/common/tests/test_common.py::test_mesh_shape_rejects_zero PASSED     [ 25%]
+src/common/tests/test_common.py::test_tensor_sharding_validates_length_match PASSED [ 25%]
+src/common/tests/test_common.py::test_sharding_spec_validates_axis_range PASSED [ 26%]
+src/common/tests/test_common.py::test_fat_binary_dedup_vendors PASSED    [ 26%]
+src/common/tests/test_common.py::test_circuit_breaker_opens_after_threshold PASSED [ 26%]
+src/common/tests/test_common.py::test_circuit_breaker_excluded_exception_does_not_count PASSED [ 26%]
+src/common/tests/test_common.py::test_stage_budget_unknown_stage_raises PASSED [ 27%]
+src/common/tests/test_common.py::test_timeout_manager_stage_budget PASSED [ 27%]
+src/common/tests/test_common.py::test_logging_structured_json PASSED     [ 27%]
+src/common/tests/test_common.py::test_logging_span_records_stages PASSED [ 27%]
+src/common/tests/test_common.py::test_hardware_detect_returns_something PASSED [ 27%]
+src/common/tests/test_common.py::test_hardware_format_summary_runs PASSED [ 28%]
+src/common/tests/test_hardware.py::test_pcie_bandwidth_gbps_gen4_x16 PASSED [ 28%]
+src/common/tests/test_hardware.py::test_pcie_bandwidth_gbps_gen3_x16 PASSED [ 28%]
+src/common/tests/test_hardware.py::test_pcie_bandwidth_gbps_gen5_x16 PASSED [ 28%]
+src/common/tests/test_hardware.py::test_pcie_bandwidth_gbps_gen1_x1 PASSED [ 28%]
+src/common/tests/test_hardware.py::test_pcie_bandwidth_gbps_unknown_returns_zero PASSED [ 29%]
+src/common/tests/test_hardware.py::test_parse_pcie_speed_string PASSED   [ 29%]
+src/common/tests/test_hardware.py::test_parse_pcie_width_string PASSED   [ 29%]
+src/common/tests/test_hardware.py::test_scan_nvidia_devices_empty PASSED [ 29%]
+src/common/tests/test_hardware.py::test_scan_nvidia_devices_scales_beyond_seven PASSED [ 29%]
+src/common/tests/test_hardware.py::test_scan_nvidia_devices_ignores_control_nodes PASSED [ 30%]
+src/common/tests/test_hardware.py::test_scan_nvidia_devices_proc_indices_only PASSED [ 30%]
+src/common/tests/test_hardware.py::test_scan_nvidia_devices_merges_dev_and_proc PASSED [ 30%]
+src/common/tests/test_hardware.py::test_scan_amd_devices_with_kfd PASSED [ 30%]
+src/common/tests/test_hardware.py::test_scan_amd_devices_no_kfd_no_pci_returns_empty PASSED [ 30%]
+src/common/tests/test_hardware.py::test_scan_amd_devices_intel_rendernode_filtered PASSED [ 31%]
+src/common/tests/test_hardware.py::test_scan_intel_devices_filters_to_0x8086 PASSED [ 31%]
+src/common/tests/test_hardware.py::test_scan_intel_devices_no_devices_returns_empty PASSED [ 31%]
+src/common/tests/test_hardware.py::test_discover_topology_zero_gpus PASSED [ 31%]
+src/common/tests/test_hardware.py::test_discover_topology_bandwidth_per_pair PASSED [ 32%]
+src/common/tests/test_hardware.py::test_discover_topology_numa_aware_ordering PASSED [ 32%]
+src/common/tests/test_hardware.py::test_discover_topology_pcie_fallback_bandwidth PASSED [ 32%]
+src/common/tests/test_hardware.py::test_discover_topology_no_devices_no_links PASSED [ 32%]
+src/common/tests/test_hardware.py::test_source_has_no_hardcoded_nvidia_ceiling PASSED [ 32%]
+src/common/tests/test_hardware.py::test_cli_inspect_topology_outputs_json PASSED [ 33%]
+src/common/tests/test_hardware.py::test_cli_inspect_topology_zero_gpus PASSED [ 33%]
+src/common/tests/test_hardware.py::test_cli_inspect_help_lists_subcommands PASSED [ 33%]
+src/common/tests/test_hardware.py::test_discover_topology_mixed_vendors PASSED [ 33%]
+src/common/tests/test_property_based.py::TestCommonInvariants::test_tuning_config_roundtrip PASSED [ 33%]
+src/common/tests/test_property_based.py::TestCommonInvariants::test_mesh_shape_total_devices PASSED [ 34%]
+src/common/tests/test_property_based.py::TestCommonInvariants::test_fat_binary_dedupes_by_vendor_arch PASSED [ 34%]
+src/common/tests/test_property_based.py::TestCommonInvariants::test_error_codes_unique PASSED [ 34%]
+src/common/tests/test_property_based.py::TestCommonInvariants::test_arch_vendor_mapping_injective PASSED [ 34%]
+src/common/tests/test_property_based.py::TestCommonInvariants::test_sharding_spec_rejects_oob_axes PASSED [ 34%]
+src/runtime/tests/test_async_checkpointer.py::TestCheckpointLoopRace::test_latest_model_saved_under_contention PASSED [ 35%]
+src/runtime/tests/test_async_checkpointer.py::TestCheckpointLoopRace::test_claim_clears_pending_atomically PASSED [ 35%]
+src/runtime/tests/test_async_checkpointer.py::TestCheckpointLoopRace::test_request_checkpoint_locked_writes PASSED [ 35%]
+src/runtime/tests/test_async_checkpointer.py::TestDeserializeSecurity::test_no_torch_no_msgpack_default_raises PASSED [ 35%]
+src/runtime/tests/test_async_checkpointer.py::TestDeserializeSecurity::test_unsafe_pickle_fallback_opt_in PASSED [ 35%]
+src/runtime/tests/test_async_checkpointer.py::TestDeserializeSecurity::test_unsafe_pickle_fallback_default_false PASSED [ 36%]
+src/runtime/tests/test_async_checkpointer.py::TestDeserializeSecurity::test_serialize_deserialize_roundtrip PASSED [ 36%]
+src/runtime/tests/test_async_checkpointer.py::TestDeserializeSecurity::test_torch_load_called_with_weights_only_true PASSED [ 36%]
+src/runtime/tests/test_async_checkpointer.py::TestPublicAPIUnchanged::test_schema_version PASSED [ 36%]
+src/runtime/tests/test_async_checkpointer.py::TestPublicAPIUnchanged::test_checkpoint_info_creation PASSED [ 37%]
+src/runtime/tests/test_async_checkpointer.py::TestPublicAPIUnchanged::test_recover_latest_returns_state PASSED [ 37%]
+src/runtime/tests/test_async_checkpointer.py::TestPublicAPIUnchanged::test_on_node_failure_triggers_recovery PASSED [ 37%]
+src/runtime/tests/test_async_checkpointer.py::TestPublicAPIUnchanged::test_on_node_failure_no_checkpoint PASSED [ 37%]
+src/runtime/tests/test_cluster_orchestrator.py::TestNodeAndLink::test_node_num_devices PASSED [ 37%]
+src/runtime/tests/test_cluster_orchestrator.py::TestNodeAndLink::test_node_devices_by_vendor PASSED [ 38%]
+src/runtime/tests/test_cluster_orchestrator.py::TestNodeAndLink::test_inter_node_link_defaults PASSED [ 38%]
+src/runtime/tests/test_cluster_orchestrator.py::TestNodeAndLink::test_inter_node_link_rejects_negative_bandwidth PASSED [ 38%]
+src/runtime/tests/test_cluster_orchestrator.py::TestNodeAndLink::test_inter_node_link_rejects_negative_latency PASSED [ 38%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_empty_cluster PASSED [ 38%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_num_devices_aggregates_across_nodes PASSED [ 39%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_vendors_aggregated PASSED [ 39%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_single_node_is_not_multi_node PASSED [ 39%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_all_devices_order_preserved PASSED [ 39%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_find_node PASSED [ 39%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_device_mesh_for_node_caches PASSED [ 40%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_device_mesh_for_unknown_node_raises PASSED [ 40%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_inter_node_bandwidth_recorded_link PASSED [ 40%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_inter_node_bandwidth_self_is_zero PASSED [ 40%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_inter_node_bandwidth_falls_back_to_ethernet_default PASSED [ 40%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterTopology::test_to_dict_is_json_serializable PASSED [ 41%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_assigns_to_distinct_devices PASSED [ 41%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_zero_shards_raises PASSED [ 41%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_too_many_shards_raises_with_context PASSED [ 41%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_empty_cluster_raises PASSED [ 41%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_vendor_affinity_groups_majority_first PASSED [ 42%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_no_vendor_affinity_keeps_node_order PASSED [ 42%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_cross_node_vendor_split_disabled_keeps_vendor_on_one_node PASSED [ 42%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_cross_node_vendor_split_enabled_distributes PASSED [ 42%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_rationale_is_set_and_nonempty PASSED [ 43%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_comm_volume_hint_propagated PASSED [ 43%]
+src/runtime/tests/test_cluster_orchestrator.py::TestVendorAwareScheduler::test_assignment_is_deterministic PASSED [ 43%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_same_node_same_vendor_high_bandwidth_is_p2p PASSED [ 43%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_same_node_cross_vendor_is_staged PASSED [ 43%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_cross_node_uses_network PASSED [ 44%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_cross_node_ualink_reflects_recorded_bandwidth PASSED [ 44%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_p2p_threshold_falls_through_to_staged PASSED [ 44%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_negative_p2p_threshold_raises PASSED [ 44%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_plan_cluster_count PASSED [ 44%]
+src/runtime/tests/test_cluster_orchestrator.py::TestCommunicationPlanner::test_to_dict_includes_all_fields PASSED [ 45%]
+src/runtime/tests/test_cluster_orchestrator.py::TestBuildOrchestrationPlan::test_combines_scheduler_and_planner PASSED [ 45%]
+src/runtime/tests/test_cluster_orchestrator.py::TestBuildOrchestrationPlan::test_to_dict_is_json_serializable PASSED [ 45%]
+src/runtime/tests/test_cluster_orchestrator.py::TestBuildOrchestrationPlan::test_assignment_for_node PASSED [ 45%]
+src/runtime/tests/test_cluster_orchestrator.py::TestBuildOrchestrationPlan::test_policy_is_propagated PASSED [ 45%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterCLI::test_cluster_inspect_runs PASSED [ 46%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterCLI::test_cluster_plan_runs PASSED [ 46%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterCLI::test_cluster_plan_rejects_zero_shards PASSED [ 46%]
+src/runtime/tests/test_cluster_orchestrator.py::TestClusterCLI::test_nautilus_cluster_subcommand_is_registered PASSED [ 46%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_all_nan_bit_exact_returns_zero_tuple PASSED [ 46%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_all_nan_non_bit_exact_falls_through PASSED [ 47%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_partial_nan_masked_out_of_ulp PASSED [ 47%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_both_nan_at_position_zero_ulp PASSED [ 47%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_nan_mismatch_yields_finite_sentinel PASSED [ 47%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_zero_arrays PASSED [ 48%]
+src/runtime/tests/test_math_validator.py::TestNaNHandling::test_empty_arrays PASSED [ 48%]
+src/runtime/tests/test_math_validator.py::TestBitExactModeGate::test_disabled_passes_through_unchanged PASSED [ 48%]
+src/runtime/tests/test_math_validator.py::TestBitExactModeGate::test_empty_input_passes_through PASSED [ 48%]
+src/runtime/tests/test_math_validator.py::TestFormatDetection::test_detect_ttgir PASSED [ 48%]
+src/runtime/tests/test_math_validator.py::TestFormatDetection::test_detect_mlir PASSED [ 49%]
+src/runtime/tests/test_math_validator.py::TestFormatDetection::test_detect_llvm PASSED [ 49%]
+src/runtime/tests/test_math_validator.py::TestFormatDetection::test_unknown_raises PASSED [ 49%]
+src/runtime/tests/test_math_validator.py::TestTTGIRInjection::test_injects_into_existing_module_attrs PASSED [ 49%]
+src/runtime/tests/test_math_validator.py::TestTTGIRInjection::test_injects_into_plain_module_block PASSED [ 49%]
+src/runtime/tests/test_math_validator.py::TestTTGIRInjection::test_idempotent PASSED [ 50%]
+src/runtime/tests/test_math_validator.py::TestMLIRInjection::test_injects_arith_fastmath_false PASSED [ 50%]
+src/runtime/tests/test_math_validator.py::TestMLIRInjection::test_idempotent PASSED [ 50%]
+src/runtime/tests/test_math_validator.py::TestLLVMInjection::test_adds_attribute_group_and_references_it PASSED [ 50%]
+src/runtime/tests/test_math_validator.py::TestLLVMInjection::test_idempotent_on_annotated_ir PASSED [ 50%]
+src/runtime/tests/test_math_validator.py::TestLLVMInjection::test_does_not_clobber_existing_attr_group PASSED [ 51%]
+src/runtime/tests/test_math_validator.py::TestValidateKernelOutput::test_all_nan_in_bit_exact_passes PASSED [ 51%]
+src/runtime/tests/test_math_validator.py::TestValidateKernelOutput::test_bit_exact_detects_real_mismatch PASSED [ 51%]
+src/runtime/tests/test_math_validator.py::TestValidateKernelOutput::test_tolerant_passes_within_ulp PASSED [ 51%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_defaults PASSED [ 51%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_invalid_max_trials PASSED [ 52%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_invalid_search_strategy PASSED [ 52%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_invalid_cost_model PASSED [ 52%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_to_dict_roundtrip PASSED [ 52%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_from_dict_ignores_unknown_keys PASSED [ 53%]
+src/bridges/triton_tvm/tests/test_backend_options.py::TestTVMOptions::test_to_dict_includes_extras PASSED [ 53%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_matmul_bounds PASSED [ 53%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_matmul_asymmetric PASSED [ 53%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_bmm_bounds PASSED [ 53%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_matmul_loop_block_size PASSED [ 54%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_matmul_missing_dot_raises PASSED [ 54%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_matmul_contracted_dim_mismatch_raises PASSED [ 54%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_reduction_bounds PASSED [ 54%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_reduction_2d_axis1 PASSED [ 54%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_reduction_missing_op_raises PASSED [ 55%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_elementwise_bounds PASSED [ 55%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_extract_dtype_fp16 PASSED [ 55%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_malformed_ir_raises PASSED [ 55%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_empty_ir_raises PASSED [ 55%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractor::test_generic_extraction_unknown_kind PASSED [ 56%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestPropertyBasedExtraction::test_property_matmul_extracts_correct_dims PASSED [ 56%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestPropertyBasedExtraction::test_property_bmm_extracts_mnk PASSED [ 56%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestPropertyBasedExtraction::test_property_reduction_extracts_axis_size PASSED [ 56%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestPropertyBasedExtraction::test_property_elementwise_extracts_total PASSED [ 56%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestASTRobustness::test_multiline_dot_extracts_correctly PASSED [ 57%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestASTRobustness::test_dot_inside_loop_extracts_correctly PASSED [ 57%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestASTRobustness::test_dtype_extraction_via_ast_not_regex PASSED [ 57%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractionError::test_is_an_exception PASSED [ 57%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractionError::test_raises_with_clear_message PASSED [ 58%]
+src/bridges/triton_tvm/tests/test_bounds_extractor.py::TestBoundsExtractionError::test_can_be_caught_as_exception PASSED [ 58%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_init_defaults PASSED [ 58%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_init_custom_cache_dir PASSED [ 58%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_resolve_grid_tuple PASSED [ 58%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_resolve_grid_partial_tuple PASSED [ 59%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_resolve_grid_callable PASSED [ 59%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_resolve_grid_callable_error PASSED [ 59%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_cache_set_and_get PASSED [ 59%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_cache_miss PASSED [ 59%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_cache_lru_eviction FAILED [ 60%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_cache_disk_persistence PASSED [ 60%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_fallback_matmul PASSED [ 60%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_fallback_defaults PASSED [ 60%]
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestAutotuneConfigs::test_generates_configs_without_tvm PASSED [ 60%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_initial_state_is_closed PASSED [ 61%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_successful_call_keeps_closed PASSED [ 61%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_failures_below_threshold_stay_closed PASSED [ 61%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_failures_at_threshold_trip_circuit PASSED [ 61%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_open_circuit_short_circuits PASSED [ 61%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_cooldown_transitions_to_half_open PASSED [ 62%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_half_open_failure_reopens PASSED [ 62%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_stats_returns_snapshot PASSED [ 62%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_reset_returns_to_closed PASSED [ 62%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestCircuitBreaker::test_unexpected_exceptions_propagate_without_tripping PASSED [ 62%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestDefaultBreakers::test_default_breakers_include_all_dependencies PASSED [ 63%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestDefaultBreakers::test_breakers_have_sensible_configs PASSED [ 63%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestDefaultBreakers::test_breakers_are_registered PASSED [ 63%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_setitem_and_getitem PASSED [ 63%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_capacity_hard_cap PASSED [ 64%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_eviction_orders PASSED [ 64%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_get_refreshes_recency PASSED [ 64%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_get_miss_does_not_introduce_key PASSED [ 64%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_overwrite_existing_key_refreshes_recency PASSED [ 64%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_invalid_maxsize_raises PASSED [ 65%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_eviction_order_matches_recency PASSED [ 65%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCache::test_clear_empties_cache PASSED [ 65%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCacheProperties::test_lru_invariants PASSED [ 65%]
+src/bridges/triton_tvm/tests/test_circuit_breaker.py::TestLRUCacheProperties::test_most_recently_used_is_never_first_eviction PASSED [ 65%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestMappedTuningConfig::test_defaults PASSED [ 66%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestMappedTuningConfig::test_to_triton_config PASSED [ 66%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestConfigMapper::test_map_with_tile_decisions PASSED [ 66%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestConfigMapper::test_map_with_thread_decisions PASSED [ 66%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestConfigMapper::test_map_empty_trace PASSED [ 66%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestConfigMapper::test_map_none_record PASSED [ 67%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestConfigMapper::test_map_json_record PASSED [ 67%]
+src/bridges/triton_tvm/tests/test_config_mapper.py::TestConfigMapper::test_map_real_tvm_like_trace PASSED [ 67%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFullPipeline::test_tuning_chain_returns_ok_with_valid_config PASSED [ 67%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFullPipeline::test_tuning_chain_stage_timing PASSED [ 67%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFullPipeline::test_tune_produces_tuning_result PASSED [ 68%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFullPipeline::test_tuning_chain_preserves_config_across_metadata_types PASSED [ 68%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFullPipeline::test_tune_with_real_ir_fallback_path PASSED [ 68%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFullPipeline::test_tune_with_real_ir_uses_cache_when_available PASSED [ 68%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l0_tvm_db_hit_tier_is_defined PASSED [ 69%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l0_tvm_db_hit_from_mocked_tune PASSED [ 69%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l1_tvm_warm_start_tier_is_defined PASSED [ 69%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l2_tvm_cold_tier_is_defined PASSED [ 69%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l3_disk_cache_returns_cached_config PASSED [ 69%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l3_disk_cache_produces_tuning_result PASSED [ 70%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l4_triton_default_from_tuning_chain_error PASSED [ 70%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l4_triton_default_is_recoverable PASSED [ 70%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l5_safe_fallback_on_template_build_error PASSED [ 70%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l5_safe_fallback_on_import_error PASSED [ 70%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_l5_safe_fallback_on_os_error PASSED [ 71%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_tuning_produces_reasonable_default PASSED [ 71%]
+src/bridges/triton_tvm/tests/test_integration.py::TestFallbackTiers::test_non_matmul_fallback_uses_defaults PASSED [ 71%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_breaker_opens_after_threshold_failures PASSED [ 71%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_breaker_closes_after_success_threshold PASSED [ 71%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_breaker_half_open_failure_reopens PASSED [ 72%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_breaker_used_in_tune_with_breaker PASSED [ 72%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_breaker_tracks_stats_in_pipeline PASSED [ 72%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_default_breakers_are_configured PASSED [ 72%]
+src/bridges/triton_tvm/tests/test_integration.py::TestCircuitBreakerIntegration::test_breaker_reset_restores_pipeline PASSED [ 72%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTimeoutIntegration::test_stage_timeout_error_raised_when_budget_exceeded PASSED [ 73%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTimeoutIntegration::test_stage_under_budget_succeeds PASSED [ 73%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTimeoutIntegration::test_total_budget_exceeded_raises PASSED [ 73%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTimeoutIntegration::test_tuning_chain_handles_timeout_gracefully PASSED [ 73%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTimeoutIntegration::test_timeout_does_not_leak_between_stages PASSED [ 74%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_mapped_tuning_config_defaults PASSED [ 74%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_mapped_tuning_config_powers_of_two PASSED [ 74%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_mapped_tuning_config_warps_are_valid PASSED [ 74%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_config_mapper_produces_valid_config PASSED [ 74%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_config_mapper_json_round_trip PASSED [ 75%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_config_mapper_empty_trace_returns_defaults PASSED [ 75%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_config_mapper_none_record_returns_defaults PASSED [ 75%]
+src/bridges/triton_tvm/tests/test_integration.py::TestConfigValidity::test_mapped_config_to_triton_config PASSED [ 75%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_bounds_extractor_parses_matmul_ir PASSED [ 75%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_bounds_extractor_parses_reduction_ir PASSED [ 76%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_bounds_extractor_parses_elementwise_ir PASSED [ 76%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_ir_capture_pipeline_processes_matmul PASSED [ 76%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_ir_capture_pipeline_processes_reduction PASSED [ 76%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_ir_capture_classifier_classifies_kernel_kind PASSED [ 76%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_bounds_extraction_through_inline_pipeline PASSED [ 77%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_ir_classifier_collects_ops PASSED [ 77%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_classifier_detects_attention_pattern PASSED [ 77%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_bounds_extraction_errors_are_informative PASSED [ 77%]
+src/bridges/triton_tvm/tests/test_integration.py::TestBoundsInPipeline::test_classifier_raises_on_no_supported_ops PASSED [ 77%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTuningResultValidity::test_tuning_result_from_successful_tune PASSED [ 78%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTuningResultValidity::test_tuning_result_with_fallback PASSED [ 78%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTuningResultValidity::test_tune_configs_list_produces_multiple_configs PASSED [ 78%]
+src/bridges/triton_tvm/tests/test_integration.py::TestTuningResultValidity::test_tune_without_tvm_still_produces_valid_result PASSED [ 78%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_matmul PASSED [ 79%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_attention PASSED [ 79%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_reduction_sum PASSED [ 79%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_reduction_max PASSED [ 79%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_reduction_min PASSED [ 79%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_reduction_axis PASSED [ 80%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_reduction_axis_nonzero PASSED [ 80%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_elementwise PASSED [ 80%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_broadcast PASSED [ 80%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_transpose PASSED [ 80%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_matmul_reduction_type_sum PASSED [ 81%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_unsupported_ir_raises PASSED [ 81%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_classify_neq_against_wrong_kind PASSED [ 81%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_tensor_shapes_matmul PASSED [ 81%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_tensor_shapes_1d_reduction PASSED [ 81%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_element_type_f32 PASSED [ 82%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_element_type_f16 PASSED [ 82%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_element_type_f64 PASSED [ 82%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_collect_tensor_types_matmul PASSED [ 82%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_collect_tensor_types_1d PASSED [ 82%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_collect_ops_matmul PASSED [ 83%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_collect_ops_preserves_order PASSED [ 83%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_collect_op_counts PASSED [ 83%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_parse_shape_with_unknown PASSED [ 83%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_parse_shape_empty PASSED [ 83%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_parse_shape_single_dim PASSED [ 84%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_ir_classification_dataclass_equality PASSED [ 84%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifier::test_ir_classification_eq_kernelkind PASSED [ 84%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifierProperties::test_elementwise_kernel_with_random_shapes PASSED [ 84%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifierProperties::test_matmul_kernel_with_random_dims PASSED [ 85%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifierProperties::test_reduction_kernel_random_size_and_axis PASSED [ 85%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifierProperties::test_broadcast_kernel_random_dims PASSED [ 85%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifierProperties::test_transpose_kernel_random_dims PASSED [ 85%]
+src/bridges/triton_tvm/tests/test_ir_classifier.py::TestIRClassifierProperties::test_no_supported_ops_raises PASSED [ 85%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_simple_matmul PASSED [ 86%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_elementwise PASSED [ 86%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_reduction PASSED [ 86%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_with_program_id PASSED [ 86%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_pointer_types PASSED [ 86%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_module_attributes PASSED [ 87%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_parse_malformed_raises PASSED [ 87%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_op_count FAILED [ 87%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass1LowerTensorIdioms::test_replaces_dot_with_elementwise PASSED [ 87%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass1LowerTensorIdioms::test_marks_arith_ops_for_lowering PASSED [ 87%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass1LowerTensorIdioms::test_preserves_unknown_ops FAILED [ 88%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass2RewriteSPMD::test_wraps_body_in_for_loop PASSED [ 88%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass2RewriteSPMD::test_finds_max_axis PASSED [ 88%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass3ReplacePointers::test_converts_pointer_args_to_memref PASSED [ 88%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass3ReplacePointers::test_marks_loads_for_memref PASSED [ 88%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass4MaterializeTensors::test_inserts_alloc_buffers_for_memref_args PASSED [ 89%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass4MaterializeTensors::test_wraps_loads_in_tvm_block PASSED [ 89%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass4MaterializeTensors::test_grows_op_count PASSED [ 89%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass4MaterializeTensors::test_reduction_block_carries_axis FAILED [ 89%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTVMScriptEmitter::test_emit_matmul PASSED [ 90%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTVMScriptEmitter::test_emit_elementwise PASSED [ 90%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTVMScriptEmitter::test_emit_signature PASSED [ 90%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTVMScriptEmitter::test_emit_normalize_dtype PASSED [ 90%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTDotSplitter::test_split_kernel_with_dot PASSED [ 90%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTDotSplitter::test_split_kernel_without_dot PASSED [ 91%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTDotSplitter::test_split_extracts_operands FAILED [ 91%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTDotSplitter::test_split_removes_dot_from_remainder PASSED [ 91%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_convert_simple_matmul PASSED [ 91%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_convert_elementwise PASSED [ 91%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_convert_reduction PASSED [ 92%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_convert_with_spmd PASSED [ 92%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_convert_malformed_falls_back PASSED [ 92%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_pipeline_records_pass_times PASSED [ 92%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestConversionPipeline::test_dot_split_bounds_extracted PASSED [ 92%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPipelineIntegration::test_end_to_end_no_dot PASSED [ 93%]
+src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPipelineIntegration::test_end_to_end_with_dot PASSED [ 93%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestKernelMetadata::test_invalid_num_warps PASSED [ 93%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestKernelMetadata::test_cache_key_deterministic PASSED [ 93%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestKernelMetadata::test_cache_key_differs_on_shape PASSED [ 93%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestKernelMetadata::test_grid_property PASSED [ 94%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestMetadataExtractor::test_classify_matmul PASSED [ 94%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestMetadataExtractor::test_classify_reduction PASSED [ 94%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestMetadataExtractor::test_classify_unknown PASSED [ 94%]
+src/bridges/triton_tvm/tests/test_metadata_extractor.py::TestMetadataExtractor::test_compute_source_hash_stable PASSED [ 95%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestSpanContext::test_span_creation PASSED [ 95%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestSpanContext::test_span_completes_on_exit PASSED [ 95%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestSpanContext::test_span_marks_failed_on_exception PASSED [ 95%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestSpanContext::test_span_stages_tracked PASSED [ 95%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestSpanContext::test_completed_spans_in_ring_buffer PASSED [ 96%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestSpanContext::test_custom_span_id PASSED [ 96%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestStageContext::test_stage_records_metadata PASSED [ 96%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestStageContext::test_stage_records_error PASSED [ 96%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestIRDumpRingBuffer::test_dump_and_retrieve PASSED [ 96%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestIRDumpRingBuffer::test_ring_buffer_capped PASSED [ 97%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestIRDumpRingBuffer::test_clear PASSED [ 97%]
+src/bridges/triton_tvm/tests/test_structured_logging.py::TestEmitSpanJSON::test_json_structure PASSED [ 97%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestStageBudgets::test_default_budgets_sum PASSED [ 97%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestStageBudgets::test_for_stage_known PASSED [ 97%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestStageBudgets::test_for_stage_unknown_uses_default PASSED [ 98%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestTimeoutManager::test_initial_state PASSED [ 98%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestTimeoutManager::test_stage_under_budget_succeeds PASSED [ 98%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestTimeoutManager::test_stage_over_budget_raises PASSED [ 98%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestTimeoutManager::test_stage_exception_propagates PASSED [ 98%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestTimeoutManager::test_total_budget_exceeded PASSED [ 99%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestTimeoutManager::test_remaining_s_decreases PASSED [ 99%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestWallclockTimeout::test_under_timeout_succeeds PASSED [ 99%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestWallclockTimeout::test_zero_timeout_is_noop PASSED [ 99%]
+src/bridges/triton_tvm/tests/test_timeout_manager.py::TestWallclockTimeout::test_over_timeout_raises PASSED [100%]
+
+=================================== FAILURES ===================================
+__________ TestCApiLibrarySearch.test_loader_handles_missing_env_var ___________
+
+self = <src.tests.integration.test_c_api.TestCApiLibrarySearch object at 0x7b915d38ef60>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b912f562240>
+
+    def test_loader_handles_missing_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An unset NAUTILUS_C_LIB must not crash the loader."""
+        monkeypatch.delenv("NAUTILUS_C_LIB", raising=False)
+        # Force a fresh load by clearing the cached lib
+        import src.c_api as c_api_mod
+        from src.c_api import _load_c_lib  # type: ignore[attr-defined]
+        from src.common.errors import DependencyMissingError
+        c_api_mod._C_LIB = None
+        c_api_mod._C_LIB_LOAD_ERROR = None  # type: ignore[attr-defined]
+    
+>       with pytest.raises(DependencyMissingError):
+E       Failed: DID NOT RAISE <class 'src.common.errors.DependencyMissingError'>
+
+src/tests/integration/test_c_api.py:220: Failed
+________ TestCApiLibrarySearch.test_loader_handles_nonexistent_env_path ________
+
+self = <src.tests.integration.test_c_api.TestCApiLibrarySearch object at 0x7b915d38f110>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b913e439880>
+tmp_path = PosixPath('/tmp/pytest-of-codespace/pytest-7/test_loader_handles_nonexisten0')
+
+    def test_loader_handles_nonexistent_env_path(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """NAUTILUS_C_LIB pointing at a non-existent file must raise
+        DependencyMissingError, not OSError.
+        """
+        fake_path = tmp_path / "does_not_exist.so"
+        monkeypatch.setenv("NAUTILUS_C_LIB", str(fake_path))
+    
+        import src.c_api as c_api_mod
+        from src.c_api import _load_c_lib  # type: ignore[attr-defined]
+        from src.common.errors import DependencyMissingError
+        c_api_mod._C_LIB = None
+        c_api_mod._C_LIB_LOAD_ERROR = None  # type: ignore[attr-defined]
+    
+>       with pytest.raises(DependencyMissingError):
+E       Failed: DID NOT RAISE <class 'src.common.errors.DependencyMissingError'>
+
+src/tests/integration/test_c_api.py:238: Failed
+________ TestEvidenceCaptureFixture.test_evidence_disabled_when_no_dir _________
+
+self = <src.tests.integration.test_harness_check.TestEvidenceCaptureFixture object at 0x7b915d3f7140>
+evidence_capture = EvidenceCapture(test_name='test_evidence_disabled_when_no_dir', evidence_dir=PosixPath('/workspaces/NVINDIA_CUD/.omo/e...=[], _timestamp='20260607T111542400409', _log_records=[], _log_handler=<_CapturingHandler (WARNING)>, _finalized=False)
+
+    def test_evidence_disabled_when_no_dir(
+        self, evidence_capture: EvidenceCapture | None,
+    ) -> None:
+        """Without --evidence-dir the fixture yields None and writes nothing."""
+>       assert evidence_capture is None
+E       AssertionError: assert EvidenceCapture(test_name='test_evidence_disabled_when_no_dir', evidence_dir=PosixPath('/workspaces/NVINDIA_CUD/.omo/evidence'), attachments=[], _timestamp='20260607T111542400409', _log_records=[], _log_handler=<_CapturingHandler (WARNING)>, _finalized=False) is None
+
+src/tests/integration/test_harness_check.py:51: AssertionError
+__________________ TestPipelineResume.test_resume_with_state ___________________
+
+self = <src.tests.integration.test_pipeline.TestPipelineResume object at 0x7b915d1e0aa0>
+tmp_path = PosixPath('/tmp/pytest-of-codespace/pytest-7/test_resume_with_state0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b912f4df4d0>
+
+    def test_resume_with_state(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        kernel = _make_kernel_file(tmp_path)
+        ctx = _make_context(tmp_path, kernel)
+        # Pre-populate state.json as if capture/shard/extract/tune
+        # had already run.
+        ctx.kernel_name = "matmul_kernel"
+        ctx.kernel_source = EXAMPLE_KERNEL
+        ctx.captured_graph_text = EXAMPLE_KERNEL
+        ctx.captured_graph_hash = "abc123"
+        ctx.extracted_kernels = [
+            {"name": "matmul_kernel", "source_hash": "abc123",
+             "lines": 1, "shard_id": 0},
+        ]
+        ctx.tuning_configs = {"matmul_kernel": {
+            "block_m": 128, "block_n": 128, "block_k": 32,
+            "num_warps": 4, "num_stages": 3, "num_ctas": 1,
+        }}
+        ctx.mesh_axes = [1]
+        ctx.shard_count = 1
+        ctx.sharding_cache_key = "k1"
+        out = tmp_path / "out"
+        out.mkdir()
+        state = out / "state.json"
+        ctx.save_state(state)
+    
+        targets = [HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)]
+        # Make the build stage a no-op so we don't depend on lld.
+        from src.cli.commands.pipeline import _STAGE_HANDLERS
+        captured_stages = []
+    
+        real_build = _STAGE_HANDLERS[PipelineStage.BUILD]
+    
+        def _spy_build():
+            captured_stages.append("build")
+            return {"output_path": str(out / "stub.fat.o"),
+                    "vendors": ["nvidia"], "skipped": [],
+                    "elapsed_s": 0.0}
+    
+        monkeypatch.setitem(
+            _STAGE_HANDLERS, PipelineStage.BUILD, _spy_build,
+        )
+        try:
+            pipeline = Pipeline(
+                ctx=ctx, targets=targets,
+                resume_from=PipelineStage.BUILD,
+            )
+            outcomes = pipeline.run()
+        finally:
+            monkeypatch.setitem(
+                _STAGE_HANDLERS, PipelineStage.BUILD, real_build,
+            )
+    
+        # Build + Dispatch should have run.
+>       assert "build" in captured_stages
+E       AssertionError: assert 'build' in []
+
+src/tests/integration/test_pipeline.py:361: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[FAIL] build         0.1 ms
+------------------------------ Captured log call -------------------------------
+ERROR    nautilus.cli.pipeline:logging.py:414 pipeline failed at stage
+________ TestPipelineHappyPath.test_kernel_pipeline_runs_to_completion _________
+
+self = <src.tests.integration.test_pipeline.TestPipelineHappyPath object at 0x7b915d1e1640>
+tmp_path = PosixPath('/tmp/pytest-of-codespace/pytest-7/test_kernel_pipeline_runs_to_c0')
+
+    def test_kernel_pipeline_runs_to_completion(
+        self, tmp_path: Path,
+    ) -> None:
+        kernel = _make_kernel_file(tmp_path)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                str(kernel),
+                "--target", "nvidia/sm_90",
+                "--output-dir", str(tmp_path / "out"),
+                "--trials", "1",
+            ],
+        )
+        # The pipeline may succeed or may report skipped vendors.
+        # Either way, exit code is 0 (graceful degradation).
+        assert result.exit_code in (0, 2), (
+            f"unexpected exit: {result.output}\n{result.exception}"
+        )
+        # The per-stage summary must appear in stdout.
+        assert "PIPELINE SUMMARY" in result.output
+        assert "capture" in result.output
+        # state.json should have been persisted.
+        assert (tmp_path / "out" / "state.json").exists()
+        # pipeline_summary.json should have been written.
+>       assert (tmp_path / "out" / "pipeline_summary.json").exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = ((PosixPath('/tmp/pytest-of-codespace/pytest-7/test_kernel_pipeline_runs_to_c0') / 'out') / 'pipeline_summary.json').exists
+
+src/tests/integration/test_pipeline.py:475: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  nautilus.cli.pipeline:logging.py:414 tuning failed for matmul_kernel; using defaults
+WARNING  nautilus.aot.intel:logging.py:414 llvm-spirv not found in PATH; Intel AOT will fall back to LLVM IR -> SPIR-V via the tool when available, otherwise report a clear DependencyMissingError
+WARNING  nautilus.aot.metal:logging.py:414 xcrun not found in PATH; Apple Metal AOT will fail with DependencyMissingError. Install Xcode Command Line Tools (xcode-select --install) on macOS.
+ERROR    nautilus.aot.nvidia:logging.py:414 Nvidia AOT compilation failed
+ERROR    nautilus.src.bridges.aot_packager.builder:logging.py:414 Nvidia build failed: Triton AOT compilation failed: name 'triton' is not defined
+ERROR    nautilus.cli.pipeline:logging.py:414 pipeline failed at stage
+_________________ TestTritonTVMBridge.test_cache_lru_eviction __________________
+
+self = <src.bridges.triton_tvm.tests.test_bridge_orchestrator.TestTritonTVMBridge object at 0x7b912f7a2930>
+
+    def test_cache_lru_eviction(self) -> None:
+        """Exceeding max cache entries should evict oldest."""
+        bridge = TritonTVMBridge(enable_tvm=False)
+        bridge._max_cache_entries = 3
+    
+        for i in range(5):
+            bridge._set_cache(f"key{i}", "target", MappedTuningConfig(num_warps=i))
+    
+        # keys 0 and 1 should be evicted
+>       assert bridge._get_cached("key0", "target") is None
+E       AssertionError: assert MappedTuningConfig(block_m=128, block_n=128, block_k=32, num_warps=0, num_stages=3, num_ctas=1, enable_fp_fusion=True, max_num_imprecise_acc=0) is None
+E        +  where MappedTuningConfig(block_m=128, block_n=128, block_k=32, num_warps=0, num_stages=3, num_ctas=1, enable_fp_fusion=True, max_num_imprecise_acc=0) = _get_cached('key0', 'target')
+E        +    where _get_cached = <src.bridges.triton_tvm.bridge_orchestrator.TritonTVMBridge object at 0x7b912e759b20>._get_cached
+
+src/bridges/triton_tvm/tests/test_bridge_orchestrator.py:84: AssertionError
+________________________ TestTTGIRParser.test_op_count _________________________
+
+self = <src.bridges.triton_tvm.tests.test_ir_to_tir.TestTTGIRParser object at 0x7b912f685520>
+
+    def test_op_count(self) -> None:
+        """op_count should return the total number of ops including nested ones."""
+        func = self.parser.parse(SIMPLE_MATMUL_IR)
+        # simple_matmul has 2 loads, 1 dot, 1 store = 4 ops
+>       assert func.op_count() == 4
+E       AssertionError: assert 5 == 4
+E        +  where 5 = op_count()
+E        +    where op_count = TTGIRFunction(name='simple_matmul', args=[('%A', TTGIRType(raw='!tt.ptr<tensor<128x32xf32>>', is_pointer=True, is_tensor=True, element_dtype='float32', shape=(128, 32), address_space=0)), ('%B', TTGIRType(raw='!tt.ptr<tensor<32x128xf32>>', is_pointer=True, is_tensor=True, element_dtype='float32', shape=(32, 128), address_space=0)), ('%C', TTGIRType(raw='!tt.ptr<tensor<128x128xf32>>', is_pointer=True, is_tensor=True, element_dtype='float32', shape=(128, 128), address_space=0))], ops=[TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%a = tt.load %A : tensor<128x32xf32>', name='tt.load', result_name='%a', operands=['%A'], types=[TTGIRType(raw='tensor<128x32xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(128, 32), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%b = tt.load %B : tensor<32x128xf32>', name='tt.load', result_name='%b', operands=['%B'], types=[TTGIRType(raw='tensor<32x128xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(32, 128), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.DOT: 3>, raw_text='%c = tt.dot %a, %b : tensor<128x128xf32>', name='tt.dot', result_name='%c', operands=['%a', '%b'], types=[TTGIRType(raw='tensor<128x128xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(128, 128), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.STORE: 2>, raw_text='tt.store %C, %c : tensor<128x128xf32>', name='tt.store', result_name='', operands=['%C', '%c'], types=[], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.RETURN: 15>, raw_text='tt.return\n  }', name='tt.return', result_name='', operands=[], types=[], attributes={}, nested_ops=[], parent_idx=-1)], module_attrs={}).op_count
+
+src/bridges/triton_tvm/tests/test_ir_to_tir.py:160: AssertionError
+____________ TestPass1LowerTensorIdioms.test_preserves_unknown_ops _____________
+
+self = <src.bridges.triton_tvm.tests.test_ir_to_tir.TestPass1LowerTensorIdioms object at 0x7b912f685af0>
+
+    def test_preserves_unknown_ops(self) -> None:
+        """UNKNOWN ops should be left unchanged."""
+        parser = TTGIRParser()
+        func = parser.parse(SIMPLE_MATMUL_IR)
+        result = self.pass1.run(func)
+        result_kinds = [op.kind for op in result.iter_all_ops()]
+        assert OpKind.UNKNOWN not in result_kinds
+>       assert result.op_count() == 4
+E       AssertionError: assert 6 == 4
+E        +  where 6 = op_count()
+E        +    where op_count = TTGIRFunction(name='simple_matmul', args=[('%A', TTGIRType(raw='!tt.ptr<tensor<128x32xf32>>', is_pointer=True, is_tensor=True, element_dtype='float32', shape=(128, 32), address_space=0)), ('%B', TTGIRType(raw='!tt.ptr<tensor<32x128xf32>>', is_pointer=True, is_tensor=True, element_dtype='float32', shape=(32, 128), address_space=0)), ('%C', TTGIRType(raw='!tt.ptr<tensor<128x128xf32>>', is_pointer=True, is_tensor=True, element_dtype='float32', shape=(128, 128), address_space=0))], ops=[TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%a = tt.load %A : tensor<128x32xf32>', name='tt.load', result_name='%a', operands=['%A'], types=[TTGIRType(raw='tensor<128x32xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(128, 32), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%b = tt.load %B : tensor<32x128xf32>', name='tt.load', result_name='%b', operands=['%B'], types=[TTGIRType(raw='tensor<32x128xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(32, 128), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.MULF: 18>, raw_text='%c._mul = arith.mulf %a, %b : f32', name='arith.mulf', result_name='%c._mul', operands=['%a', '%b'], types=[], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.ADDF: 16>, raw_text='%c = arith.addf %c._mul, %c._mul : f32', name='arith.addf', result_name='%c', operands=['%c._mul', '%c._mul'], types=[], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.STORE: 2>, raw_text='tt.store %C, %c : tensor<128x128xf32>', name='tt.store', result_name='', operands=['%C', '%c'], types=[], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.RETURN: 15>, raw_text='tt.return\n  }', name='tt.return', result_name='', operands=[], types=[], attributes={}, nested_ops=[], parent_idx=-1)], module_attrs={}).op_count
+
+src/bridges/triton_tvm/tests/test_ir_to_tir.py:199: AssertionError
+________ TestPass4MaterializeTensors.test_reduction_block_carries_axis _________
+
+self = <src.bridges.triton_tvm.tests.test_ir_to_tir.TestPass4MaterializeTensors object at 0x7b912f687080>
+
+    def test_reduction_block_carries_axis(self) -> None:
+        """A reduction must produce a T.block whose axis attribute matches."""
+        parser = TTGIRParser()
+        func = self.pass4.run(parser.parse(REDUCTION_IR))
+        block_ops = [op for op in func.ops if op.kind == OpKind.TVM_BLOCK]
+        if not block_ops:
+            return  # parser may not have surfaced a REDUCE; covered elsewhere
+        for block in block_ops:
+>           assert "__tvm_reduction_axis" in block.attributes
+E           assert '__tvm_reduction_axis' in {'__materialized_to_tvm_block': 'true', '__tvm_block_child_kind': 'LOAD', '__tvm_block_label': 'compute_load'}
+Stage 'extract' exceeded budget of 5.0s
+E            +  where {'__materialized_to_tvm_block': 'true', '__tvm_block_child_kind': 'LOAD', '__tvm_block_label': 'compute_load'} = TTGIROperation(kind=<OpKind.TVM_BLOCK: 34>, raw_text='with T.block("compute_load"):\n    %x = tt.load %input : tensor<1024xf32>', name='T.block', result_name='%x', operands=['%input'], types=[TTGIRType(raw='tensor<1024xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(1024,), address_space=0)], attributes={'__materialized_to_tvm_block': 'true', '__tvm_block_label': 'compute_load', '__tvm_block_child_kind': 'LOAD'}, nested_ops=[TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%x = tt.load %input : tensor<1024xf32>', name='tt.load', result_name='%x', operands=['%input'], types=[TTGIRType(raw='tensor<1024xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(1024,), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1)], parent_idx=-1).attributes
+
+src/bridges/triton_tvm/tests/test_ir_to_tir.py:290: AssertionError
+________________ TestTTDotSplitter.test_split_extracts_operands ________________
+
+self = <src.bridges.triton_tvm.tests.test_ir_to_tir.TestTTDotSplitter object at 0x7b912f685850>
+
+    def test_split_extracts_operands(self) -> None:
+        """The split should extract the dot's operands."""
+        parser = TTGIRParser()
+        func = parser.parse(SIMPLE_MATMUL_IR)
+        result = self.splitter.split(func)
+        # The dot has 3 operands: A, B, C
+>       assert len(result.operands) == 3
+E       AssertionError: assert 2 == 3
+E        +  where 2 = len(['%a', '%b'])
+E        +    where ['%a', '%b'] = SplitResult(has_dot=True, matmul_m=128, matmul_n=128, matmul_k=32, matmul_dtype='float32', remainder_ops=[TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%a = tt.load %A : tensor<128x32xf32>', name='tt.load', result_name='%a', operands=['%A'], types=[TTGIRType(raw='tensor<128x32xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(128, 32), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.LOAD: 1>, raw_text='%b = tt.load %B : tensor<32x128xf32>', name='tt.load', result_name='%b', operands=['%B'], types=[TTGIRType(raw='tensor<32x128xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(32, 128), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.STORE: 2>, raw_text='tt.store %C, %c : tensor<128x128xf32>', name='tt.store', result_name='', operands=['%C', '%c'], types=[], attributes={}, nested_ops=[], parent_idx=-1), TTGIROperation(kind=<OpKind.RETURN: 15>, raw_text='tt.return\n  }', name='tt.return', result_name='', operands=[], types=[], attributes={}, nested_ops=[], parent_idx=-1)], dot_op=TTGIROperation(kind=<OpKind.DOT: 3>, raw_text='%c = tt.dot %a, %b : tensor<128x128xf32>', name='tt.dot', result_name='%c', operands=['%a', '%b'], types=[TTGIRType(raw='tensor<128x128xf32>', is_pointer=False, is_tensor=True, element_dtype='float32', shape=(128, 128), address_space=0)], attributes={}, nested_ops=[], parent_idx=-1), operands=['%a', '%b']).operands
+
+src/bridges/triton_tvm/tests/test_ir_to_tir.py:374: AssertionError
+=============================== warnings summary ===============================
+src/bridges/pytorch_xla/pipeline_orchestrator.py:37
+  /workspaces/NVINDIA_CUD/src/bridges/pytorch_xla/pipeline_orchestrator.py:37: DeprecationWarning: ExportMethod enum is deprecated; use StableHLOModule.export_method string field instead
+    from .stablehlo_export import StableHLOExporter, StableHLOModule
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] src/tests/integration/test_c_api.py:102: C library is built; this test is for the missing-lib case
+SKIPPED [1] src/tests/integration/test_c_api.py:125: C library is built
+SKIPPED [1] src/tests/integration/test_c_api.py:166: C library is built; lib-missing path not exercised
+SKIPPED [1] src/tests/integration/test_full_pipeline.py:157: No GPU detected (nvidia-smi/rocm-smi/lspci missing)
+SKIPPED [1] src/tests/integration/test_full_pipeline.py:874: test requires real (non-mocked) AOT backend
+SKIPPED [1] src/tests/integration/test_full_pipeline.py:902: test requires real (non-mocked) AOT backend
+SKIPPED [1] src/tests/integration/test_harness_check.py:253: TVM not installed (required for real backend)
+FAILED src/tests/integration/test_c_api.py::TestCApiLibrarySearch::test_loader_handles_missing_env_var
+FAILED src/tests/integration/test_c_api.py::TestCApiLibrarySearch::test_loader_handles_nonexistent_env_path
+FAILED src/tests/integration/test_harness_check.py::TestEvidenceCaptureFixture::test_evidence_disabled_when_no_dir
+FAILED src/tests/integration/test_pipeline.py::TestPipelineResume::test_resume_with_state
+FAILED src/tests/integration/test_pipeline.py::TestPipelineHappyPath::test_kernel_pipeline_runs_to_completion
+FAILED src/bridges/triton_tvm/tests/test_bridge_orchestrator.py::TestTritonTVMBridge::test_cache_lru_eviction
+FAILED src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTGIRParser::test_op_count
+FAILED src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass1LowerTensorIdioms::test_preserves_unknown_ops
+FAILED src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestPass4MaterializeTensors::test_reduction_block_carries_axis
+FAILED src/bridges/triton_tvm/tests/test_ir_to_tir.py::TestTTDotSplitter::test_split_extracts_operands
+===== 10 failed, 464 passed, 7 skipped, 2 deselected, 1 warning in 36.53s ======
