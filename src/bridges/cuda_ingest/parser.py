@@ -24,7 +24,7 @@ Architecture:
                     nodes                     └─ body: CudaStatement[]
                                                └─ shared_mem_declarations
                                                └─ parameters
-"""  # noqa: W505
+"""
 
 from __future__ import annotations
 
@@ -41,26 +41,28 @@ logger = get_logger(__name__)
 
 class CudaStatementType(Enum):
     """Types of CUDA statements we recognise."""
-    FUNCTION_DEF = auto()        # __global__ / __device__ function
-    SHARED_MEM = auto()          # __shared__ declaration
-    ASSIGNMENT = auto()          # a = b;
-    EXPRESSION = auto()          # standalone expression
-    IF = auto()                  # if/else
-    FOR = auto()                 # for loop
-    WHILE = auto()               # while loop
-    SYNC_THREADS = auto()        # __syncthreads()
-    ATOMIC_OP = auto()           # atomicAdd, atomicCAS, etc.
-    MEMORY_LOAD = auto()         # shared/global load
-    MEMORY_STORE = auto()        # shared/global store
-    RETURN = auto()              # return
-    BLOCK_INDEX = auto()         # blockIdx / threadIdx usage
-    DECLARATION = auto()         # variable declaration (non-__shared__)
+
+    FUNCTION_DEF = auto()  # __global__ / __device__ function
+    SHARED_MEM = auto()  # __shared__ declaration
+    ASSIGNMENT = auto()  # a = b;
+    EXPRESSION = auto()  # standalone expression
+    IF = auto()  # if/else
+    FOR = auto()  # for loop
+    WHILE = auto()  # while loop
+    SYNC_THREADS = auto()  # __syncthreads()
+    ATOMIC_OP = auto()  # atomicAdd, atomicCAS, etc.
+    MEMORY_LOAD = auto()  # shared/global load
+    MEMORY_STORE = auto()  # shared/global store
+    RETURN = auto()  # return
+    BLOCK_INDEX = auto()  # blockIdx / threadIdx usage
+    DECLARATION = auto()  # variable declaration (non-__shared__)
     UNKNOWN = auto()
 
 
 @dataclass
 class CudaStatement:
     """A single statement in a CUDA kernel."""
+
     stmt_type: CudaStatementType
     raw_text: str
     line_number: int
@@ -78,6 +80,7 @@ class CudaStatement:
 @dataclass
 class CudaKernel:
     """A parsed CUDA kernel function."""
+
     name: str
     qualifier: str  # "__global__" or "__device__"
     return_type: str
@@ -123,10 +126,10 @@ class TreeSitterCudaParser:
 
     # Regex helpers for simple extractions from CUDA declarations
     _SHARED_MEM_TEXT_RE = re.compile(
-        r'__shared__\s+'
-        r'(\w[\w\s\*]*?)\s+'   # type
-        r'(\w+)\s*'            # name
-        r'(.*?)\s*;',          # rest (including array dims)
+        r"__shared__\s+"
+        r"(\w[\w\s\*]*?)\s+"  # type
+        r"(\w+)\s*"  # name
+        r"(.*?)\s*;",  # rest (including array dims)
         re.DOTALL,
     )
 
@@ -145,7 +148,8 @@ class TreeSitterCudaParser:
             return
         try:
             import tree_sitter_cpp as tscpp
-            from tree_sitter import Language, Parser  # type: ignore[import-untyped]
+            from tree_sitter import Language, Parser
+
             cpp_language = Language(tscpp.language())
             cls._parser = Parser(cpp_language)
         except ImportError as exc:
@@ -271,7 +275,8 @@ class TreeSitterCudaParser:
             )
 
         name = self._node_text(
-            self._find_child(declarator, "identifier"), source_bytes,
+            self._find_child(declarator, "identifier"),
+            source_bytes,
         )
         if not name:
             raise IngestionParseError(
@@ -290,9 +295,7 @@ class TreeSitterCudaParser:
         else:
             body = self._extract_body(body_node, source_bytes)
             shared_mems = [
-                stmt.metadata
-                for stmt in body
-                if stmt.stmt_type == CudaStatementType.SHARED_MEM
+                stmt.metadata for stmt in body if stmt.stmt_type == CudaStatementType.SHARED_MEM
             ]
 
         return CudaKernel(
@@ -393,8 +396,9 @@ class TreeSitterCudaParser:
     ) -> None:
         """Collect all identifier texts from a node subtree (recursive)."""
         if node.type == "identifier":
-            text = source_bytes[node.start_byte:node.end_byte].decode(
-                "utf-8", errors="replace",
+            text = source_bytes[node.start_byte : node.end_byte].decode(
+                "utf-8",
+                errors="replace",
             )
             out.append(text)
         for child in node.children:
@@ -483,7 +487,8 @@ class TreeSitterCudaParser:
             node_text = self._node_text(node, source_bytes)
             if node_text.startswith("__shared__"):
                 return CudaStatementType.SHARED_MEM, self._build_shared_mem_meta(
-                    node, source_bytes,
+                    node,
+                    source_bytes,
                 )
             # Scan for CUDA constructs inside non-shared declarations
             self._scan_for_cuda_constructs(node, source_bytes, metadata)
@@ -559,22 +564,27 @@ class TreeSitterCudaParser:
 
         if call_name in self._CUDA_SYNC_NAMES:
             metadata["has_sync"] = True
-            metadata["sync_calls"].append({
-                "name": call_name,
-                "start_byte": expr.start_byte,
-                "end_byte": expr.end_byte,
-            })
+            metadata["sync_calls"].append(
+                {
+                    "name": call_name,
+                    "start_byte": expr.start_byte,
+                    "end_byte": expr.end_byte,
+                }
+            )
             return CudaStatementType.SYNC_THREADS, metadata
 
         if call_name.startswith(self._CUDA_ATOMIC_PREFIX):
             metadata["has_atomic"] = True
             args = self._extract_call_args(expr, source_bytes)
-            metadata["atomic_ops"].append({
-                "name": call_name,
-                "args": args,
-            })
+            metadata["atomic_ops"].append(
+                {
+                    "name": call_name,
+                    "args": args,
+                }
+            )
             metadata["cuda_fields"] = self._collect_field_expressions(
-                expr, source_bytes,
+                expr,
+                source_bytes,
             )
             return CudaStatementType.ATOMIC_OP, metadata
 
@@ -613,7 +623,7 @@ class TreeSitterCudaParser:
             meta["type"] = type_str
             meta["name"] = name
             # Extract array dimensions: [16][16] → ["16", "16"]
-            dims = re.findall(r'\[([^\]]*)\]', rest)
+            dims = re.findall(r"\[([^\]]*)\]", rest)
             meta["dims"] = dims
 
         return meta
@@ -639,18 +649,22 @@ class TreeSitterCudaParser:
             call_name = self._extract_call_name(node, source_bytes)
             if call_name in self._CUDA_SYNC_NAMES:
                 metadata["has_sync"] = True
-                metadata["sync_calls"].append({
-                    "name": call_name,
-                    "start_byte": node.start_byte,
-                    "end_byte": node.end_byte,
-                })
+                metadata["sync_calls"].append(
+                    {
+                        "name": call_name,
+                        "start_byte": node.start_byte,
+                        "end_byte": node.end_byte,
+                    }
+                )
             elif call_name.startswith(self._CUDA_ATOMIC_PREFIX):
                 metadata["has_atomic"] = True
                 args = self._extract_call_args(node, source_bytes)
-                metadata["atomic_ops"].append({
-                    "name": call_name,
-                    "args": args,
-                })
+                metadata["atomic_ops"].append(
+                    {
+                        "name": call_name,
+                        "args": args,
+                    }
+                )
 
         if node.type == "field_expression":
             field_info = self._extract_field_expression(node, source_bytes)
@@ -730,16 +744,24 @@ class TreeSitterCudaParser:
         """
         for child in expr_node.children:
             if child.type == "identifier":
-                return source_bytes[child.start_byte: child.end_byte].decode(
-                    "utf-8", errors="replace",
+                return source_bytes[child.start_byte : child.end_byte].decode(
+                    "utf-8",
+                    errors="replace",
                 )
             if child.type == "field_expression":
-                return source_bytes[child.start_byte: child.end_byte].decode(
-                    "utf-8", errors="replace",
+                return source_bytes[child.start_byte : child.end_byte].decode(
+                    "utf-8",
+                    errors="replace",
                 )
-        return source_bytes[expr_node.start_byte: expr_node.end_byte].decode(
-            "utf-8", errors="replace",
-        ).split("(")[0].strip()
+        return (
+            source_bytes[expr_node.start_byte : expr_node.end_byte]
+            .decode(
+                "utf-8",
+                errors="replace",
+            )
+            .split("(")[0]
+            .strip()
+        )
 
     @staticmethod
     def _extract_call_args(
@@ -765,8 +787,9 @@ class TreeSitterCudaParser:
         for child in arg_list.children:
             if not child.is_named and child.type in ("(", ")"):
                 continue
-            text = source_bytes[child.start_byte: child.end_byte].decode(
-                "utf-8", errors="replace",
+            text = source_bytes[child.start_byte : child.end_byte].decode(
+                "utf-8",
+                errors="replace",
             )
             if child.type == "," and depth == 0:
                 args.append("".join(current).strip())
@@ -799,8 +822,9 @@ class TreeSitterCudaParser:
     @staticmethod
     def _node_text(node: Any, source_bytes: bytes) -> str:
         """Get the source text for a tree-sitter node."""
-        return source_bytes[node.start_byte: node.end_byte].decode(
-            "utf-8", errors="replace",
+        return source_bytes[node.start_byte : node.end_byte].decode(
+            "utf-8",
+            errors="replace",
         )
 
 

@@ -82,6 +82,7 @@ _PrimitiveVendor.from_string = _vendor_from_string  # type: ignore[attr-defined]
 
 class SectionFormat(str, Enum):
     """Binary format of a kernel section inside a fat binary."""
+
     PTX = "ptx"
     CUBIN = "cubin"
     HSACO = "hsaco"
@@ -98,6 +99,7 @@ class KernelSection:
     `data` may be text (PTX) or binary (HSACO/SPV/CUBIN). Format
     determines interpretation.
     """
+
     vendor: Vendor
     arch: Arch
     format: SectionFormat
@@ -116,6 +118,7 @@ class KernelSection:
 @dataclass
 class FatBinary:
     """Complete fat binary with one KernelSection per compiled vendor."""
+
     kernel_name: str
     sections: list[KernelSection] = field(default_factory=list)
     created_at: str = ""
@@ -144,8 +147,7 @@ class FatBinary:
     def add_section(self, section: KernelSection) -> None:
         """Add or replace a section. Dedupes by (vendor, arch)."""
         self.sections = [
-            s for s in self.sections
-            if not (s.vendor == section.vendor and s.arch == section.arch)
+            s for s in self.sections if not (s.vendor == section.vendor and s.arch == section.arch)
         ]
         self.sections.append(section)
 
@@ -166,6 +168,7 @@ class FatBinary:
             [data: bytes]
         """
         import struct
+
         out = bytearray()
         out += b"NFAT"
         out += struct.pack("<B", 1)
@@ -194,6 +197,7 @@ class FatBinary:
     def from_bytes(cls, blob: bytes) -> FatBinary:
         """Deserialize from the compact binary format produced by `to_bytes`."""
         import struct
+
         if blob[:4] != b"NFAT":
             raise ValueError(f"Invalid fat binary magic: {blob[:4]!r}")
         version = blob[4]
@@ -202,7 +206,7 @@ class FatBinary:
         offset = 5
         name_len = struct.unpack_from("<H", blob, offset)[0]
         offset += 2
-        kernel_name = blob[offset:offset + name_len].decode("utf-8")
+        kernel_name = blob[offset : offset + name_len].decode("utf-8")
         offset += name_len
         num_sections = struct.unpack_from("<H", blob, offset)[0]
         offset += 2
@@ -211,24 +215,28 @@ class FatBinary:
         for _ in range(num_sections):
             vendor_len = blob[offset]
             offset += 1
-            vendor = Vendor(blob[offset:offset + vendor_len].decode("utf-8"))
+            vendor = Vendor(blob[offset : offset + vendor_len].decode("utf-8"))
             offset += vendor_len
             arch_len = blob[offset]
             offset += 1
-            arch = Arch(blob[offset:offset + arch_len].decode("utf-8"))
+            arch = Arch(blob[offset : offset + arch_len].decode("utf-8"))
             offset += arch_len
             fmt_idx = blob[offset]
             offset += 1
             data_len = struct.unpack_from("<I", blob, offset)[0]
             offset += 4
-            data = blob[offset:offset + data_len]
+            data = blob[offset : offset + data_len]
             offset += data_len
-            sections.append(KernelSection(
-                vendor=vendor,
-                arch=arch,
-                format=format_list[fmt_idx] if fmt_idx < len(format_list) else SectionFormat.STUB,
-                data=data,
-            ))
+            sections.append(
+                KernelSection(
+                    vendor=vendor,
+                    arch=arch,
+                    format=format_list[fmt_idx]
+                    if fmt_idx < len(format_list)
+                    else SectionFormat.STUB,
+                    data=data,
+                )
+            )
         return cls(kernel_name=kernel_name, sections=sections)
 
 
@@ -242,6 +250,7 @@ class KernelHandle:
     Used by the runtime loader to dispatch a fat binary to a specific
     device backend.
     """
+
     kernel_name: str
     vendor: Vendor
     arch: Arch
@@ -261,6 +270,7 @@ class KernelHandle:
 @dataclass
 class TuningConfig:
     """Block configuration for a matmul-like kernel. Vendor-neutral."""
+
     block_m: int = 128
     block_n: int = 128
     block_k: int = 32
@@ -321,6 +331,7 @@ def _build_triton_config(
 @dataclass(frozen=True)
 class MeshShape:
     """Logical device mesh, e.g. (2, 4) for an 8-device cluster."""
+
     axes: tuple[int, ...]
 
     def __post_init__(self) -> None:
@@ -352,6 +363,7 @@ class MeshShape:
 @dataclass(frozen=True)
 class TensorShardingLite:
     """How a single tensor is partitioned across the mesh."""
+
     tensor_name: str
     mesh_axes: tuple[int, ...]
     partition_shape: tuple[int, ...]
@@ -375,6 +387,7 @@ class TensorShardingLite:
 @dataclass(frozen=True)
 class ShardingSpecLite:
     """Vendor-neutral sharding spec. Output of GSPMD-like analysis."""
+
     mesh: MeshShape
     tensor_shardings: dict[str, TensorShardingLite]
     inserted_collectives: tuple[dict, ...] = ()
@@ -395,6 +408,7 @@ class ShardingSpecLite:
     def cache_key(self) -> str:
         import hashlib
         import json
+
         payload = {
             "mesh": list(self.mesh.axes),
             "tensors": {
@@ -407,9 +421,7 @@ class ShardingSpecLite:
             },
             "collectives": list(self.inserted_collectives),
         }
-        return hashlib.sha256(
-            json.dumps(payload, sort_keys=True).encode()
-        ).hexdigest()
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 # --- IR / StableHLO ---
@@ -423,6 +435,7 @@ class IRModule:
     `dialect` identifies which. Production code should normalize
     through the MLIR Vector dialect before this is filled.
     """
+
     text: str
     dialect: str
     source: str = ""  # Origin (e.g. "triton-capture", "tvmscript-emit")
@@ -432,6 +445,7 @@ class IRModule:
 @dataclass
 class StableHLOModule:
     """A StableHLO module ready for GSPMD sharding."""
+
     mlir_text: str
     function_name: str
     input_specs: list[dict[str, Any]] = field(default_factory=list)
@@ -468,6 +482,7 @@ class LogLevel(str, Enum):
 @dataclass
 class SourceLocation:
     """File:line:col for diagnostics."""
+
     file: str
     line: int
     col: int = 0
@@ -479,6 +494,7 @@ class SourceLocation:
 @dataclass
 class StageRecord:
     """A single stage within a span."""
+
     name: str
     start_ms: float
     duration_ms: float
@@ -489,6 +505,7 @@ class StageRecord:
 @dataclass
 class SpanRecord:
     """A top-level span wrapping a multi-stage operation."""
+
     span_id: str
     operation: str  # e.g. "tune_kernel", "build_fat_binary"
     start_ms: float

@@ -139,9 +139,7 @@ class TestAutoShardingBridge:
 # torch_xla or TVM to be installed — the bridge must handle the
 # unavailable-tier case as a graceful no-op, not a hard crash.
 
-torch = pytest.importorskip(
-    "torch", reason="PyTorch is required for the pipeline happy-path test"
-)
+torch = pytest.importorskip("torch", reason="PyTorch is required for the pipeline happy-path test")
 import torch.nn as nn  # noqa: E402
 
 

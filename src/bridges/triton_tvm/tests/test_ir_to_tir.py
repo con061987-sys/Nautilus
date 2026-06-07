@@ -6,7 +6,6 @@ import pytest
 
 from src.bridges.triton_tvm.ir_to_tir.conversion_pipeline import (
     ConversionPipeline,
-    ConversionResult,
     ConversionStatus,
 )
 from src.bridges.triton_tvm.ir_to_tir.pass1_lower_tensor_idioms import (
@@ -21,13 +20,11 @@ from src.bridges.triton_tvm.ir_to_tir.pass3_replace_pointers import (
 from src.bridges.triton_tvm.ir_to_tir.pass4_materialize_tvm import (
     MaterializeTensorsToTVM,
 )
-from src.bridges.triton_tvm.ir_to_tir.tt_dot_split import SplitResult, TTDotSplitter
+from src.bridges.triton_tvm.ir_to_tir.tt_dot_split import TTDotSplitter
 from src.bridges.triton_tvm.ir_to_tir.ttgir_parser import (
     OpKind,
     TTGIRFunction,
-    TTGIROperation,
     TTGIRParser,
-    TTGIRType,
 )
 from src.bridges.triton_tvm.ir_to_tir.tvmscript_emitter import TVMScriptEmitter
 
@@ -297,8 +294,12 @@ class TestTVMScriptEmitter:
 
     def setup_method(self) -> None:
         self.emitter = TVMScriptEmitter()
-        self.pipeline = [LowerTensorIdioms(), RewriteSPMDToLoops(),
-                        ReplacePointersWithMemRefs(), MaterializeTensorsToTVM()]
+        self.pipeline = [
+            LowerTensorIdioms(),
+            RewriteSPMDToLoops(),
+            ReplacePointersWithMemRefs(),
+            MaterializeTensorsToTVM(),
+        ]
 
     def _convert(self, ir_text: str) -> TTGIRFunction:
         parser = TTGIRParser()

@@ -13,8 +13,6 @@ is skipped, not silently passed.
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 torch = pytest.importorskip("torch", reason="PyTorch is required for graph capture tests")
@@ -76,13 +74,17 @@ class TestGraphMetadata:
 
     def test_cache_key_stable_for_same_content(self) -> None:
         a = GraphMetadata(
-            model_name="m", source_hash="h",
-            input_shapes=[(1, 16)], input_dtypes=["float32"],
+            model_name="m",
+            source_hash="h",
+            input_shapes=[(1, 16)],
+            input_dtypes=["float32"],
             op_count=10,
         )
         b = GraphMetadata(
-            model_name="m", source_hash="h",
-            input_shapes=[(1, 16)], input_dtypes=["float32"],
+            model_name="m",
+            source_hash="h",
+            input_shapes=[(1, 16)],
+            input_dtypes=["float32"],
             op_count=10,
         )
         assert a.cache_key == b.cache_key
@@ -134,7 +136,8 @@ class TestGraphCaptureWithMLP:
 
         gc = GraphCapture()
         captured = gc.capture(
-            model=model, example_inputs=example_inputs,
+            model=model,
+            example_inputs=example_inputs,
             model_name="my_custom_mlp",
         )
 
@@ -190,8 +193,9 @@ class TestGraphCaptureModes:
 
         assert captured.is_usable is True
         # MANUAL_FX traces the model directly — output shape must match
-        assert (2, 4) in captured.metadata.output_shapes or \
-               captured.metadata.output_shapes == [(1, 4)]
+        assert (2, 4) in captured.metadata.output_shapes or captured.metadata.output_shapes == [
+            (1, 4)
+        ]
 
     def test_torch_export_mode(self) -> None:
         """TORCH_EXPORT uses torch.export.export — produces a richer
@@ -205,7 +209,7 @@ class TestGraphCaptureModes:
 
         # The export path may or may not succeed depending on torch version
         if not captured.is_usable:
-            pytest.skip(f"torch.export path unusable in this env")
+            pytest.skip("torch.export path unusable in this env")
         assert captured.graph_module is not None
 
 

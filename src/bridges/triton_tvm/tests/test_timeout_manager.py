@@ -22,9 +22,14 @@ class TestStageBudgets:
         """Total budget should equal the sum of all stages."""
         budgets = StageBudgets()
         expected = (
-            budgets.extract_s + budgets.build_tir_s + budgets.tune_s +
-            budgets.map_config_s + budgets.recompile_s + budgets.aot_compile_s +
-            budgets.link_s + budgets.validate_s
+            budgets.extract_s
+            + budgets.build_tir_s
+            + budgets.tune_s
+            + budgets.map_config_s
+            + budgets.recompile_s
+            + budgets.aot_compile_s
+            + budgets.link_s
+            + budgets.validate_s
         )
         assert budgets.total_s == expected
 
@@ -59,32 +64,34 @@ class TestTimeoutManager:
     def test_stage_over_budget_raises(self) -> None:
         """A stage exceeding its budget should raise StageTimeoutError."""
         mgr = TimeoutManager(StageBudgets(extract_s=0.1))
-        with pytest.raises(StageTimeoutError) as exc_info:
-            with mgr.stage("extract"):
-                time.sleep(0.5)  # Will exceed the 0.1s budget
+        with pytest.raises(StageTimeoutError) as exc_info, mgr.stage("extract"):
+            time.sleep(0.5)  # Will exceed the 0.1s budget
         assert "extract" in str(exc_info.value)
         assert exc_info.value.budget_s == pytest.approx(0.1, abs=0.01)
 
     def test_stage_exception_propagates(self) -> None:
         """Exceptions inside a stage should propagate after the stage ends."""
         mgr = TimeoutManager(StageBudgets())
-        with pytest.raises(ValueError):
-            with mgr.stage("extract"):
-                raise ValueError("test error")
+        with pytest.raises(ValueError), mgr.stage("extract"):
+            raise ValueError("test error")
 
     def test_total_budget_exceeded(self) -> None:
         """The total budget should be enforceable independently."""
         # Set tight budgets so we can quickly exhaust
         budgets = StageBudgets(
-            extract_s=0.05, build_tir_s=0.05, tune_s=0.05,
-            map_config_s=0.05, recompile_s=0.05, aot_compile_s=0.05,
-            link_s=0.05, validate_s=0.05,
+            extract_s=0.05,
+            build_tir_s=0.05,
+            tune_s=0.05,
+            map_config_s=0.05,
+            recompile_s=0.05,
+            aot_compile_s=0.05,
+            link_s=0.05,
+            validate_s=0.05,
         )
         mgr = TimeoutManager(budgets)
         for _ in range(8):
-            with pytest.raises(StageTimeoutError):
-                with mgr.stage("extract"):
-                    time.sleep(0.2)
+            with pytest.raises(StageTimeoutError), mgr.stage("extract"):
+                time.sleep(0.2)
         # Now the total budget should be exhausted
         with pytest.raises(TotalBudgetExceededError):
             mgr.check_total_budget()
@@ -117,6 +124,7 @@ class TestWallclockTimeout:
         """An operation exceeding the wallclock timeout should raise."""
         # Note: SIGALRM-based timeout requires Unix and main thread
         import sys
+
         if sys.platform == "win32":
             pytest.skip("SIGALRM not available on Windows")
 

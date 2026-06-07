@@ -67,12 +67,12 @@ import hashlib
 import json
 import sys
 import time
-import traceback
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import click
 
@@ -81,11 +81,14 @@ from src.common.errors import (
     ConfigError,
     DependencyMissingError,
     NautilusError,
-    ShardingError,
 )
 from src.common.logging import (
     get_logger,
+)
+from src.common.logging import (
     span as span_context,
+)
+from src.common.logging import (
     stage as stage_context,
 )
 from src.common.types import HardwareTarget, TuningConfig, Vendor
@@ -119,7 +122,7 @@ class PipelineStage(str, Enum):
         return [s.value for s in cls]
 
     @classmethod
-    def from_str(cls, s: str) -> "PipelineStage":
+    def from_str(cls, s: str) -> PipelineStage:
         try:
             return cls(s.lower())
         except ValueError as exc:
@@ -129,7 +132,7 @@ class PipelineStage(str, Enum):
             ) from exc
 
     @classmethod
-    def stages_from(cls, start: "PipelineStage") -> list["PipelineStage"]:
+    def stages_from(cls, start: PipelineStage) -> list[PipelineStage]:
         """Return all stages from ``start`` (inclusive) to the end."""
         all_stages = list(cls)
         idx = all_stages.index(start)
@@ -211,7 +214,7 @@ class PipelineContext:
         path.write_text(json.dumps(serialisable, indent=2, default=str))
 
     @classmethod
-    def load_state(cls, path: Path) -> "PipelineContext":
+    def load_state(cls, path: Path) -> PipelineContext:
         """Inverse of :meth:`save_state`. Reconstructs Path fields."""
         blob = json.loads(path.read_text())
         ctx = cls(input_path=Path(blob["input_path"]))
@@ -225,9 +228,7 @@ class PipelineContext:
         ctx.sharding_cache_key = blob.get("sharding_cache_key", "")
         ctx.extracted_kernels = list(blob.get("extracted_kernels", []))
         ctx.tuning_configs = dict(blob.get("tuning_configs", {}))
-        ctx.fat_binary_paths = {
-            k: Path(v) for k, v in blob.get("fat_binary_paths", {}).items()
-        }
+        ctx.fat_binary_paths = {k: Path(v) for k, v in blob.get("fat_binary_paths", {}).items()}
         ctx.build_stage_times = dict(blob.get("build_stage_times", {}))
         ctx.skipped_vendors = list(blob.get("skipped_vendors", []))
         ctx.dispatch_plan = dict(blob.get("dispatch_plan", {}))
@@ -246,6 +247,7 @@ class PipelineContext:
 @dataclass
 class StageOutcome:
     """One stage's outcome, reported to the user via stdout + logs."""
+
     stage: PipelineStage
     success: bool
     duration_ms: float
@@ -295,9 +297,7 @@ class Pipeline:
             try:
                 self.ctx = PipelineContext.load_state(self.state_path)
                 # Preserve run-time overrides
-                self.ctx.output_dir = (
-                    self.ctx.output_dir or Path("nautilus-out")
-                )
+                self.ctx.output_dir = self.ctx.output_dir or Path("nautilus-out")
                 log.info(
                     "resumed from previous state",
                     state_path=str(self.state_path),
@@ -344,7 +344,7 @@ class Pipeline:
                 if not self.dry_run:
                     try:
                         self.ctx.save_state(self.state_path)
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         log.warning("could not persist state: %s", exc)
 
         return self.outcomes
@@ -352,14 +352,16 @@ class Pipeline:
     def _run_one(
         self,
         stage: PipelineStage,
-        handler: Callable[["Pipeline"], dict[str, Any]],
+        handler: Callable[[Pipeline], dict[str, Any]],
         sp: Any,
     ) -> StageOutcome:
         """Run a single stage and convert exceptions into StageOutcome."""
         if self.dry_run and stage != PipelineStage.DISPATCH:
             # Dispatch always runs in dry-run; it just emits a plan.
             outcome = StageOutcome(
-                stage=stage, success=True, duration_ms=0.0,
+                stage=stage,
+                success=True,
+                duration_ms=0.0,
                 summary={"dry_run": True, "would_run": handler.__name__},
                 dry_run=True,
             )
@@ -369,27 +371,34 @@ class Pipeline:
         try:
             with stage_context(sp, stage.value) as st:
                 summary = handler(self)
-                st.set(**{k: v for k, v in summary.items()
-                          if isinstance(v, (str, int, float, bool))})
+                st.set(
+                    **{k: v for k, v in summary.items() if isinstance(v, (str, int, float, bool))}
+                )
         except NautilusError as exc:
             duration = (time.perf_counter() - t0) * 1000
             outcome = StageOutcome(
-                stage=stage, success=False, duration_ms=duration,
+                stage=stage,
+                success=False,
+                duration_ms=duration,
                 error=f"[{exc.code.value}] {exc.message}",
             )
             self._print_outcome(outcome)
             return outcome
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             duration = (time.perf_counter() - t0) * 1000
             outcome = StageOutcome(
-                stage=stage, success=False, duration_ms=duration,
+                stage=stage,
+                success=False,
+                duration_ms=duration,
                 error=f"unexpected: {type(exc).__name__}: {exc}",
             )
             self._print_outcome(outcome)
             return outcome
         duration = (time.perf_counter() - t0) * 1000
         outcome = StageOutcome(
-            stage=stage, success=True, duration_ms=duration,
+            stage=stage,
+            success=True,
+            duration_ms=duration,
             summary=summary,
         )
         self._print_outcome(outcome)
@@ -401,17 +410,26 @@ class Pipeline:
         summary_str = ""
         if outcome.summary:
             # Render the summary as a short, single-line hint.
-            keys = ("kernel", "kernels", "shards", "targets", "vendors",
-                    "shard_count", "output_path", "would_run", "skipped",
-                    "available", "unavailable")
+            keys = (
+                "kernel",
+                "kernels",
+                "shards",
+                "targets",
+                "vendors",
+                "shard_count",
+                "output_path",
+                "would_run",
+                "skipped",
+                "available",
+                "unavailable",
+            )
             for k in keys:
                 if k in outcome.summary:
                     v = outcome.summary[k]
                     summary_str = f" {k}={v}"
                     break
         click.echo(
-            f"[{marker}] {outcome.stage.value:8s} "
-            f"{outcome.duration_ms:8.1f} ms{dry}{summary_str}",
+            f"[{marker}] {outcome.stage.value:8s} {outcome.duration_ms:8.1f} ms{dry}{summary_str}",
             err=False,
         )
 
@@ -437,6 +455,7 @@ class Pipeline:
         # Try Triton-kernel first
         try:
             from src.cli.commands.tune import _load_kernel_file
+
             name, text = _load_kernel_file(path)
             self.ctx.kernel_name = name
             self.ctx.kernel_source = text
@@ -458,12 +477,11 @@ class Pipeline:
 
         # Try PyTorch model capture
         try:
-            from src.cli.commands.shard import _import_user_module
             from src.bridges.pytorch_xla.graph_capture import GraphCapture
+            from src.cli.commands.shard import _import_user_module
         except ImportError as exc:
             log.warning(
-                "PyTorch capture unavailable; treating input as "
-                "Triton kernel with no @triton.jit",
+                "PyTorch capture unavailable; treating input as Triton kernel with no @triton.jit",
                 error=str(exc),
             )
             raise KernelNotFoundError(
@@ -481,8 +499,7 @@ class Pipeline:
             model = module.build_model()
         if model is None:
             raise KernelNotFoundError(
-                f"No @triton.jit function and no Model / model / "
-                f"build_model in {path}.",
+                f"No @triton.jit function and no Model / model / build_model in {path}.",
             )
 
         # Capture with no example inputs — best effort; downstream
@@ -490,14 +507,18 @@ class Pipeline:
         try:
             capturer = GraphCapture()
             captured = capturer.capture(
-                model=model, example_inputs=(),
+                model=model,
+                example_inputs=(),
                 model_name=model.__class__.__name__,
             )
-            self.ctx.captured_graph_text = captured.fx_graph_text or \
-                f"# model={model.__class__.__name__}"
-            self.ctx.captured_graph_hash = captured.metadata.source_hash or \
-                hashlib.sha256(self.ctx.captured_graph_text.encode()).hexdigest()
-        except Exception as exc:  # noqa: BLE001
+            self.ctx.captured_graph_text = (
+                captured.fx_graph_text or f"# model={model.__class__.__name__}"
+            )
+            self.ctx.captured_graph_hash = (
+                captured.metadata.source_hash
+                or hashlib.sha256(self.ctx.captured_graph_text.encode()).hexdigest()
+            )
+        except Exception as exc:
             log.warning("graph capture failed: %s; continuing", exc)
             self.ctx.captured_graph_text = f"# model={model.__class__.__name__}"
             self.ctx.captured_graph_hash = hashlib.sha256(
@@ -565,10 +586,8 @@ class Pipeline:
             total = self.ctx.shard_count
             # First vendor from targets — best effort vendor for the
             # synthetic mesh.
-            vendor = (self.targets[0].vendor if self.targets
-                      else Vendor.NVIDIA)
-            arch = (self.targets[0].arch.value if self.targets
-                    else "sm_90")
+            vendor = self.targets[0].vendor if self.targets else Vendor.NVIDIA
+            arch = self.targets[0].arch.value if self.targets else "sm_90"
             devices = [
                 MeshDevice(
                     device_id=i,
@@ -585,11 +604,13 @@ class Pipeline:
                 mesh_shape=list(self.ctx.mesh_axes),
             )
             self.ctx.sharding_cache_key = hashlib.sha256(
-                json.dumps({
-                    "mesh": list(self.ctx.mesh_axes),
-                    "strategy": self.ctx.sharding_strategy,
-                    "kernel": self.ctx.kernel_name,
-                }).encode()
+                json.dumps(
+                    {
+                        "mesh": list(self.ctx.mesh_axes),
+                        "strategy": self.ctx.sharding_strategy,
+                        "kernel": self.ctx.kernel_name,
+                    }
+                ).encode()
             ).hexdigest()
             # Note: we deliberately do not call AutoShardingBridge.shard()
             # here because that requires a torch model with example
@@ -603,7 +624,7 @@ class Pipeline:
                 "sharding_cache_key": self.ctx.sharding_cache_key[:12],
                 "devices": [d.vendor.value for d in mesh.devices],
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("shard stage failed: %s; falling back to 1x1", exc)
             self.ctx.mesh_axes = [1]
             self.ctx.shard_count = 1
@@ -626,8 +647,7 @@ class Pipeline:
         log.info("extract stage", kernel_name=self.ctx.kernel_name)
         if not self.ctx.kernel_name:
             raise KernelNotFoundError(
-                "Cannot extract kernels: no kernel_name in context. "
-                "Capture stage must run first.",
+                "Cannot extract kernels: no kernel_name in context. Capture stage must run first.",
             )
         if not self.ctx.kernel_source:
             raise KernelNotFoundError(
@@ -635,9 +655,7 @@ class Pipeline:
             )
         kernel = {
             "name": self.ctx.kernel_name,
-            "source_hash": hashlib.sha256(
-                self.ctx.kernel_source.encode()
-            ).hexdigest()[:12],
+            "source_hash": hashlib.sha256(self.ctx.kernel_source.encode()).hexdigest()[:12],
             "lines": self.ctx.kernel_source.count("\n") + 1,
             "shard_id": 0,
         }
@@ -653,8 +671,7 @@ class Pipeline:
         For each extracted kernel, runs the bridge. If TVM/Triton
         is unavailable, falls back to the default block config.
         """
-        log.info("tune stage", kernels=len(self.ctx.extracted_kernels),
-                 trials=self.trials)
+        log.info("tune stage", kernels=len(self.ctx.extracted_kernels), trials=self.trials)
         for kernel in self.ctx.extracted_kernels:
             name = kernel["name"]
             source_hash = kernel["source_hash"]
@@ -673,7 +690,9 @@ class Pipeline:
         }
 
     def _tune_one_kernel(
-        self, kernel_name: str, source_hash: str,
+        self,
+        kernel_name: str,
+        source_hash: str,
     ) -> TuningConfig:
         """Tune a single kernel. Falls back to defaults on missing deps."""
         try:
@@ -696,28 +715,36 @@ class Pipeline:
         target = self.targets[0]
         try:
             bridge = TritonTVMBridge(
-                max_trials=self.trials, enable_cache=True,
+                max_trials=self.trials,
+                enable_cache=True,
             )
             metadata = KernelMetadata(
                 kernel_name=kernel_name,
                 source_hash=source_hash,
-                grid_0=1, grid_1=1, grid_2=1,
-                num_warps=4, num_stages=3, num_ctas=1,
+                grid_0=1,
+                grid_1=1,
+                grid_2=1,
+                num_warps=4,
+                num_stages=3,
+                num_ctas=1,
             )
             mapped = bridge._tuning_chain(
-                metadata, target.to_tvm_target(),
+                metadata,
+                target.to_tvm_target(),
             )
             return TuningConfig(
-                block_m=mapped.block_m, block_n=mapped.block_n,
+                block_m=mapped.block_m,
+                block_n=mapped.block_n,
                 block_k=mapped.block_k,
                 num_warps=mapped.num_warps,
                 num_stages=mapped.num_stages,
                 num_ctas=mapped.num_ctas,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning(
                 "tuning failed for %s; using defaults",
-                kernel_name, error=str(exc),
+                kernel_name,
+                error=str(exc),
             )
             return TuningConfig.defaults()
 
@@ -741,9 +768,10 @@ class Pipeline:
         kernel = self.ctx.extracted_kernels[0]
         config_dict = self.ctx.tuning_configs.get(
             kernel["name"],
-            {f: getattr(TuningConfig.defaults(), f)
-             for f in ("block_m", "block_n", "block_k",
-                       "num_warps", "num_stages", "num_ctas")},
+            {
+                f: getattr(TuningConfig.defaults(), f)
+                for f in ("block_m", "block_n", "block_k", "num_warps", "num_stages", "num_ctas")
+            },
         )
 
         # Map targets to FatBinaryConfig skip flags. The builder
@@ -763,8 +791,7 @@ class Pipeline:
             )
         except ImportError as exc:
             raise DependencyMissingError(
-                f"AOT packager not importable: {exc}. "
-                f"Install with: pip install -e .",
+                f"AOT packager not importable: {exc}. Install with: pip install -e .",
             ) from exc
 
         out_dir = self.ctx.output_dir or Path("nautilus-out")
@@ -780,13 +807,25 @@ class Pipeline:
         # one call with all backends.
         if self.parallel and len(self.targets) > 1:
             return self._build_parallel(
-                builder, out_dir, config_dict, kernel,
-                skip_amd, skip_intel, skip_nvidia, skip_apple,
+                builder,
+                out_dir,
+                config_dict,
+                kernel,
+                skip_amd,
+                skip_intel,
+                skip_nvidia,
+                skip_apple,
             )
 
         return self._build_single(
-            builder, out_dir, config_dict, kernel,
-            skip_amd, skip_intel, skip_nvidia, skip_apple,
+            builder,
+            out_dir,
+            config_dict,
+            kernel,
+            skip_amd,
+            skip_intel,
+            skip_nvidia,
+            skip_apple,
         )
 
     def _build_single(
@@ -802,6 +841,7 @@ class Pipeline:
     ) -> dict[str, Any]:
         """Single FatBinaryBuilder call covering all vendors."""
         from src.bridges.aot_packager.builder import FatBinaryConfig
+
         cfg = FatBinaryConfig(
             kernel_name=kernel["name"],
             kernel_source=self.ctx.kernel_source,
@@ -824,7 +864,10 @@ class Pipeline:
         if result.output_path is not None:
             self.ctx.fat_binary_paths["primary"] = result.output_path
         for vendor_str in (
-            "amd", "intel", "nvidia", "apple",
+            "amd",
+            "intel",
+            "nvidia",
+            "apple",
         ):
             if not getattr(cfg, f"skip_{vendor_str}", True):
                 # The builder result exposes the per-vendor
@@ -834,13 +877,8 @@ class Pipeline:
                     if vendor_str not in self.ctx.skipped_vendors:
                         self.ctx.skipped_vendors.append(vendor_str)
         return {
-            "output_path": (
-                str(result.output_path) if result.output_path else None
-            ),
-            "vendors": (
-                [v.value for v in result.fat_binary.vendors]
-                if result.fat_binary else []
-            ),
+            "output_path": (str(result.output_path) if result.output_path else None),
+            "vendors": ([v.value for v in result.fat_binary.vendors] if result.fat_binary else []),
             "skipped": list(self.ctx.skipped_vendors),
             "elapsed_s": round(elapsed, 3),
         }
@@ -867,22 +905,33 @@ class Pipeline:
         from src.bridges.aot_packager.builder import FatBinaryConfig
 
         per_vendor: dict[str, dict[str, bool]] = {
-            "amd":   {"skip_amd":   False, "skip_intel": True,
-                      "skip_nvidia": True, "skip_apple": True},
-            "intel": {"skip_amd":   True,  "skip_intel": False,
-                      "skip_nvidia": True, "skip_apple": True},
-            "nvidia": {"skip_amd":   True,  "skip_intel": True,
-                       "skip_nvidia": False, "skip_apple": True},
-            "apple":  {"skip_amd":   True,  "skip_intel": True,
-                       "skip_nvidia": True,  "skip_apple": False},
+            "amd": {"skip_amd": False, "skip_intel": True, "skip_nvidia": True, "skip_apple": True},
+            "intel": {
+                "skip_amd": True,
+                "skip_intel": False,
+                "skip_nvidia": True,
+                "skip_apple": True,
+            },
+            "nvidia": {
+                "skip_amd": True,
+                "skip_intel": True,
+                "skip_nvidia": False,
+                "skip_apple": True,
+            },
+            "apple": {
+                "skip_amd": True,
+                "skip_intel": True,
+                "skip_nvidia": True,
+                "skip_apple": False,
+            },
         }
 
         # Only run vendors the user actually requested.
         requested = {
-            "amd":   not skip_amd,
+            "amd": not skip_amd,
             "intel": not skip_intel,
             "nvidia": not skip_nvidia,
-            "apple":  not skip_apple,
+            "apple": not skip_apple,
         }
         vendors_to_build = [v for v, req in requested.items() if req]
         if not vendors_to_build:
@@ -920,9 +969,7 @@ class Pipeline:
         skipped: list[str] = []
         t_total = time.perf_counter()
         with ThreadPoolExecutor(max_workers=max(1, len(vendors_to_build))) as ex:
-            futures = {
-                ex.submit(_build_one, v): v for v in vendors_to_build
-            }
+            futures = {ex.submit(_build_one, v): v for v in vendors_to_build}
             for fut in as_completed(futures):
                 vendor, out_path, elapsed = fut.result()
                 self.ctx.build_stage_times[vendor] = elapsed
@@ -954,9 +1001,7 @@ class Pipeline:
             "shards": self.ctx.shard_count,
             "mesh_axes": self.ctx.mesh_axes,
             "tuning": self.ctx.tuning_configs,
-            "fat_binaries": {
-                k: str(v) for k, v in self.ctx.fat_binary_paths.items()
-            },
+            "fat_binaries": {k: str(v) for k, v in self.ctx.fat_binary_paths.items()},
             "skipped_vendors": list(self.ctx.skipped_vendors),
             "sharding_cache_key": self.ctx.sharding_cache_key,
             "dry_run": self.dry_run,
@@ -975,7 +1020,6 @@ class Pipeline:
 # extra import (the stage_capture method raises it).
 from src.common.errors import KernelNotFoundError  # noqa: E402
 
-
 # Map stages to handler methods.  Defined after the class so the
 # bound method lookup is unambiguous.
 _STAGE_HANDLERS: dict[PipelineStage, Callable[[Pipeline], dict[str, Any]]] = {}
@@ -984,24 +1028,12 @@ _STAGE_HANDLERS: dict[PipelineStage, Callable[[Pipeline], dict[str, Any]]] = {}
 def _register_handlers() -> None:
     if _STAGE_HANDLERS:
         return
-    _STAGE_HANDLERS[PipelineStage.CAPTURE] = (
-        lambda p: p.stage_capture()
-    )
-    _STAGE_HANDLERS[PipelineStage.SHARD] = (
-        lambda p: p.stage_shard()
-    )
-    _STAGE_HANDLERS[PipelineStage.EXTRACT] = (
-        lambda p: p.stage_extract()
-    )
-    _STAGE_HANDLERS[PipelineStage.TUNE] = (
-        lambda p: p.stage_tune()
-    )
-    _STAGE_HANDLERS[PipelineStage.BUILD] = (
-        lambda p: p.stage_build()
-    )
-    _STAGE_HANDLERS[PipelineStage.DISPATCH] = (
-        lambda p: p.stage_dispatch()
-    )
+    _STAGE_HANDLERS[PipelineStage.CAPTURE] = lambda p: p.stage_capture()
+    _STAGE_HANDLERS[PipelineStage.SHARD] = lambda p: p.stage_shard()
+    _STAGE_HANDLERS[PipelineStage.EXTRACT] = lambda p: p.stage_extract()
+    _STAGE_HANDLERS[PipelineStage.TUNE] = lambda p: p.stage_tune()
+    _STAGE_HANDLERS[PipelineStage.BUILD] = lambda p: p.stage_build()
+    _STAGE_HANDLERS[PipelineStage.DISPATCH] = lambda p: p.stage_dispatch()
 
 
 _register_handlers()
@@ -1024,12 +1056,14 @@ def _parse_targets(target_strs: tuple[str, ...]) -> list[HardwareTarget]:
         # Default to one target per vendor so the fat binary has
         # something to compile.
         from src.cli.commands.tune import _parse_target
+
         return [
             _parse_target("nvidia/sm_90"),
             _parse_target("amd/gfx942"),
             _parse_target("intel/intel_gpu_xehpg"),
         ]
     from src.cli.commands.tune import _parse_target
+
     return [_parse_target(t) for t in target_strs]
 
 
@@ -1086,28 +1120,33 @@ Examples:
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
 )
 @click.option(
-    "--target", "-t",
+    "--target",
+    "-t",
     "targets",
     multiple=True,
     help="Target hardware as 'vendor/arch' (e.g. nvidia/sm_90, amd/gfx942). "
-         "Can be passed multiple times. Default: one per vendor.",
+    "Can be passed multiple times. Default: one per vendor.",
 )
 @click.option(
-    "--mesh", "-m",
+    "--mesh",
+    "-m",
     default=None,
     help="Device mesh as comma-separated axes (e.g. '2,2'). Default: 1x1.",
 )
 @click.option(
-    "--strategy", "-s",
-    type=click.Choice(["auto", "replicated", "data_parallel",
-                       "model_parallel", "tensor_parallel"],
-                      case_sensitive=False),
+    "--strategy",
+    "-s",
+    type=click.Choice(
+        ["auto", "replicated", "data_parallel", "model_parallel", "tensor_parallel"],
+        case_sensitive=False,
+    ),
     default="auto",
     show_default=True,
     help="Sharding strategy hint.",
 )
 @click.option(
-    "--output-dir", "-o",
+    "--output-dir",
+    "-o",
     type=click.Path(file_okay=False, dir_okay=True, writable=True, path_type=Path),
     default=Path("./nautilus-out"),
     show_default=True,
@@ -1126,7 +1165,8 @@ Examples:
     help="Validate inputs and print a per-stage plan without doing expensive work.",
 )
 @click.option(
-    "--trials", "-n",
+    "--trials",
+    "-n",
     type=click.IntRange(min=1, max=10000),
     default=64,
     show_default=True,
@@ -1190,9 +1230,7 @@ def _pipeline_impl(
     """
     hardware_targets = _parse_targets(tuple(target_strs))
     mesh_axes = _parse_mesh(mesh_str)
-    resume_stage = (
-        PipelineStage.from_str(resume_from) if resume_from else None
-    )
+    resume_stage = PipelineStage.from_str(resume_from) if resume_from else None
     output_dir.mkdir(parents=True, exist_ok=True)
     ctx = PipelineContext(
         input_path=input_file,
@@ -1239,8 +1277,7 @@ def _pipeline_impl(
         dry = " (dry-run)" if o.dry_run else ""
         skip = " (skipped)" if o.skipped else ""
         click.echo(
-            f"  [{marker}] {o.stage.value:8s} "
-            f"{o.duration_ms:8.1f} ms{dry}{skip}",
+            f"  [{marker}] {o.stage.value:8s} {o.duration_ms:8.1f} ms{dry}{skip}",
         )
     click.echo("")
     if failed:
@@ -1271,9 +1308,7 @@ def _pipeline_impl(
         "kernel_name": ctx.kernel_name,
         "mesh_axes": ctx.mesh_axes,
         "shard_count": ctx.shard_count,
-        "fat_binary_paths": {
-            k: str(v) for k, v in ctx.fat_binary_paths.items()
-        },
+        "fat_binary_paths": {k: str(v) for k, v in ctx.fat_binary_paths.items()},
         "dispatch_plan": ctx.dispatch_plan,
     }
     summary_path = output_dir / "pipeline_summary.json"
@@ -1282,4 +1317,4 @@ def _pipeline_impl(
 
 
 if __name__ == "__main__":
-    cli()  # type: ignore[reportArgumentType]
+    cli()

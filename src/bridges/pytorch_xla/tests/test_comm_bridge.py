@@ -26,8 +26,9 @@ import pytest
 # vendor backend fixtures; we gate the torch-dependent tests below
 # rather than at import time so the file always collects.
 try:
-    import torch  # type: ignore[import-not-found]
-    import torch.distributed as dist  # type: ignore[import-not-found]
+    import torch
+    import torch.distributed as dist
+
     TORCH_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised in torch-less envs
     torch = None  # type: ignore[assignment]
@@ -52,7 +53,6 @@ from src.bridges.pytorch_xla.device_mesh import (
     MeshDevice,
 )
 from src.common.errors import BridgeError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -258,11 +258,15 @@ class TestAvailabilityProbes:
 
     def test_nccl_probe_requires_cuda(self) -> None:
         """Even with the backend available, no cuda → unavailable."""
-        with patch.object(NCCLBackend, "_torch_backend_available", return_value=True), \
-             patch.object(torch.cuda, "is_available", return_value=False):
+        with (
+            patch.object(NCCLBackend, "_torch_backend_available", return_value=True),
+            patch.object(torch.cuda, "is_available", return_value=False),
+        ):
             assert NCCLBackend(device_id=0).is_available is False
-        with patch.object(NCCLBackend, "_torch_backend_available", return_value=True), \
-             patch.object(torch.cuda, "is_available", return_value=True):
+        with (
+            patch.object(NCCLBackend, "_torch_backend_available", return_value=True),
+            patch.object(torch.cuda, "is_available", return_value=True),
+        ):
             assert NCCLBackend(device_id=0).is_available is True
 
     def test_rccl_probe_handles_missing_cuda(self) -> None:
@@ -359,26 +363,26 @@ class _MockBackend(CollectiveBackend):
     def _record(self, op: str, *args, **kwargs) -> None:
         self.calls.append((op, args, kwargs))
 
-    def all_reduce(self, tensor, op=None, group=None):  # type: ignore[override]
+    def all_reduce(self, tensor, op=None, group=None):
         self._record("all_reduce", tensor, op=op, group=group)
         return tensor
 
-    def all_gather(self, tensor, group=None):  # type: ignore[override]
+    def all_gather(self, tensor, group=None):
         self._record("all_gather", tensor, group=group)
         return tensor
 
-    def reduce_scatter(self, tensor, op=None, group=None):  # type: ignore[override]
+    def reduce_scatter(self, tensor, op=None, group=None):
         self._record("reduce_scatter", tensor, op=op, group=group)
         return tensor
 
-    def all_to_all(self, tensor, group=None):  # type: ignore[override]
+    def all_to_all(self, tensor, group=None):
         self._record("all_to_all", tensor, group=group)
         return tensor
 
-    def send(self, tensor, dst, group=None):  # type: ignore[override]
+    def send(self, tensor, dst, group=None):
         self._record("send", tensor, dst, group=group)
 
-    def recv(self, tensor, src, group=None):  # type: ignore[override]
+    def recv(self, tensor, src, group=None):
         self._record("recv", tensor, src, group=group)
         return tensor
 
@@ -512,8 +516,11 @@ class TestCrossVendorBridgePrimitives:
         tensor = torch.ones(4, dtype=torch.float32)
 
         from src.bridges.pytorch_xla import comm_bridge
-        with patch.object(comm_bridge, "dist") as mock_dist, \
-             patch.object(comm_bridge, "torch", create=True) as mock_torch:
+
+        with (
+            patch.object(comm_bridge, "dist") as mock_dist,
+            patch.object(comm_bridge, "torch", create=True) as mock_torch,
+        ):
             # The bridge uses torch.chunk and torch.empty; route them
             # through the real torch so the test tensors flow.
             mock_torch.empty = torch.empty
@@ -533,8 +540,11 @@ class TestCrossVendorBridgePrimitives:
         tensor = torch.ones(4, dtype=torch.float32)
 
         from src.bridges.pytorch_xla import comm_bridge
-        with patch.object(comm_bridge, "dist") as mock_dist, \
-             patch.object(comm_bridge, "torch", create=True) as mock_torch:
+
+        with (
+            patch.object(comm_bridge, "dist") as mock_dist,
+            patch.object(comm_bridge, "torch", create=True) as mock_torch,
+        ):
             mock_torch.empty = torch.empty
             mock_torch.chunk = torch.chunk
             mock_dist.send = MagicMock()
@@ -547,8 +557,11 @@ class TestCrossVendorBridgePrimitives:
         template = torch.ones(4, dtype=torch.float32)
 
         from src.bridges.pytorch_xla import comm_bridge
-        with patch.object(comm_bridge, "dist") as mock_dist, \
-             patch.object(comm_bridge, "torch", create=True) as mock_torch:
+
+        with (
+            patch.object(comm_bridge, "dist") as mock_dist,
+            patch.object(comm_bridge, "torch", create=True) as mock_torch,
+        ):
             mock_torch.empty = torch.empty
             mock_torch.chunk = torch.chunk
             mock_dist.recv = MagicMock()
@@ -561,11 +574,14 @@ class TestCrossVendorBridgePrimitives:
         tensor = torch.ones(4, dtype=torch.float32)
 
         from src.bridges.pytorch_xla import comm_bridge
-        with patch.object(comm_bridge, "TORCH_AVAILABLE", False), \
-             patch.object(comm_bridge, "dist", None), \
-             patch.object(comm_bridge, "torch", None):
-            with pytest.raises(Exception):
-                bridge.all_reduce(tensor)
+
+        with (
+            patch.object(comm_bridge, "TORCH_AVAILABLE", False),
+            patch.object(comm_bridge, "dist", None),
+            patch.object(comm_bridge, "torch", None),
+            pytest.raises(Exception),
+        ):
+            bridge.all_reduce(tensor)
 
 
 # ---------------------------------------------------------------------------
@@ -587,8 +603,11 @@ class TestVendorBackendPrimitives:
     def mock_dist(self):
         """Patch torch.distributed inside the comm_bridge module."""
         from src.bridges.pytorch_xla import comm_bridge
-        with patch.object(comm_bridge, "dist") as mock_dist, \
-             patch.object(comm_bridge, "torch", create=True) as mock_torch:
+
+        with (
+            patch.object(comm_bridge, "dist") as mock_dist,
+            patch.object(comm_bridge, "torch", create=True) as mock_torch,
+        ):
             mock_dist.is_initialized = MagicMock(return_value=False)
             mock_dist.get_backend = MagicMock(return_value="nccl")
             mock_dist.ReduceOp = dist.ReduceOp
@@ -662,7 +681,6 @@ class TestRealCollectives:
 
         # Patch all three backends' _torch_backend_name to "gloo" so
         # init_process_group succeeds on CPU.  Restore at teardown.
-        from src.bridges.pytorch_xla import comm_bridge
         saved = {
             NCCLBackend: NCCLBackend._torch_backend_name,
             RCCLBackend: RCCLBackend._torch_backend_name,
@@ -733,6 +751,7 @@ class TestTorchlessImport:
     def test_module_can_be_imported(self) -> None:
         """importlib.reload shouldn't blow up."""
         from src.bridges.pytorch_xla import comm_bridge
+
         importlib.reload(comm_bridge)
         assert hasattr(comm_bridge, "CollectiveBackend")
         assert hasattr(comm_bridge, "NCCLBackend")
@@ -745,6 +764,7 @@ class TestTorchlessImport:
         """With TORCH_AVAILABLE=False, backend construction still works
         but ``is_available`` reports False and primitives raise."""
         from src.bridges.pytorch_xla import comm_bridge
+
         monkeypatch.setattr(comm_bridge, "TORCH_AVAILABLE", False)
         monkeypatch.setattr(comm_bridge, "dist", None)
         monkeypatch.setattr(comm_bridge, "torch", None)

@@ -70,34 +70,42 @@ class TestFullPipeline:
         """src.common must be importable without any optional deps."""
         from src.common import (
             Arch,
-            CircuitBreaker,
             Err,
             HardwareTarget,
             Ok,
-            Result,
-            Span,
-            StageLog,
             Vendor,
-            configure_logging,
         )
+
         assert Ok(1).is_ok()
         assert Err(ValueError("x")).is_err()
-        assert HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90).to_tvm_target() == "nvidia/nvidia-h100"
+        assert (
+            HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90).to_tvm_target()
+            == "nvidia/nvidia-h100"
+        )
 
     def test_fat_binary_serialization_roundtrip(self):
         """Fat binary data model can be serialized and deserialized loss-lessly."""
         from src.common import Arch, FatBinary, KernelSection, SectionFormat, Vendor
-        ptx_data = b"// PTX text"           # 10 bytes
-        hsaco_data = b"\\x7fELFhsaco"       # 12 bytes (includes escaped backslash)
+
+        ptx_data = b"// PTX text"  # 10 bytes
+        hsaco_data = b"\\x7fELFhsaco"  # 12 bytes (includes escaped backslash)
         fb = FatBinary(kernel_name="matmul")
-        fb.add_section(KernelSection(
-            vendor=Vendor.NVIDIA, arch=Arch.SM_90,
-            format=SectionFormat.PTX, data=ptx_data,
-        ))
-        fb.add_section(KernelSection(
-            vendor=Vendor.AMD, arch=Arch.GFX942,
-            format=SectionFormat.HSACO, data=hsaco_data,
-        ))
+        fb.add_section(
+            KernelSection(
+                vendor=Vendor.NVIDIA,
+                arch=Arch.SM_90,
+                format=SectionFormat.PTX,
+                data=ptx_data,
+            )
+        )
+        fb.add_section(
+            KernelSection(
+                vendor=Vendor.AMD,
+                arch=Arch.GFX942,
+                format=SectionFormat.HSACO,
+                data=hsaco_data,
+            )
+        )
         assert fb.total_size == len(ptx_data) + len(hsaco_data)
         assert set(fb.vendors) == {Vendor.NVIDIA, Vendor.AMD}
 
@@ -125,6 +133,7 @@ class TestFullPipeline:
             has_nvidia_gpu,
         )
         from src.common.types import Vendor
+
         # At least the call must not raise
         nv = has_nvidia_gpu()
         amd = has_amd_gpu()
@@ -138,6 +147,7 @@ class TestFullPipeline:
     def test_example_matmul_parses(self, tmp_path: Path):
         """The example matmul kernel must parse as a @triton.jit function."""
         from src.cli.commands.tune import _load_kernel_file
+
         p = tmp_path / "matmul.py"
         p.write_text(EXAMPLE_MATMUL)
         name, text = _load_kernel_file(p)
@@ -169,22 +179,27 @@ class TestFullPipeline:
         result = backend.compile_kernel(
             kernel_source=EXAMPLE_MATMUL,
             kernel_name="matmul_kernel",
-            block_m=64, block_n=64, block_k=32,
-            num_warps=4, num_stages=2,
+            block_m=64,
+            block_n=64,
+            block_k=32,
+            num_warps=4,
+            num_stages=2,
         )
         if not result.success:
             pytest.skip(f"AOT compile failed: {result.error}")
         assert result.ptx_text, "PTX text should not be empty"
         assert result.arch == "sm_90"
         # PTX must contain real instructions, not just the placeholder
-        assert "mov" in result.ptx_text or "ld." in result.ptx_text, \
+        assert "mov" in result.ptx_text or "ld." in result.ptx_text, (
             "PTX contains only the placeholder kernel — AOT did not run"
+        )
 
     def test_cli_help(self):
         """All CLI commands must show help without crashing."""
         from click.testing import CliRunner
 
         from src.cli.main import cli
+
         runner = CliRunner()
         for sub in ("tune", "build", "shard", "verify"):
             result = runner.invoke(cli, [sub, "--help"])
@@ -193,12 +208,14 @@ class TestFullPipeline:
 
     def test_c_api_stub_loads(self):
         """src.c_api must import even when the C library isn't built."""
-        from src.c_api import compile, is_available, triton_version
+        from src.c_api import is_available, triton_version
+
         # is_available() must return a bool without raising
         available = is_available()
         assert isinstance(available, bool)
         # triton_version() should raise DependencyMissingError when no lib
         from src.common.errors import DependencyMissingError
+
         if not available:
             with pytest.raises(DependencyMissingError):
                 triton_version()
@@ -206,9 +223,12 @@ class TestFullPipeline:
     def test_verify_env_script(self, repo_root: Path):
         """scripts/verify_env.py must run and produce structured output."""
         import subprocess
+
         result = subprocess.run(
             [sys.executable, str(repo_root / "scripts" / "verify_env.py"), "--json"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         assert result.returncode in (0, 1), f"verify_env crashed: {result.stderr}"
         report = json.loads(result.stdout)
@@ -280,16 +300,20 @@ class TestFullPipelineE2E:
         from unittest.mock import MagicMock, patch
 
         from src.bridges.pytorch_xla.device_mesh import (
-            DeviceMesh, DeviceVendor, InterconnectType, MeshDevice,
+            DeviceMesh,
+            DeviceVendor,
+            InterconnectType,
+            MeshDevice,
         )
-        from src.common.result import Ok
-        from src.common.types import FatBinary, Vendor
 
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
-                    device_id=0, vendor=DeviceVendor.NVIDIA,
-                    arch="sm_90", memory_gb=80.0, compute_tflops=989.0,
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
             ],
@@ -311,18 +335,14 @@ class TestFullPipelineE2E:
         assert shard_result.gspmd_result.is_usable
         assert shard_result.total_duration_ms > 0
         for stage in ("graph_capture", "stablehlo_export", "gspmd", "dtensor_apply"):
-            assert stage in shard_result.stage_durations, (
-                f"Missing stage timing: {stage}"
-            )
+            assert stage in shard_result.stage_durations, f"Missing stage timing: {stage}"
 
         # Stage 2: Tuning bridge (mock TIR template build to avoid TVM dependency)
         from src.bridges.triton_tvm.metadata_extractor import KernelMetadata
 
         metadata = KernelMetadata(
             kernel_name="matmul_kernel",
-            source_hash=hashlib.sha256(
-                self.EXAMPLE_MATMUL_KERNEL.encode()
-            ).hexdigest(),
+            source_hash=hashlib.sha256(self.EXAMPLE_MATMUL_KERNEL.encode()).hexdigest(),
             grid_0=4,
             grid_1=4,
             grid_2=1,
@@ -338,8 +358,9 @@ class TestFullPipelineE2E:
         )
 
         auto_tuning_bridge.enable_tvm = True
-        with patch.object(type(auto_tuning_bridge), '_build_tir_template',
-                          return_value=MagicMock()):
+        with patch.object(
+            type(auto_tuning_bridge), "_build_tir_template", return_value=MagicMock()
+        ):
             tune_result = auto_tuning_bridge._tuning_chain(
                 metadata,
                 target="nvidia/nvidia-a100",
@@ -378,6 +399,7 @@ class TestFullPipelineE2E:
 
         blob = fat_binary.to_bytes()
         from src.common.types import FatBinary as FBSerializer
+
         restored = FBSerializer.from_bytes(blob)
         assert restored.kernel_name == fat_binary.kernel_name
         assert len(restored.sections) == len(fat_binary.sections)
@@ -411,27 +433,37 @@ class TestFullPipelineE2E:
         metadata = KernelMetadata(
             kernel_name="test_kernel",
             source_hash="abcd1234",
-            grid_0=2, grid_1=2, grid_2=1,
-            num_warps=4, num_stages=3, num_ctas=1,
+            grid_0=2,
+            grid_1=2,
+            grid_2=1,
+            num_warps=4,
+            num_stages=3,
+            num_ctas=1,
             is_matmul=True,
-            matmul_m=64, matmul_n=64, matmul_k=128,
+            matmul_m=64,
+            matmul_n=64,
+            matmul_k=128,
         )
-        with patch.object(type(auto_tuning_bridge), '_build_tir_template',
-                          return_value=MagicMock()):
+        with patch.object(
+            type(auto_tuning_bridge), "_build_tir_template", return_value=MagicMock()
+        ):
             tune_result = auto_tuning_bridge._tuning_chain(
-                metadata, target="nvidia/nvidia-a100",
+                metadata,
+                target="nvidia/nvidia-a100",
             )
-        config = tune_result.unwrap() if tune_result.is_ok() \
-            else tune_result.unwrap_or(None)
+        config = tune_result.unwrap() if tune_result.is_ok() else tune_result.unwrap_or(None)
 
         if evidence_capture is not None and config is not None:
-            evidence_capture.attach_json("tuning_config", {
-                "block_m": config.block_m,
-                "block_n": config.block_n,
-                "block_k": config.block_k,
-                "num_warps": config.num_warps,
-                "num_stages": config.num_stages,
-            })
+            evidence_capture.attach_json(
+                "tuning_config",
+                {
+                    "block_m": config.block_m,
+                    "block_n": config.block_n,
+                    "block_k": config.block_k,
+                    "num_warps": config.num_warps,
+                    "num_stages": config.num_stages,
+                },
+            )
 
         from src.bridges.aot_packager.builder import FatBinaryConfig
 
@@ -443,8 +475,7 @@ class TestFullPipelineE2E:
         build_result = aot_packager.build(build_config)
 
         if evidence_capture is not None:
-            evidence_capture.attach_json("build_result",
-                                         build_result.to_dict())
+            evidence_capture.attach_json("build_result", build_result.to_dict())
             if build_result.fat_binary is not None:
                 evidence_capture.attach_bytes(
                     "fat_binary_blob",
@@ -471,8 +502,11 @@ class TestFullPipelineE2E:
         build_config = FatBinaryConfig(
             kernel_name="multi_vendor_kernel",
             kernel_source=self.EXAMPLE_MATMUL_KERNEL,
-            block_m=128, block_n=128, block_k=32,
-            num_warps=8, num_stages=3,
+            block_m=128,
+            block_n=128,
+            block_k=32,
+            num_warps=8,
+            num_stages=3,
             output_dir=str(tmp_path),
             skip_amd=False,
             skip_intel=False,
@@ -489,6 +523,7 @@ class TestFullPipelineE2E:
         assert fat.kernel_name == "multi_vendor_kernel"
         blob = fat.to_bytes()
         from src.common.types import FatBinary as FB
+
         restored = FB.from_bytes(blob)
         assert len(restored.sections) == len(fat.sections)
 
@@ -517,14 +552,20 @@ class TestPartialPipelines:
         and sharded by GSPMD without data loss or type errors.
         """
         from src.bridges.pytorch_xla.device_mesh import (
-            DeviceMesh, DeviceVendor, InterconnectType, MeshDevice,
+            DeviceMesh,
+            DeviceVendor,
+            InterconnectType,
+            MeshDevice,
         )
 
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
-                    device_id=0, vendor=DeviceVendor.NVIDIA,
-                    arch="sm_90", memory_gb=80.0, compute_tflops=989.0,
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
             ],
@@ -541,8 +582,7 @@ class TestPartialPipelines:
         assert shard_result.captured_graph.is_usable
         assert shard_result.stablehlo_module is not None
         assert shard_result.stablehlo_module.is_usable
-        assert shard_result.stablehlo_module.mlir_text or \
-               shard_result.stablehlo_module.module_text
+        assert shard_result.stablehlo_module.mlir_text or shard_result.stablehlo_module.module_text
         assert shard_result.gspmd_result is not None
         assert shard_result.gspmd_result.is_usable
         assert shard_result.gspmd_result.success
@@ -567,16 +607,22 @@ class TestPartialPipelines:
         """Capture→Shard with skip_sharding=True.
         Should produce a result without a GSPMD result.
         """
-        from src.bridges.pytorch_xla.pipeline_orchestrator import ShardingConfig
         from src.bridges.pytorch_xla.device_mesh import (
-            DeviceMesh, DeviceVendor, InterconnectType, MeshDevice,
+            DeviceMesh,
+            DeviceVendor,
+            InterconnectType,
+            MeshDevice,
         )
+        from src.bridges.pytorch_xla.pipeline_orchestrator import ShardingConfig
 
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
-                    device_id=0, vendor=DeviceVendor.NVIDIA,
-                    arch="sm_90", memory_gb=80.0, compute_tflops=989.0,
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
             ],
@@ -612,14 +658,20 @@ class TestPartialPipelines:
         the two bridges' data models.
         """
         from src.bridges.pytorch_xla.device_mesh import (
-            DeviceMesh, DeviceVendor, InterconnectType, MeshDevice,
+            DeviceMesh,
+            DeviceVendor,
+            InterconnectType,
+            MeshDevice,
         )
 
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
-                    device_id=0, vendor=DeviceVendor.NVIDIA,
-                    arch="sm_90", memory_gb=80.0, compute_tflops=989.0,
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
             ],
@@ -658,14 +710,14 @@ class TestPartialPipelines:
         )
 
         auto_tuning_bridge.enable_tvm = True
-        with patch.object(type(auto_tuning_bridge), '_build_tir_template',
-                          return_value=MagicMock()):
+        with patch.object(
+            type(auto_tuning_bridge), "_build_tir_template", return_value=MagicMock()
+        ):
             tune_result = auto_tuning_bridge._tuning_chain(
                 metadata,
                 target="nvidia/nvidia-a100",
             )
-        config = tune_result.unwrap() if tune_result.is_ok() \
-            else tune_result.unwrap_or(None)
+        config = tune_result.unwrap() if tune_result.is_ok() else tune_result.unwrap_or(None)
         assert config is not None, "Shard→Tune: tuning should produce a config"
         assert config.block_m > 0
 
@@ -690,22 +742,26 @@ class TestPartialPipelines:
         metadata = KernelMetadata(
             kernel_name="test_kernel",
             source_hash="tune2build",
-            grid_0=4, grid_1=4, grid_2=1,
-            num_warps=8, num_stages=3, num_ctas=1,
+            grid_0=4,
+            grid_1=4,
+            grid_2=1,
+            num_warps=8,
+            num_stages=3,
+            num_ctas=1,
             is_matmul=True,
             matmul_m=256,
             matmul_n=256,
             matmul_k=256,
         )
         auto_tuning_bridge.enable_tvm = True
-        with patch.object(type(auto_tuning_bridge), '_build_tir_template',
-                          return_value=MagicMock()):
+        with patch.object(
+            type(auto_tuning_bridge), "_build_tir_template", return_value=MagicMock()
+        ):
             tune_result = auto_tuning_bridge._tuning_chain(
                 metadata,
                 target="nvidia/nvidia-a100",
             )
-        config = tune_result.unwrap() if tune_result.is_ok() \
-            else tune_result.unwrap_or(None)
+        config = tune_result.unwrap() if tune_result.is_ok() else tune_result.unwrap_or(None)
         assert config is not None
 
         from src.bridges.aot_packager.builder import FatBinaryConfig
@@ -743,7 +799,7 @@ class TestPartialPipelines:
         that the runtime loader can use.
         """
         from src.bridges.aot_packager.builder import FatBinaryConfig
-        from src.common.types import KernelHandle, Vendor
+        from src.common.types import KernelHandle
 
         build_config = FatBinaryConfig(
             kernel_name="dispatch_test",
@@ -758,7 +814,9 @@ class TestPartialPipelines:
 
         handles: list[KernelHandle] = []
         for section in fat.sections:
-            from src.common.primitives import Vendor as V, Arch as A
+            from src.common.primitives import Arch as A
+            from src.common.primitives import Vendor as V
+
             vendor = V(section.vendor) if isinstance(section.vendor, str) else section.vendor
             arch = A(section.arch) if isinstance(section.arch, str) else section.arch
             handle = KernelHandle(
@@ -781,6 +839,7 @@ class TestPartialPipelines:
 
         blob = fat.to_bytes()
         from src.common.types import FatBinary as FB
+
         restored = FB.from_bytes(blob)
         assert restored.kernel_name == "dispatch_test"
 
@@ -874,7 +933,7 @@ class TestFailureModes:
             pytest.skip("test requires real (non-mocked) AOT backend")
 
         monkeypatch.setenv("PATH", "/dev/null")
-        aot_packager.linker._lld_path = None  # type: ignore[attr-defined]
+        aot_packager.linker._lld_path = None
 
         build_config = FatBinaryConfig(
             kernel_name="test_kernel",
@@ -912,7 +971,7 @@ class TestFailureModes:
             kernel_source="# kernel source",
             output_dir=str(tmp_path),
         )
-        aot_packager.linker._lld_path = str(fake_lld)  # type: ignore[attr-defined]
+        aot_packager.linker._lld_path = str(fake_lld)
 
         with pytest.raises((DependencyMissingError, LinkingError)):
             aot_packager.build(build_config)
@@ -928,14 +987,20 @@ class TestFailureModes:
         than raising an unhandled exception.
         """
         from src.bridges.pytorch_xla.device_mesh import (
-            DeviceMesh, DeviceVendor, InterconnectType, MeshDevice,
+            DeviceMesh,
+            DeviceVendor,
+            InterconnectType,
+            MeshDevice,
         )
 
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
-                    device_id=0, vendor=DeviceVendor.NVIDIA,
-                    arch="sm_90", memory_gb=80.0, compute_tflops=989.0,
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
             ],
@@ -973,8 +1038,12 @@ class TestFailureModes:
             KernelMetadata(
                 kernel_name="bad_kernel",
                 source_hash="",
-                grid_0=0, grid_1=1, grid_2=1,
-                num_warps=4, num_stages=3, num_ctas=1,
+                grid_0=0,
+                grid_1=1,
+                grid_2=1,
+                num_warps=4,
+                num_stages=3,
+                num_ctas=1,
             )
 
     def test_malformed_kernel_source_invalid_warps(
@@ -990,9 +1059,12 @@ class TestFailureModes:
             KernelMetadata(
                 kernel_name="bad_warps",
                 source_hash="abc",
-                grid_0=1, grid_1=1, grid_2=1,
+                grid_0=1,
+                grid_1=1,
+                grid_2=1,
                 num_warps=3,  # Not a power of 2
-                num_stages=3, num_ctas=1,
+                num_stages=3,
+                num_ctas=1,
             )
 
     def test_invalid_target_string(
@@ -1038,10 +1110,13 @@ class TestFailureModes:
         assert error.elapsed_s == 4.5
 
         from src.common.errors import TuningError
-        err_result: Err = Err(TuningError(
-            "tuning timed out",
-            context={"stage": "tvm_tune"},
-        ))
+
+        err_result: Err = Err(
+            TuningError(
+                "tuning timed out",
+                context={"stage": "tvm_tune"},
+            )
+        )
         assert err_result.is_err()
         fallback = err_result.unwrap_or(None)
         assert fallback is None
@@ -1070,8 +1145,8 @@ class TestFailureModes:
         self,
     ) -> None:
         """MeshShape rejects invalid configurations."""
-        from src.common.types import MeshShape
         from src.common.errors import ConfigError
+        from src.common.types import MeshShape
 
         # Zero axes
         with pytest.raises(ConfigError):
@@ -1093,8 +1168,8 @@ class TestFailureModes:
         self,
     ) -> None:
         """TensorShardingLite rejects mismatched axes/shape lengths."""
-        from src.common.types import TensorShardingLite
         from src.common.errors import ConfigError
+        from src.common.types import TensorShardingLite
 
         # Empty name
         with pytest.raises(ConfigError):
@@ -1116,12 +1191,12 @@ class TestFailureModes:
         self,
     ) -> None:
         """ShardingSpecLite validates mesh axis references."""
+        from src.common.errors import ConfigError
         from src.common.types import (
             MeshShape,
             ShardingSpecLite,
             TensorShardingLite,
         )
-        from src.common.errors import ConfigError
 
         # Valid spec
         spec = ShardingSpecLite(
@@ -1178,8 +1253,7 @@ class TestFailureModes:
             pass
 
         # The breaker should now be open
-        assert breaker.state == CircuitState.OPEN, \
-            f"Expected OPEN, got {breaker.state}"
+        assert breaker.state == CircuitState.OPEN, f"Expected OPEN, got {breaker.state}"
 
         with pytest.raises(Exception) as exc_info:
             breaker.call(_always_fail)
@@ -1207,22 +1281,25 @@ class TestCrossArchitecture:
     --use-real-backend, they validate against actual hardware.
     """
 
-    @pytest.mark.parametrize("vendor_str,arch_str,tvm_target", [
-        ("nvidia", "sm_90", "nvidia/nvidia-h100"),
-        ("nvidia", "sm_80", "nvidia/nvidia-a100"),
-        ("nvidia", "sm_70", "nvidia/sm_70"),
-        ("nvidia", "sm_100", "nvidia/sm_100"),
-        ("amd", "gfx942", "rocm/gfx942"),
-        ("amd", "gfx90a", "rocm/gfx90a"),
-        ("amd", "gfx908", "rocm/gfx908"),
-        ("amd", "gfx950", "rocm/gfx950"),
-        ("intel", "intel_gpu_xehpg", "intel/intel_gpu_xehpg"),
-        ("intel", "intel_gpu_xehpc", "intel/intel_gpu_xehpc"),
-        ("intel", "intel_gaudi2", "intel/gaudi-2"),
-        ("intel", "intel_gaudi3", "intel/intel_gaudi3"),
-        ("apple", "apple_m2", "cuda"),
-        ("apple", "apple_m3", "cuda"),
-    ])
+    @pytest.mark.parametrize(
+        "vendor_str,arch_str,tvm_target",
+        [
+            ("nvidia", "sm_90", "nvidia/nvidia-h100"),
+            ("nvidia", "sm_80", "nvidia/nvidia-a100"),
+            ("nvidia", "sm_70", "nvidia/sm_70"),
+            ("nvidia", "sm_100", "nvidia/sm_100"),
+            ("amd", "gfx942", "rocm/gfx942"),
+            ("amd", "gfx90a", "rocm/gfx90a"),
+            ("amd", "gfx908", "rocm/gfx908"),
+            ("amd", "gfx950", "rocm/gfx950"),
+            ("intel", "intel_gpu_xehpg", "intel/intel_gpu_xehpg"),
+            ("intel", "intel_gpu_xehpc", "intel/intel_gpu_xehpc"),
+            ("intel", "intel_gaudi2", "intel/gaudi-2"),
+            ("intel", "intel_gaudi3", "intel/intel_gaudi3"),
+            ("apple", "apple_m2", "cuda"),
+            ("apple", "apple_m3", "cuda"),
+        ],
+    )
     def test_hardware_target_conversion(
         self,
         vendor_str: str,
@@ -1242,8 +1319,7 @@ class TestCrossArchitecture:
 
         result = target.to_tvm_target()
         assert result == tvm_target, (
-            f"Expected {tvm_target!r} for ({vendor_str}, {arch_str}), "
-            f"got {result!r}"
+            f"Expected {tvm_target!r} for ({vendor_str}, {arch_str}), got {result!r}"
         )
 
     def test_hardware_target_vendor_detection(
@@ -1324,20 +1400,24 @@ class TestCrossArchitecture:
         # Verify the sections serialize/deserialize correctly
         blob = fat.to_bytes()
         from src.common.types import FatBinary as FB
+
         restored = FB.from_bytes(blob)
         assert len(restored.sections) == len(fat.sections)
         for orig, rest in zip(fat.sections, restored.sections):
             assert orig.sha256 == rest.sha256
 
-    @pytest.mark.parametrize("arch_cls,expected_vendor", [
-        ("SM_90", "nvidia"),
-        ("SM_80", "nvidia"),
-        ("GFX942", "amd"),
-        ("GFX90A", "amd"),
-        ("XE_HPG", "intel"),
-        ("GAUDI2", "intel"),
-        ("APPLE_M2", "apple"),
-    ])
+    @pytest.mark.parametrize(
+        "arch_cls,expected_vendor",
+        [
+            ("SM_90", "nvidia"),
+            ("SM_80", "nvidia"),
+            ("GFX942", "amd"),
+            ("GFX90A", "amd"),
+            ("XE_HPG", "intel"),
+            ("GAUDI2", "intel"),
+            ("APPLE_M2", "apple"),
+        ],
+    )
     def test_arch_vendor_association(
         self,
         arch_cls: str,
@@ -1345,6 +1425,7 @@ class TestCrossArchitecture:
     ) -> None:
         """Each arch constant maps to the correct vendor."""
         from src.common.primitives import Arch, Vendor
+
         arch = getattr(Arch, arch_cls)
         assert arch.vendor == Vendor(expected_vendor)
 
@@ -1366,8 +1447,8 @@ class TestCrossArchitecture:
         self,
     ) -> None:
         """Vendor.from_string correctly parses vendor names."""
-        from src.common.types import Vendor
         from src.common.errors import ConfigError
+        from src.common.types import Vendor
 
         assert Vendor.from_string("nvidia") == Vendor.NVIDIA
         assert Vendor.from_string("NVIDIA") == Vendor.NVIDIA
@@ -1388,7 +1469,6 @@ class TestCrossArchitecture:
         """DeviceMesh correctly represents heterogeneous clusters."""
         from src.bridges.pytorch_xla.device_mesh import (
             DeviceMesh,
-            DeviceVendor,
             InterconnectType,
             MeshDevice,
         )
@@ -1398,23 +1478,35 @@ class TestCrossArchitecture:
         mesh = DeviceMesh(
             devices=[
                 MeshDevice(
-                    device_id=0, vendor=DV.NVIDIA, arch="sm_90",
-                    memory_gb=80.0, compute_tflops=989.0,
+                    device_id=0,
+                    vendor=DV.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
                 MeshDevice(
-                    device_id=1, vendor=DV.NVIDIA, arch="sm_90",
-                    memory_gb=80.0, compute_tflops=989.0,
+                    device_id=1,
+                    vendor=DV.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80.0,
+                    compute_tflops=989.0,
                     interconnect=InterconnectType.NVLINK,
                 ),
                 MeshDevice(
-                    device_id=2, vendor=DV.AMD, arch="gfx942",
-                    memory_gb=128.0, compute_tflops=653.0,
+                    device_id=2,
+                    vendor=DV.AMD,
+                    arch="gfx942",
+                    memory_gb=128.0,
+                    compute_tflops=653.0,
                     interconnect=InterconnectType.INFINITY_FABRIC,
                 ),
                 MeshDevice(
-                    device_id=3, vendor=DV.AMD, arch="gfx942",
-                    memory_gb=128.0, compute_tflops=653.0,
+                    device_id=3,
+                    vendor=DV.AMD,
+                    arch="gfx942",
+                    memory_gb=128.0,
+                    compute_tflops=653.0,
                     interconnect=InterconnectType.INFINITY_FABRIC,
                 ),
             ],

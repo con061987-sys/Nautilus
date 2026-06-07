@@ -65,8 +65,7 @@ class TVMOptions:
             )
         if self.cost_model not in ("xgb", "mlp", "random"):
             raise ValueError(
-                f"cost_model must be one of 'xgb', 'mlp', 'random'; "
-                f"got {self.cost_model!r}"
+                f"cost_model must be one of 'xgb', 'mlp', 'random'; got {self.cost_model!r}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -90,9 +89,16 @@ class TVMOptions:
     def from_dict(cls, d: dict[str, Any]) -> TVMOptions:
         """Construct from a dict, ignoring unknown keys (with extras)."""
         known = {
-            "target", "max_trials", "num_trials_per_iter", "search_strategy",
-            "cost_model", "use_hybrid_autotune", "work_dir",
-            "tune_timeout_s", "extract_timeout_s", "build_timeout_s",
+            "target",
+            "max_trials",
+            "num_trials_per_iter",
+            "search_strategy",
+            "cost_model",
+            "use_hybrid_autotune",
+            "work_dir",
+            "tune_timeout_s",
+            "extract_timeout_s",
+            "build_timeout_s",
             "use_native_plugin",
         }
         base = {k: v for k, v in d.items() if k in known}

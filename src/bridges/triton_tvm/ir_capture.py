@@ -30,14 +30,15 @@ logger = get_logger(__name__)
 
 class KernelKind(Enum):
     """Classification of Triton kernel by op structure."""
-    MATMUL = auto()           # tt.dot present
-    ATTENTION = auto()        # matmul + softmax + matmul pattern
-    REDUCTION = auto()        # tt.reduce dominates
-    ELEMENTWISE = auto()      # pointwise ops only
-    SCAN = auto()             # tt.scan
-    PERSISTENT = auto()       # while loops with persistent threads
-    BROADCAST = auto()        # tt.broadcast
-    TRANSPOSE = auto()        # tt.trans
+
+    MATMUL = auto()  # tt.dot present
+    ATTENTION = auto()  # matmul + softmax + matmul pattern
+    REDUCTION = auto()  # tt.reduce dominates
+    ELEMENTWISE = auto()  # pointwise ops only
+    SCAN = auto()  # tt.scan
+    PERSISTENT = auto()  # while loops with persistent threads
+    BROADCAST = auto()  # tt.broadcast
+    TRANSPOSE = auto()  # tt.trans
     UNKNOWN = auto()
 
 
@@ -48,6 +49,7 @@ class IRBounds:
     These are NOT template bounds — they come from the actual
     tensor shape attributes in the captured MLIR.
     """
+
     # For matmul
     m: int | None = None
     n: int | None = None
@@ -73,6 +75,7 @@ class IRBounds:
 @dataclass
 class CapturedKernelIR:
     """The fully-processed IR from a Triton kernel, ready for tuning."""
+
     source_hash: str
     target: str
     stage_name: str
@@ -102,7 +105,9 @@ class CapturedKernelIR:
             self.source_hash,
             self.target,
             self.kind.name,
-            f"m{self.bounds.m}", f"n{self.bounds.n}", f"k{self.bounds.k}",
+            f"m{self.bounds.m}",
+            f"n{self.bounds.n}",
+            f"k{self.bounds.k}",
             self.bounds.data_dtype,
         ]
         return hashlib.sha256("|".join(str(p) for p in parts).encode()).hexdigest()
@@ -120,6 +125,7 @@ class IRCapture:
         # Lazy import to avoid circular dependency
         from .bounds_extractor import BoundsExtractor
         from .ir_classifier import IRClassifier
+
         self.classifier = IRClassifier()
         self.extractor = BoundsExtractor()
         self._last_processed: dict[str, CapturedKernelIR] = {}
@@ -207,8 +213,12 @@ class IRCapture:
 
         logger.info(
             "IR processed: kind=%s, ops=%d, tensors=%d, m=%s, n=%s, k=%s",
-            result.kind.name, len(result.ops_seen), len(result.tensor_types),
-            result.bounds.m, result.bounds.n, result.bounds.k,
+            result.kind.name,
+            len(result.ops_seen),
+            len(result.tensor_types),
+            result.bounds.m,
+            result.bounds.n,
+            result.bounds.k,
         )
 
         return result
@@ -219,10 +229,10 @@ class IRCapture:
         num_stages: int | None = None
 
         # Triton sets these as module attributes: ttg.num-warps = 4
-        m = re.search(r'ttg\.num-warps\s*=\s*(\d+)', ir_text)
+        m = re.search(r"ttg\.num-warps\s*=\s*(\d+)", ir_text)
         if m:
             num_warps = int(m.group(1))
-        m = re.search(r'ttg\.num-stages\s*=\s*(\d+)', ir_text)
+        m = re.search(r"ttg\.num-stages\s*=\s*(\d+)", ir_text)
         if m:
             num_stages = int(m.group(1))
 

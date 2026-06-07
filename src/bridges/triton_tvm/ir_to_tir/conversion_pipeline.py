@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any
 
 from src.common.logging import get_logger
 
@@ -30,10 +29,11 @@ logger = get_logger(__name__)
 
 class ConversionStatus(Enum):
     """Status of a conversion attempt."""
-    SUCCESS = auto()              # Full conversion succeeded
-    SUCCESS_WITH_DOT = auto()     # Converted with dot split out for extern
-    PARTIAL = auto()              # Some passes failed, partial result
-    FALLBACK = auto()             # Conversion failed, caller should use template
+
+    SUCCESS = auto()  # Full conversion succeeded
+    SUCCESS_WITH_DOT = auto()  # Converted with dot split out for extern
+    PARTIAL = auto()  # Some passes failed, partial result
+    FALLBACK = auto()  # Conversion failed, caller should use template
 
 
 @dataclass
@@ -43,6 +43,7 @@ class ConversionResult:
     Carries the TVMScript text, the status, and any split info
     (for kernels with tt.dot that need extern_bridge).
     """
+
     status: ConversionStatus
     tvmscript_text: str = ""
     split: SplitResult | None = None
@@ -162,10 +163,7 @@ class ConversionPipeline:
             )
         pass_times["emit"] = (time.perf_counter() - t0) * 1000
 
-        status = (
-            ConversionStatus.SUCCESS_WITH_DOT if has_dot
-            else ConversionStatus.SUCCESS
-        )
+        status = ConversionStatus.SUCCESS_WITH_DOT if has_dot else ConversionStatus.SUCCESS
         result = ConversionResult(
             status=status,
             tvmscript_text=tvmscript,
@@ -174,6 +172,8 @@ class ConversionPipeline:
         )
         logger.info(
             "Conversion succeeded: status=%s, dot=%s, passes=%s",
-            status.name, has_dot, list(pass_times.keys()),
+            status.name,
+            has_dot,
+            list(pass_times.keys()),
         )
         return result

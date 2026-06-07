@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import random
 
-import pytest
-
 from src.bridges.pytorch_xla.device_mesh import (
     DeviceMesh,
     DeviceVendor,
@@ -206,10 +204,7 @@ class TestMeshTopology:
 
         def manual_uniform(matrix: list[list[float]]) -> bool:
             off_diag = [
-                matrix[i][j]
-                for i in range(len(matrix))
-                for j in range(len(matrix))
-                if i != j
+                matrix[i][j] for i in range(len(matrix)) for j in range(len(matrix)) if i != j
             ]
             if not off_diag:
                 return True
@@ -225,7 +220,9 @@ class TestMeshTopology:
                     if i == j:
                         matrix[i][j] = 0.0
                     else:
-                        matrix[i][j] = base + rng.uniform(-safe_jitter_amplitude, safe_jitter_amplitude)
+                        matrix[i][j] = base + rng.uniform(
+                            -safe_jitter_amplitude, safe_jitter_amplitude
+                        )
 
             topo = MeshTopology(bandwidth_matrix=matrix)
             expected = manual_uniform(matrix)
@@ -251,10 +248,7 @@ class TestMeshTopology:
 
         def manual_uniform(matrix: list[list[float]]) -> bool:
             off_diag = [
-                matrix[i][j]
-                for i in range(len(matrix))
-                for j in range(len(matrix))
-                if i != j
+                matrix[i][j] for i in range(len(matrix)) for j in range(len(matrix)) if i != j
             ]
             if not off_diag:
                 return True
@@ -291,7 +285,9 @@ class TestDeviceMesh:
         """A DeviceMesh should aggregate multiple MeshDevices."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         assert mesh.num_devices == 2
@@ -312,8 +308,12 @@ class TestDeviceMesh:
         """get_devices_by_vendor should filter correctly."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
-            MeshDevice(2, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
+            MeshDevice(
+                2, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[3])
         amd_devices = mesh.get_devices_by_vendor(DeviceVendor.AMD)
@@ -323,8 +323,12 @@ class TestDeviceMesh:
         """vendor_mesh_shape should return per-vendor counts."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
-            MeshDevice(2, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
+            MeshDevice(
+                2, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[3])
         shapes = mesh.vendor_mesh_shape()

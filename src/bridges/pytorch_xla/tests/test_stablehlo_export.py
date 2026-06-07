@@ -18,7 +18,6 @@ three tiers are unavailable the orchestrator test asserts that
 from __future__ import annotations
 
 import importlib.util
-from typing import Any
 
 import pytest
 
@@ -47,6 +46,7 @@ def _make_minimal_fx_graph() -> fx.GraphModule:
     aten::relu). This produces ~3 nodes which is enough to exercise
     every export tier without dragging in model-specific dependencies.
     """
+
     class _TinyNet(torch.nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -178,7 +178,7 @@ class TestTVMScriptExporterTier:
         # can pass None and verify it produces a parseable string with
         # a func.func / module wrapper.
         result = _TVMScriptExporter._emit_stablehlo_like(
-            mod=None,  # type: ignore[arg-type]
+            mod=None,
             function_name="forward",
             example_inputs=example_inputs,
         )
@@ -207,7 +207,6 @@ class TestStableHLOExporterOrchestrator:
 
         It must never silently return a fake StableHLO module.
         """
-        from src.bridges.pytorch_xla.graph_capture import GraphCapture
 
         graph = _make_minimal_fx_graph()
         # We need a CapturedGraph — synthesize one from the FX graph
@@ -269,7 +268,7 @@ class TestStableHLOExporterOrchestrator:
         """Passing None must raise a clear error."""
         exporter = StableHLOExporter()
         with pytest.raises(Exception):
-            exporter.export_from_captured(None)  # type: ignore[arg-type]
+            exporter.export_from_captured(None)
 
     def test_tvm_path_can_be_disabled(self) -> None:
         """The TVM tier must be skippable via the constructor flag."""

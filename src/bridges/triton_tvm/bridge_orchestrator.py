@@ -14,15 +14,15 @@ Production features:
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from src.bridges.triton_tvm.config_mapper import ConfigMapper, MappedTuningConfig
 from src.bridges.triton_tvm.metadata_extractor import (
@@ -33,16 +33,18 @@ from src.bridges.triton_tvm.metaschedule_adapter import MetaScheduleAdapter
 from src.bridges.triton_tvm.timeout_manager import StageTimeoutError
 from src.common.errors import TuningError
 from src.common.logging import get_logger
-from src.common.result import Err, Ok, Result
+from src.common.result import Err, Result
 
 try:
     import triton
+
     TRITON_AVAILABLE = True
 except ImportError:
     TRITON_AVAILABLE = False
 
 try:
     from tvm import meta_schedule as ms
+
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
@@ -52,17 +54,19 @@ logger = get_logger(__name__)
 
 class FallbackTier(Enum):
     """Tuning fallback tiers. Higher number = worse but more reliable."""
-    L0_TVM_DB_HIT = auto()       # Best: existing TVM database record
-    L1_TVM_WARM_START = auto()   # TVM warm-starts from similar config
-    L2_TVM_COLD = auto()         # Full TVM tuning (cold start)
-    L3_DISK_CACHE = auto()       # Previously cached Triton config
-    L4_TRITON_DEFAULT = auto()   # Triton's built-in defaults
-    L5_SAFE_FALLBACK = auto()    # Conservative pre-vetted config
+
+    L0_TVM_DB_HIT = auto()  # Best: existing TVM database record
+    L1_TVM_WARM_START = auto()  # TVM warm-starts from similar config
+    L2_TVM_COLD = auto()  # Full TVM tuning (cold start)
+    L3_DISK_CACHE = auto()  # Previously cached Triton config
+    L4_TRITON_DEFAULT = auto()  # Triton's built-in defaults
+    L5_SAFE_FALLBACK = auto()  # Conservative pre-vetted config
 
 
 @dataclass
 class TuningResult:
     """Result of the full bridge pipeline."""
+
     config: MappedTuningConfig
     fallback_tier: FallbackTier
     total_duration_ms: float
@@ -97,22 +101,29 @@ class TritonTVMBridge:
         enable_cache: bool = True,
         enable_tvm: bool = True,
     ) -> None:
-        self.cache_dir = Path(cache_dir or os.environ.get(
-            "NVINDIACUD_CACHE_DIR",
-            str(Path.home() / ".cache" / "nvindia_cud"),
-        ))
+        self.cache_dir = Path(
+            cache_dir
+            or os.environ.get(
+                "NVINDIACUD_CACHE_DIR",
+                str(Path.home() / ".cache" / "nvindia_cud"),
+            )
+        )
         self.max_trials = max_trials
         self.enable_cache = enable_cache
         self.enable_tvm = enable_tvm and TVM_AVAILABLE
 
         self.extractor = MetadataExtractor()
         self.config_mapper = ConfigMapper()
-        self.tvm_adapter = MetaScheduleAdapter(
-            cache_dir=str(self.cache_dir),
-            default_max_trials=max_trials,
-            default_num_trials_per_iter=16,
-            timeout_seconds=600,
-        ) if self.enable_tvm else None
+        self.tvm_adapter = (
+            MetaScheduleAdapter(
+                cache_dir=str(self.cache_dir),
+                default_max_trials=max_trials,
+                default_num_trials_per_iter=16,
+                timeout_seconds=600,
+            )
+            if self.enable_tvm
+            else None
+        )
 
         # Real IR capture infrastructure (Step 1 of the production wiring)
         # These are the components that hook into Triton's actual compile
@@ -120,12 +131,6 @@ class TritonTVMBridge:
         from .circuit_breaker import get_default_breakers
         from .extern_bridge import ExternMatmulBuilder
         from .ir_capture import IRCapture
-        from .structured_logging import (
-            configure_logging,
-        )
-        from .structured_logging import (
-            span as span_context,
-        )
         from .timeout_manager import StageBudgets, TimeoutManager
 
         self.ir_capture = IRCapture()
@@ -205,7 +210,8 @@ class TritonTVMBridge:
             mapped = tune_result.unwrap()
         else:
             mapped = self._fallback_config(
-                metadata, FallbackTier.L4_TRITON_DEFAULT,
+                metadata,
+                FallbackTier.L4_TRITON_DEFAULT,
                 error=tune_result.error.message,
             )
 
@@ -237,7 +243,8 @@ class TritonTVMBridge:
             best = tune_result.unwrap()
         else:
             best = self._fallback_config(
-                metadata, FallbackTier.L4_TRITON_DEFAULT,
+                metadata,
+                FallbackTier.L4_TRITON_DEFAULT,
                 error=tune_result.error.message,
             )
         # Generate variant configs around the best
@@ -307,7 +314,8 @@ class TritonTVMBridge:
                         "target=%s; falling back to synthetic metadata with "
                         "grid=(%d,%d,%d), num_warps=%d, num_stages=%d. "
                         "Returned TuningResult.fallback_used=True.",
-                        source_hash[:12], target,
+                        source_hash[:12],
+                        target,
                         synth_metadata.grid_0,
                         synth_metadata.grid_1,
                         synth_metadata.grid_2,
@@ -315,7 +323,9 @@ class TritonTVMBridge:
                         synth_metadata.num_stages,
                     )
                     return self._fallback_tune_chain(
-                        synth_metadata, target, start,
+                        synth_metadata,
+                        target,
+                        start,
                         fallback_reason=(
                             f"real_ir_capture_failed: no IR for source="
                             f"{source_hash[:12]} target={target}; "
@@ -346,7 +356,8 @@ class TritonTVMBridge:
             # Stage 3: Build TIR template from REAL bounds
             with stage_ctx(sp, "build_tir") as st:
                 tir_mod, fallback_reason = self._build_tir_from_captured(
-                    captured, target,
+                    captured,
+                    target,
                 )
                 st.metadata["built"] = tir_mod is not None
                 st.metadata["fallback_used"] = tir_mod is None
@@ -361,12 +372,17 @@ class TritonTVMBridge:
                 logger.warning(
                     "TIR build failed for %s..%s: %s; falling back to synthetic metadata "
                     "(expected M=%s N=%s K=%s, fallback uses grid=(1,1,1))",
-                    source_hash[:12], target, fallback_reason,
-                    captured.bounds.m, captured.bounds.n, captured.bounds.k,
+                    source_hash[:12],
+                    target,
+                    fallback_reason,
+                    captured.bounds.m,
+                    captured.bounds.n,
+                    captured.bounds.k,
                 )
                 return self._fallback_tune_chain(
                     self._synthesize_metadata(source_hash, target),
-                    target, start,
+                    target,
+                    start,
                     fallback_reason=fallback_reason,
                 )
 
@@ -429,31 +445,37 @@ class TritonTVMBridge:
         except StageTimeoutError as exc:
             logger.warning(
                 "TVM tune timed out (breaker=%s budget=%.1fs): %s",
-                breaker.state.name, exc.budget_s, exc,
+                breaker.state.name,
+                exc.budget_s,
+                exc,
             )
             return MappedTuningConfig.defaults()
         except (ValueError, TypeError) as exc:
             logger.warning(
                 "TVM tune rejected input (breaker=%s): %s",
-                breaker.state.name, exc,
+                breaker.state.name,
+                exc,
             )
             return MappedTuningConfig.defaults()
         except ImportError as exc:
             logger.warning(
                 "TVM tune: missing dependency (breaker=%s): %s",
-                breaker.state.name, exc,
+                breaker.state.name,
+                exc,
             )
             return MappedTuningConfig.defaults()
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning(
                 "TVM tune: filesystem error (breaker=%s): %s",
-                breaker.state.name, exc,
+                breaker.state.name,
+                exc,
             )
             return MappedTuningConfig.defaults()
         except RuntimeError as exc:
             logger.warning(
                 "TVM tune: runtime error (breaker=%s): %s",
-                breaker.state.name, exc,
+                breaker.state.name,
+                exc,
             )
             return MappedTuningConfig.defaults()
 
@@ -461,7 +483,8 @@ class TritonTVMBridge:
             return result.unwrap()
         logger.warning(
             "TVM tune returned Err (breaker=%s): %s",
-            breaker.state.name, result.error.message,
+            breaker.state.name,
+            result.error.message,
         )
         return MappedTuningConfig.defaults()
 
@@ -494,8 +517,7 @@ class TritonTVMBridge:
                 )
                 if ir_module is not None:
                     logger.info(
-                        "Real IR conversion succeeded: status=%s, has_dot=%s, "
-                        "M=%s N=%s K=%s",
+                        "Real IR conversion succeeded: status=%s, has_dot=%s, M=%s N=%s K=%s",
                         conv_result.status.name,
                         conv_result.has_dot_split,
                         captured.bounds.m,
@@ -521,7 +543,8 @@ class TritonTVMBridge:
                 logger.warning(
                     "Real IR conversion raised %s: %s; "
                     "falling back to template with M=%s N=%s K=%s dtype=%s",
-                    type(exc).__name__, exc,
+                    type(exc).__name__,
+                    exc,
                     captured.bounds.m,
                     captured.bounds.n,
                     captured.bounds.k,
@@ -532,8 +555,10 @@ class TritonTVMBridge:
                 logger.warning(
                     "Real IR conversion: missing dependency %s; "
                     "falling back to template with M=%s N=%s K=%s",
-                    exc, captured.bounds.m,
-                    captured.bounds.n, captured.bounds.k,
+                    exc,
+                    captured.bounds.m,
+                    captured.bounds.n,
+                    captured.bounds.k,
                 )
 
         try:
@@ -550,7 +575,8 @@ class TritonTVMBridge:
                             "TEMPLATE_FALLBACK_BUILD: kind=%s M=%d N=%d K=%d "
                             "dtype=%s (real_ir_failed=%s)",
                             captured.kind.name,
-                            template_bounds[0], template_bounds[1],
+                            template_bounds[0],
+                            template_bounds[1],
                             template_bounds[2],
                             captured.bounds.data_dtype,
                             real_ir_failed_reason or "unknown",
@@ -562,9 +588,12 @@ class TritonTVMBridge:
                                     "MNK_DISCREPANCY: template fallback built "
                                     "with M=%d N=%d K=%d but real-IR analysis "
                                     "had M=%s N=%s K=%s",
-                                    template_bounds[0], template_bounds[1],
+                                    template_bounds[0],
+                                    template_bounds[1],
                                     template_bounds[2],
-                                    exp[0], exp[1], exp[2],
+                                    exp[0],
+                                    exp[1],
+                                    exp[2],
                                 )
                     ir_module = builder.build_matmul(
                         m=template_bounds[0],
@@ -600,7 +629,8 @@ class TritonTVMBridge:
                     logger.info(
                         "TEMPLATE_FALLBACK_BUILD: kind=ELEMENTWISE "
                         "total=%d dtype=%s (real_ir_failed=%s)",
-                        total, captured.bounds.data_dtype,
+                        total,
+                        captured.bounds.data_dtype,
                         real_ir_failed_reason or "unknown",
                     )
                 ir_module = builder.build_elementwise(
@@ -613,7 +643,7 @@ class TritonTVMBridge:
             return None, f"TIR template build rejected input: {type(exc).__name__}: {exc}"
         except ImportError as exc:
             return None, f"TIR template build missing dependency: {exc}"
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             return None, f"TIR template build filesystem error: {exc}"
 
     def _handle_matmul_extern(
@@ -656,17 +686,20 @@ class TritonTVMBridge:
         except (ValueError, TypeError) as exc:
             logger.warning(
                 "Extern matmul build rejected input (backend=%s): %s",
-                backend, exc,
+                backend,
+                exc,
             )
         except ImportError as exc:
             logger.warning(
                 "Extern matmul build: missing dependency (backend=%s): %s",
-                backend, exc,
+                backend,
+                exc,
             )
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.warning(
                 "Extern matmul build: filesystem error (backend=%s): %s",
-                backend, exc,
+                backend,
+                exc,
             )
         except RuntimeError as exc:
             logger.warning("Extern matmul build failed (backend=%s): %s", backend, exc)
@@ -692,8 +725,12 @@ class TritonTVMBridge:
         return KernelMetadata(
             kernel_name=f"synthesized_{source_hash[:8]}",
             source_hash=source_hash,
-            grid_0=1, grid_1=1, grid_2=1,
-            num_warps=4, num_stages=3, num_ctas=1,
+            grid_0=1,
+            grid_1=1,
+            grid_2=1,
+            num_warps=4,
+            num_stages=3,
+            num_ctas=1,
         )
 
     def _fallback_tune_chain(
@@ -723,7 +760,8 @@ class TritonTVMBridge:
             mapped = tune_result.unwrap()
         else:
             mapped = self._fallback_config(
-                metadata, FallbackTier.L4_TRITON_DEFAULT,
+                metadata,
+                FallbackTier.L4_TRITON_DEFAULT,
                 error=tune_result.error.message,
             )
         if self.enable_cache:
@@ -772,33 +810,40 @@ class TritonTVMBridge:
         except (ValueError, TypeError, KeyError) as exc:
             logger.warning(
                 "TIR template build rejected input (%s): %s",
-                type(exc).__name__, exc,
+                type(exc).__name__,
+                exc,
             )
             self._stages["build_template"] = -1
-            return Err(TuningError(
-                f"TIR template build rejected input: {exc}",
-                context={"tier": FallbackTier.L5_SAFE_FALLBACK.name},
-            ))
+            return Err(
+                TuningError(
+                    f"TIR template build rejected input: {exc}",
+                    context={"tier": FallbackTier.L5_SAFE_FALLBACK.name},
+                )
+            )
         except ImportError as exc:
             logger.warning(
                 "TIR template build: missing dependency (%s); using safe fallback",
                 exc,
             )
             self._stages["build_template"] = -1
-            return Err(TuningError(
-                f"TIR template build missing dependency: {exc}",
-                context={"tier": FallbackTier.L5_SAFE_FALLBACK.name},
-            ))
-        except (OSError, IOError) as exc:
+            return Err(
+                TuningError(
+                    f"TIR template build missing dependency: {exc}",
+                    context={"tier": FallbackTier.L5_SAFE_FALLBACK.name},
+                )
+            )
+        except OSError as exc:
             logger.warning(
                 "TIR template build: filesystem error (%s); using safe fallback",
                 exc,
             )
             self._stages["build_template"] = -1
-            return Err(TuningError(
-                f"TIR template build filesystem error: {exc}",
-                context={"tier": FallbackTier.L5_SAFE_FALLBACK.name},
-            ))
+            return Err(
+                TuningError(
+                    f"TIR template build filesystem error: {exc}",
+                    context={"tier": FallbackTier.L5_SAFE_FALLBACK.name},
+                )
+            )
 
         t0 = time.perf_counter()
         if self.tvm_adapter and self.enable_tvm:
@@ -813,56 +858,65 @@ class TritonTVMBridge:
                 logger.error(
                     "TVM tuning timed out (budget=%.1fs elapsed=%.1fs); "
                     "falling back to Triton default",
-                    exc.budget_s, exc.elapsed_s,
+                    exc.budget_s,
+                    exc.elapsed_s,
                 )
                 self._stages["tvm_tune"] = -1
-                return Err(TuningError(
-                    f"TVM tuning timed out: {exc}",
-                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-                ))
+                return Err(
+                    TuningError(
+                        f"TVM tuning timed out: {exc}",
+                        context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                    )
+                )
             except (ValueError, TypeError) as exc:
                 logger.error(
                     "TVM tuning rejected input (%s): %s",
-                    type(exc).__name__, exc,
+                    type(exc).__name__,
+                    exc,
                 )
                 self._stages["tvm_tune"] = -1
-                return Err(TuningError(
-                    f"TVM tuning rejected input: {exc}",
-                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-                ))
+                return Err(
+                    TuningError(
+                        f"TVM tuning rejected input: {exc}",
+                        context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                    )
+                )
             except ImportError as exc:
                 logger.error(
-                    "TVM tuning: missing dependency (%s); "
-                    "falling back to Triton default",
+                    "TVM tuning: missing dependency (%s); falling back to Triton default",
                     exc,
                 )
                 self._stages["tvm_tune"] = -1
-                return Err(TuningError(
-                    f"TVM tuning missing dependency: {exc}",
-                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-                ))
-            except (OSError, IOError) as exc:
+                return Err(
+                    TuningError(
+                        f"TVM tuning missing dependency: {exc}",
+                        context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                    )
+                )
+            except OSError as exc:
                 logger.error(
-                    "TVM tuning: filesystem error (%s); "
-                    "falling back to Triton default",
+                    "TVM tuning: filesystem error (%s); falling back to Triton default",
                     exc,
                 )
                 self._stages["tvm_tune"] = -1
-                return Err(TuningError(
-                    f"TVM tuning filesystem error: {exc}",
-                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-                ))
+                return Err(
+                    TuningError(
+                        f"TVM tuning filesystem error: {exc}",
+                        context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                    )
+                )
             except RuntimeError as exc:
                 logger.error(
-                    "TVM tuning: runtime error (%s); "
-                    "falling back to Triton default",
+                    "TVM tuning: runtime error (%s); falling back to Triton default",
                     exc,
                 )
                 self._stages["tvm_tune"] = -1
-                return Err(TuningError(
-                    f"TVM tuning runtime error: {exc}",
-                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-                ))
+                return Err(
+                    TuningError(
+                        f"TVM tuning runtime error: {exc}",
+                        context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                    )
+                )
 
             if tune_result.is_ok():
                 self._stages["tvm_tune"] = (time.perf_counter() - t0) * 1000
@@ -876,10 +930,12 @@ class TritonTVMBridge:
         else:
             self._stages["tvm_tune"] = 0
 
-        return Err(TuningError(
-            "TVM tuning bypassed; using Triton default config",
-            context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-        ))
+        return Err(
+            TuningError(
+                "TVM tuning bypassed; using Triton default config",
+                context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+            )
+        )
 
     def _fallback_config(
         self,
@@ -895,7 +951,9 @@ class TritonTVMBridge:
         logger.info("Using fallback %s for %s", tier.name, metadata.kernel_name)
         if metadata.is_matmul:
             return MappedTuningConfig(
-                block_m=128, block_n=128, block_k=32,
+                block_m=128,
+                block_n=128,
+                block_k=32,
                 num_warps=min(metadata.num_warps, 8),
                 num_stages=metadata.num_stages,
             )
@@ -911,7 +969,9 @@ class TritonTVMBridge:
         logger.info("Using fallback %s for %s", tier.name, metadata.kernel_name)
         if metadata.is_matmul:
             return MappedTuningConfig(
-                block_m=128, block_n=128, block_k=32,
+                block_m=128,
+                block_n=128,
+                block_k=32,
                 num_warps=min(metadata.num_warps, 8),
                 num_stages=metadata.num_stages,
             )
@@ -924,6 +984,7 @@ class TritonTVMBridge:
     def _build_tir_template(self, metadata: KernelMetadata) -> Any:
         """Build a TVM TIR template from kernel metadata."""
         from src.bridges.triton_tvm.tir_template import TIRTemplateBuilder
+
         builder = TIRTemplateBuilder()
         return builder.build_from_metadata(metadata)
 
@@ -1020,6 +1081,7 @@ class TritonTVMBridge:
 # Convenience function for @triton.autotune integration
 # ------------------------------------------------------------------
 
+
 def autotune_configs(
     kernel_fn: Any,
     example_args: tuple[Any, ...],
@@ -1062,13 +1124,26 @@ def autotune_configs(
         mapped = tune_result.unwrap()
     else:
         mapped = bridge._fallback_config(
-            metadata, FallbackTier.L4_TRITON_DEFAULT,
+            metadata,
+            FallbackTier.L4_TRITON_DEFAULT,
             error=tune_result.error.message,
         )
     # Generate variants
     results = [mapped]
     if metadata.is_matmul:
-        results.append(MappedTuningConfig(block_m=mapped.block_m * 2, block_n=mapped.block_n, block_k=mapped.block_k))
-        results.append(MappedTuningConfig(block_m=mapped.block_m, block_n=mapped.block_n * 2, block_k=mapped.block_k))
-        results.append(MappedTuningConfig(block_m=mapped.block_m, block_n=mapped.block_n, block_k=max(mapped.block_k // 2, 16)))
+        results.append(
+            MappedTuningConfig(
+                block_m=mapped.block_m * 2, block_n=mapped.block_n, block_k=mapped.block_k
+            )
+        )
+        results.append(
+            MappedTuningConfig(
+                block_m=mapped.block_m, block_n=mapped.block_n * 2, block_k=mapped.block_k
+            )
+        )
+        results.append(
+            MappedTuningConfig(
+                block_m=mapped.block_m, block_n=mapped.block_n, block_k=max(mapped.block_k // 2, 16)
+            )
+        )
     return [r.to_triton_config() for r in results]

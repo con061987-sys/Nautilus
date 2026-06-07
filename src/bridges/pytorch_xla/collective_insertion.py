@@ -45,14 +45,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 from src.common.errors import GSPMDError
 from src.common.logging import get_logger
 from src.common.types import StableHLOModule
 
 from .comm_backend import CollectiveOp, CommBackend, CommLibrary
-from .device_mesh import DeviceMesh, DeviceVendor
+from .device_mesh import DeviceMesh
 from .gspmd_runner import ShardingSpec, TensorSharding
 
 logger = get_logger("nautilus.collective_insertion")
@@ -261,14 +260,14 @@ def _select_comm_library(
         return CommLibrary.NCCL
 
     try:
-        return comm_backend.select_library_for_op(
-            _OP_TO_COMM_OP[ctype], device_ids
-        )
+        return comm_backend.select_library_for_op(_OP_TO_COMM_OP[ctype], device_ids)
     except Exception as exc:
         logger.warning(
             "CommBackend.select_library_for_op failed for %s on devices %s: %s; "
             "falling back to NCCL",
-            ctype.value, device_ids, exc,
+            ctype.value,
+            device_ids,
+            exc,
         )
         return CommLibrary.NCCL
 
@@ -339,9 +338,8 @@ def _emit_all_gather(
     # ``(N * dim0, dim1, ..., dimN)``.
     if coll.tensor_shape:
         gathered_shape: tuple[int, ...] = (
-            (coll.num_devices * coll.tensor_shape[0],)
-            + coll.tensor_shape[1:]
-        )
+            coll.num_devices * coll.tensor_shape[0],
+        ) + coll.tensor_shape[1:]
     else:
         gathered_shape = coll.tensor_shape
     result_type = f"tensor<{'x'.join(str(d) for d in gathered_shape)}x{coll.dtype}>"
@@ -366,9 +364,8 @@ def _emit_reduce_scatter(
     type_str = f"tensor<{'x'.join(str(d) for d in coll.tensor_shape)}x{coll.dtype}>"
     if coll.tensor_shape:
         scattered_shape: tuple[int, ...] = (
-            (coll.tensor_shape[0] // coll.num_devices,)
-            + coll.tensor_shape[1:]
-        )
+            coll.tensor_shape[0] // coll.num_devices,
+        ) + coll.tensor_shape[1:]
     else:
         scattered_shape = coll.tensor_shape
     result_type = f"tensor<{'x'.join(str(d) for d in scattered_shape)}x{coll.dtype}>"
@@ -533,9 +530,7 @@ def _plan_collectives(
 
         # Resolve the tensor's per-device shape & dtype from the
         # function arg type in the MLIR.
-        shape, dtype = _resolve_tensor_layout(
-            tensor_name, arg_types, ts, dtype_overrides
-        )
+        shape, dtype = _resolve_tensor_layout(tensor_name, arg_types, ts, dtype_overrides)
         per_tensor_bytes = _tensor_bytes(shape, dtype)
 
         for axis in ts.mesh_axes:
@@ -550,23 +545,31 @@ def _plan_collectives(
             ):
                 lib = _select_comm_library(comm_backend, device_ids, ctype)
                 bytes_vol = _collective_volume_bytes(
-                    ctype, per_tensor_bytes, num_devices,
+                    ctype,
+                    per_tensor_bytes,
+                    num_devices,
                 )
                 result_counter += 1
-                result_name = f"%coll_{tensor_name.lstrip('%')}_{ctype.value}_{axis}_{result_counter}"
-                collectives.append(InsertedCollective(
-                    collective_type=ctype,
-                    tensor_name=tensor_name if tensor_name.startswith("%") else f"%{tensor_name}",
-                    mesh_axis=axis,
-                    num_devices=num_devices,
-                    device_ids=tuple(device_ids),
-                    comm_library=lib,
-                    result_name=result_name,
-                    tensor_shape=shape,
-                    dtype=dtype,
-                    reduction_op="add",
-                    estimated_bytes=bytes_vol,
-                ))
+                result_name = (
+                    f"%coll_{tensor_name.lstrip('%')}_{ctype.value}_{axis}_{result_counter}"
+                )
+                collectives.append(
+                    InsertedCollective(
+                        collective_type=ctype,
+                        tensor_name=tensor_name
+                        if tensor_name.startswith("%")
+                        else f"%{tensor_name}",
+                        mesh_axis=axis,
+                        num_devices=num_devices,
+                        device_ids=tuple(device_ids),
+                        comm_library=lib,
+                        result_name=result_name,
+                        tensor_shape=shape,
+                        dtype=dtype,
+                        reduction_op="add",
+                        estimated_bytes=bytes_vol,
+                    )
+                )
 
     return collectives
 
@@ -697,18 +700,14 @@ class CollectiveInserter:
             )
 
         try:
-            collectives = _plan_collectives(
-                spec, module, self.mesh, dtype_overrides
-            )
+            collectives = _plan_collectives(spec, module, self.mesh, dtype_overrides)
         except GSPMDError as exc:
             return CollectiveInsertionResult(
                 stablehlo_module=module,
                 error=f"Planning collectives failed: {exc}",
             )
 
-        mlir_text, error = _emit_collectives(
-            module.mlir_text, collectives, self.channel_id_base
-        )
+        mlir_text, error = _emit_collectives(module.mlir_text, collectives, self.channel_id_base)
         if error is not None:
             return CollectiveInsertionResult(
                 stablehlo_module=module,
@@ -821,7 +820,7 @@ def _emit_collectives(
     last_result = last_result_by_tensor.get(first_tensor) if first_tensor else None
 
     if return_match is not None:
-        original_ret = mlir_text[ret_offset:ret_offset + return_match.end()]
+        original_ret = mlir_text[ret_offset : ret_offset + return_match.end()]
         if last_result is not None:
             new_ret = re.sub(
                 r"return\s+\S+",
@@ -842,15 +841,12 @@ def _emit_collectives(
 
     # Splice the new ops + new return into the MLIR text.
     insertion_block = "\n".join(new_ops + [new_ret])
-    new_mlir = (
-        mlir_text[:ret_offset]
-        + insertion_block
-        + mlir_text[ret_offset + replacement_len:]
-    )
+    new_mlir = mlir_text[:ret_offset] + insertion_block + mlir_text[ret_offset + replacement_len :]
     return new_mlir, None
 
 
 # ── Convenience: directly plan + emit in one call (used by tests)
+
 
 def plan_and_insert(
     module: StableHLOModule,
@@ -863,9 +859,9 @@ def plan_and_insert(
 
 # Re-export useful types
 __all__ = [
+    "CollectiveInserter",
+    "CollectiveInsertionResult",
     "CollectiveType",
     "InsertedCollective",
-    "CollectiveInsertionResult",
-    "CollectiveInserter",
     "plan_and_insert",
 ]

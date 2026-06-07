@@ -31,11 +31,10 @@ Usage:
     if result.is_usable:
         # Feed result.triton_source to Phase 1/2 pipeline
         ...
-"""  # noqa: W505
+"""
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -53,8 +52,8 @@ try:
 except ImportError:
     # Fallback for backward compatibility during transition
     from enum import Enum
-    from enum import auto as _auto
-    class CudaStatementType(str, Enum):
+
+    class CudaStatementType(str, Enum):  # type: ignore[no-redef]
         FUNCTION_DEF = "FUNCTION_DEF"
         SHARED_MEM = "SHARED_MEM"
         ASSIGNMENT = "ASSIGNMENT"
@@ -71,12 +70,14 @@ except ImportError:
         DECLARATION = "DECLARATION"
         UNKNOWN = "UNKNOWN"
 
+
 logger = get_logger(__name__)
 
 
 @dataclass
 class TranslationResult:
     """Result of translating a CUDA kernel to Triton source."""
+
     success: bool
     triton_source: str = ""
     kernel_name: str = ""
@@ -142,7 +143,7 @@ _ATOMIC_TO_TRITON: dict[str, str] = {
 # forces all three dim letters to match — mixed-dim expressions are
 # bugs in the original source and are left to fall through.
 _BLOCK_LINEAR_RE = re.compile(
-    r'blockIdx\.([xyz])\s*\*\s*blockDim\.\1\s*\+\s*threadIdx\.\1',
+    r"blockIdx\.([xyz])\s*\*\s*blockDim\.\1\s*\+\s*threadIdx\.\1",
 )
 
 _COMPOUND_OPS: dict[str, str] = {
@@ -159,25 +160,25 @@ _COMPOUND_OPS: dict[str, str] = {
 }
 
 _COMPOUND_ASSIGN_RE = re.compile(
-    r'^([^=+\-*/%&|^!<>]+?)\s*(<<=|>>=|\+=|-=|\*=|/=|%=|&=|\|=|\^=)\s*(.+)$',
+    r"^([^=+\-*/%&|^!<>]+?)\s*(<<=|>>=|\+=|-=|\*=|/=|%=|&=|\|=|\^=)\s*(.+)$",
     re.DOTALL,
 )
 
 # C++11 `auto` declaration prefix. Catches plain `auto`, `auto&`, `auto*`,
 # `const auto&`, and `static auto`. Whitespace tolerant.
 _AUTO_DECL_RE = re.compile(
-    r'^(?:const\s+)?(?:static\s+)?(?:constexpr\s+)?auto(?:\s*[&*]+)?\s+',
+    r"^(?:const\s+)?(?:static\s+)?(?:constexpr\s+)?auto(?:\s*[&*]+)?\s+",
 )
 
 # C++11 `decltype(...)` declaration prefix. The decltype expression is
 # dropped entirely — Triton doesn't need a type annotation.
 _DECLTYPE_DECL_RE = re.compile(
-    r'^(?:const\s+)?(?:static\s+)?decltype\s*\([^)]*\)\s*(?:[&*]\s*)?',
+    r"^(?:const\s+)?(?:static\s+)?decltype\s*\([^)]*\)\s*(?:[&*]\s*)?",
 )
 
 # C++11 `std::move(x)` → `x` (rvalue-reference cast, no-op in Triton).
 # The leading \b prevents `mystd::move` and similar names from matching.
-_STD_MOVE_RE = re.compile(r'\bstd::move\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)')
+_STD_MOVE_RE = re.compile(r"\bstd::move\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)")
 
 
 def _is_scalar_lhs(lhs: str) -> bool:
@@ -192,7 +193,8 @@ def _is_scalar_lhs(lhs: str) -> bool:
 
 
 def _decompose_compound_assignment(
-    raw: str, temp_name: str | None = None,
+    raw: str,
+    temp_name: str | None = None,
 ) -> list[str] | None:
     """Decompose `x <op>= y` into the load → modify → store sequence.
 
@@ -258,13 +260,11 @@ def _apply_block_linearization(text: str) -> str:
     still produce *something* for them, just not the canonical
     linearization).
     """
+
     def _repl(match: re.Match[str]) -> str:
         dim = match.group(1)
         dim_idx = {"x": 0, "y": 1, "z": 2}[dim]
-        return (
-            f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx})"
-            f" + tl.program_id({dim_idx})"
-        )
+        return f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx}) + tl.program_id({dim_idx})"
 
     return _BLOCK_LINEAR_RE.sub(_repl, text)
 
@@ -375,9 +375,10 @@ class CudaToTritonTranslator:
                 continue
             if "*" in type_str:
                 params.append(f"{name}_ptr")
-            elif type_str.strip() in ("int", "unsigned int", "size_t"):
-                params.append(name)
-            elif type_str.strip() in ("float", "double"):
+            elif type_str.strip() in ("int", "unsigned int", "size_t") or type_str.strip() in (
+                "float",
+                "double",
+            ):
                 params.append(name)
             else:
                 params.append(name)
@@ -448,7 +449,8 @@ class CudaToTritonTranslator:
             except Exception as exc:
                 logger.error(
                     "Failed to translate statement at line %d: %s",
-                    stmt.line_number, exc,
+                    stmt.line_number,
+                    exc,
                 )
                 translated.append(
                     f"# ERROR: translation failed at line {stmt.line_number}: {exc}",
@@ -732,16 +734,25 @@ class CudaToTritonTranslator:
             stripped = _DECLTYPE_DECL_RE.sub("", raw, count=1)
         else:
             types_to_strip = [
-                "int", "float", "double", "char", "short", "long",
-                "unsigned int", "unsigned long", "size_t",
-                "bool", "void", "unsigned",
+                "int",
+                "float",
+                "double",
+                "char",
+                "short",
+                "long",
+                "unsigned int",
+                "unsigned long",
+                "size_t",
+                "bool",
+                "void",
+                "unsigned",
             ]
 
             stripped = raw
             stripped_type = False
             for t in types_to_strip:
                 if raw.startswith(t + " ") or raw.startswith(t + "*"):
-                    rest = raw[len(t):].strip()
+                    rest = raw[len(t) :].strip()
                     if rest.startswith("*"):
                         # Pointer declaration — needs manual review
                         return f"# (review) {raw}"
@@ -749,7 +760,7 @@ class CudaToTritonTranslator:
                     stripped_type = True
                     break
                 if raw.startswith("const " + t):
-                    rest = raw[len("const " + t):].strip()
+                    rest = raw[len("const " + t) :].strip()
                     if rest.startswith("*"):
                         return f"# (review) {raw}"
                     stripped = rest
@@ -901,11 +912,7 @@ class CudaToTritonTranslator:
     def _has_cuda_constructs(stmt: Any) -> bool:
         """Check if a statement contains any CUDA-specific constructs."""
         meta = stmt.metadata
-        return bool(
-            meta.get("has_cuda_field")
-            or meta.get("has_sync")
-            or meta.get("has_atomic")
-        )
+        return bool(meta.get("has_cuda_field") or meta.get("has_sync") or meta.get("has_atomic"))
 
     @staticmethod
     def _strip_triton_import(text: str) -> str:
@@ -927,7 +934,4 @@ class CudaToTritonTranslator:
     def _is_matmul_like(kernel: Any) -> bool:
         """Heuristic: is this kernel a matmul-style GEMM?"""
         name_lower = kernel.name.lower()
-        return any(
-            keyword in name_lower
-            for keyword in ["matmul", "gemm", "sgemm", "dgemm"]
-        )
+        return any(keyword in name_lower for keyword in ["matmul", "gemm", "sgemm", "dgemm"])

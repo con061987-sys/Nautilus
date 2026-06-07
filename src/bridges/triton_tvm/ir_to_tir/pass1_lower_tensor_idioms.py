@@ -22,8 +22,7 @@ Two real AST mutations:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from src.common.logging import get_logger
 
@@ -36,13 +35,26 @@ from .ttgir_parser import (
 logger = get_logger(__name__)
 
 
-_ELEMWISE_KINDS = frozenset({
-    OpKind.ADDF, OpKind.SUBF, OpKind.MULF, OpKind.DIVF,
-    OpKind.ADDI, OpKind.SUBI, OpKind.MULI,
-    OpKind.EXP, OpKind.LOG, OpKind.SQRT, OpKind.RSQRT,
-    OpKind.TANH, OpKind.COS, OpKind.SIN,
-    OpKind.MAX, OpKind.MIN,
-})
+_ELEMWISE_KINDS = frozenset(
+    {
+        OpKind.ADDF,
+        OpKind.SUBF,
+        OpKind.MULF,
+        OpKind.DIVF,
+        OpKind.ADDI,
+        OpKind.SUBI,
+        OpKind.MULI,
+        OpKind.EXP,
+        OpKind.LOG,
+        OpKind.SQRT,
+        OpKind.RSQRT,
+        OpKind.TANH,
+        OpKind.COS,
+        OpKind.SIN,
+        OpKind.MAX,
+        OpKind.MIN,
+    }
+)
 
 
 @dataclass
@@ -73,7 +85,8 @@ class LowerTensorIdioms:
         )
 
     def _lower_op(
-        self, op: TTGIROperation,
+        self,
+        op: TTGIROperation,
     ) -> TTGIROperation | list[TTGIROperation]:
         if op.kind == OpKind.DOT:
             return self._lower_dot_to_elementwise(op)
@@ -107,7 +120,8 @@ class LowerTensorIdioms:
         return op
 
     def _lower_dot_to_elementwise(
-        self, op: TTGIROperation,
+        self,
+        op: TTGIROperation,
     ) -> list[TTGIROperation]:
         """Replace a ``tt.dot`` with a sequence of elementwise mul+add ops.
 
@@ -122,7 +136,8 @@ class LowerTensorIdioms:
         operands = op.operands
         if len(operands) < 2:
             logger.warning(
-                "tt.dot with %d operands; emitting passthrough", len(operands),
+                "tt.dot with %d operands; emitting passthrough",
+                len(operands),
             )
             return [op]
 
@@ -159,7 +174,8 @@ class LowerTensorIdioms:
         return [mul_op, add_op]
 
     def _wrap_in_tensor_generate(
-        self, op: TTGIROperation,
+        self,
+        op: TTGIROperation,
     ) -> TTGIROperation:
         """Promote a scalar op to a tensor-form op.
 

@@ -112,6 +112,7 @@ nautilus-tune = "src.cli.commands.tune:cli"
 nautilus-build = "src.cli.commands.build:cli"
 nautilus-shard = "src.cli.commands.shard:cli"
 nautilus-verify = "src.cli.commands.verify:cli"
+nautilus-bench = "src.cli.commands.bench:cli"
 
 [project.urls]
 Homepage = "https://github.com/nvindia-cud/NVINDIA_CUD"
@@ -126,7 +127,7 @@ zip-safe = false
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
-exclude = ["src.tests*", "src.*.tests", "tests*", "third_party*", "docs*", ".opencode*", "scripts*", "benchmarks*"]
+exclude = ["src.tests*", "src.*.tests", "tests*", "third_party*", "docs*", ".opencode*", "scripts*"]
 
 [tool.setuptools.package-data]
 "src.bridges.triton_tvm.lib" = ["*.so", "*.dylib", "*.dll", "CMakeLists.txt", "*.h", "*.cpp"]

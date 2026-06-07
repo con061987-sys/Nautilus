@@ -45,16 +45,17 @@ class ReductionType(Enum):
     reduction semantics of a kernel so the TIR template can pick
     the right primitive.
     """
+
     SUM = auto()
     MAX = auto()
     MIN = auto()
     ARGMAX = auto()
     ARGMIN = auto()
-    MEAN = auto()      # divide-after-sum; inferred from addf + size
+    MEAN = auto()  # divide-after-sum; inferred from addf + size
     UNKNOWN = auto()
 
     @property
-    def name(self) -> str:  # type: ignore[override]
+    def name(self) -> str:
         return self._name_.lower()
 
 
@@ -78,10 +79,16 @@ _COMBINE_OP_TO_REDUCTION: dict[str, ReductionType] = {
 def _dtype_to_str(dtype: str) -> str:
     """Map MLIR dtype string to canonical Python form."""
     mapping = {
-        "f32": "float32", "f16": "float16", "f64": "float64",
+        "f32": "float32",
+        "f16": "float16",
+        "f64": "float64",
         "bf16": "bfloat16",
-        "i32": "int32", "i64": "int64", "i8": "int8",
-        "u32": "uint32", "u64": "uint64", "u8": "uint8",
+        "i32": "int32",
+        "i64": "int64",
+        "i8": "int8",
+        "u32": "uint32",
+        "u64": "uint64",
+        "u8": "uint8",
         "i1": "bool",
     }
     return mapping.get(dtype, dtype)
@@ -113,6 +120,7 @@ class IRClassification:
         ops: Op names (``tt.dot``, ``arith.addf``, ...) in the
             order they appear in the IR, including nested ones.
     """
+
     kind: KernelKind
     reduction_type: ReductionType | None = None
     reduction_axis: int | None = None
@@ -160,8 +168,7 @@ class IRClassifier:
             func = self._parser.parse(ir_text)
         except ValueError as exc:
             raise ClassificationError(
-                f"IR cannot be parsed (no tt.func definition or "
-                f"malformed): {exc}",
+                f"IR cannot be parsed (no tt.func definition or malformed): {exc}",
             ) from exc
         return self._classify_parsed(func)
 
@@ -188,7 +195,8 @@ class IRClassifier:
         return Counter(self.collect_ops(ir_text))
 
     def collect_tensor_types(
-        self, ir_text: str,
+        self,
+        ir_text: str,
     ) -> list[tuple[tuple[int, ...], str]]:
         """Extract all tensor type definitions and their (shape, dtype).
 
@@ -223,7 +231,7 @@ class IRClassifier:
         """
         if not shape_str.strip():
             return ()
-        return self._parser._parse_shape(shape_str)  # noqa: SLF001
+        return self._parser._parse_shape(shape_str)
 
     # ------------------------------------------------------------------
     # Internal classification
@@ -254,44 +262,76 @@ class IRClassifier:
 
         if dot_count >= 2 and reduce_count >= 1 and self._looks_like_softmax(ops):
             return self._wrap(
-                func, KernelKind.ATTENTION, ops, tensor_types, element_type,
+                func,
+                KernelKind.ATTENTION,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         if dot_count >= 1:
             return self._wrap(
-                func, KernelKind.MATMUL, ops, tensor_types, element_type,
+                func,
+                KernelKind.MATMUL,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         if reduce_count >= 1:
             return self._wrap(
-                func, KernelKind.REDUCTION, ops, tensor_types, element_type,
+                func,
+                KernelKind.REDUCTION,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         if scan_count >= 1:
             return self._wrap(
-                func, KernelKind.SCAN, ops, tensor_types, element_type,
+                func,
+                KernelKind.SCAN,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         if while_count >= 1 and dot_count == 0 and reduce_count == 0:
             return self._wrap(
-                func, KernelKind.PERSISTENT, ops, tensor_types, element_type,
+                func,
+                KernelKind.PERSISTENT,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         if transpose_count >= 1 and dot_count == 0 and reduce_count == 0:
             return self._wrap(
-                func, KernelKind.TRANSPOSE, ops, tensor_types, element_type,
+                func,
+                KernelKind.TRANSPOSE,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         if broadcast_count >= 1 and dot_count == 0 and reduce_count == 0:
             return self._wrap(
-                func, KernelKind.BROADCAST, ops, tensor_types, element_type,
+                func,
+                KernelKind.BROADCAST,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         # ELEMENTWISE: loads + stores + at least one elementwise
         # arith/math op, with no dot/reduce/trans/broadcast dominating.
         if self._looks_like_elementwise(ops, kind_counts):
             return self._wrap(
-                func, KernelKind.ELEMENTWISE, ops, tensor_types, element_type,
+                func,
+                KernelKind.ELEMENTWISE,
+                ops,
+                tensor_types,
+                element_type,
             )
 
         # Fallback: if we recognised ANY supported op at all, classify
@@ -302,18 +342,34 @@ class IRClassifier:
         if not any(
             kind in kind_counts
             for kind in (
-                OpKind.LOAD, OpKind.STORE, OpKind.DOT, OpKind.REDUCE,
-                OpKind.BROADCAST, OpKind.TRANSPOSE, OpKind.ADDF,
-                OpKind.SUBF, OpKind.MULF, OpKind.DIVF, OpKind.ADDI,
-                OpKind.SUBI, OpKind.MULI, OpKind.EXP, OpKind.LOG,
-                OpKind.SQRT, OpKind.RSQRT, OpKind.TANH, OpKind.COS,
-                OpKind.SIN, OpKind.CONSTANT, OpKind.FOR_LOOP,
-                OpKind.IF_STATEMENT, OpKind.GET_PROGRAM_ID,
+                OpKind.LOAD,
+                OpKind.STORE,
+                OpKind.DOT,
+                OpKind.REDUCE,
+                OpKind.BROADCAST,
+                OpKind.TRANSPOSE,
+                OpKind.ADDF,
+                OpKind.SUBF,
+                OpKind.MULF,
+                OpKind.DIVF,
+                OpKind.ADDI,
+                OpKind.SUBI,
+                OpKind.MULI,
+                OpKind.EXP,
+                OpKind.LOG,
+                OpKind.SQRT,
+                OpKind.RSQRT,
+                OpKind.TANH,
+                OpKind.COS,
+                OpKind.SIN,
+                OpKind.CONSTANT,
+                OpKind.FOR_LOOP,
+                OpKind.IF_STATEMENT,
+                OpKind.GET_PROGRAM_ID,
             )
         ):
             raise ClassificationError(
-                f"IR contains no supported ops; cannot classify: "
-                f"{func.name!r}",
+                f"IR contains no supported ops; cannot classify: {func.name!r}",
             )
 
         return IRClassification(
@@ -382,7 +438,8 @@ class IRClassifier:
 
     @staticmethod
     def _looks_like_elementwise(
-        ops: list, kind_counts: Counter,
+        ops: list,
+        kind_counts: Counter,
     ) -> bool:
         """A kernel is elementwise when it has loads + stores + at
         least one pointwise arith/math op and no dot/reduce/broadcast/
@@ -402,10 +459,22 @@ class IRClassifier:
         if not kind_counts.get(OpKind.STORE, 0):
             return False
         pointwise = {
-            OpKind.ADDF, OpKind.SUBF, OpKind.MULF, OpKind.DIVF,
-            OpKind.ADDI, OpKind.SUBI, OpKind.MULI, OpKind.EXP,
-            OpKind.LOG, OpKind.SQRT, OpKind.RSQRT, OpKind.TANH,
-            OpKind.COS, OpKind.SIN, OpKind.MAX, OpKind.MIN,
+            OpKind.ADDF,
+            OpKind.SUBF,
+            OpKind.MULF,
+            OpKind.DIVF,
+            OpKind.ADDI,
+            OpKind.SUBI,
+            OpKind.MULI,
+            OpKind.EXP,
+            OpKind.LOG,
+            OpKind.SQRT,
+            OpKind.RSQRT,
+            OpKind.TANH,
+            OpKind.COS,
+            OpKind.SIN,
+            OpKind.MAX,
+            OpKind.MIN,
         }
         return any(k in pointwise for k in kind_counts)
 
@@ -433,7 +502,8 @@ class IRClassifier:
         return None
 
     def _collect_tensor_types_from_func(
-        self, func: TTGIRFunction,
+        self,
+        func: TTGIRFunction,
     ) -> list[tuple[tuple[int, ...], str]]:
         """Collect (shape, dtype) tuples from the parsed function's types."""
         results: list[tuple[tuple[int, ...], str]] = []

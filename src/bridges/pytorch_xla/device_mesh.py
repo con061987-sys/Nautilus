@@ -20,8 +20,6 @@ Production features:
 
 from __future__ import annotations
 
-import hashlib
-import json
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
@@ -34,6 +32,7 @@ logger = get_logger(__name__)
 
 class DeviceVendor(Enum):
     """Supported device vendors."""
+
     NVIDIA = "nvidia"
     AMD = "amd"
     INTEL = "intel"
@@ -42,16 +41,18 @@ class DeviceVendor(Enum):
 
 class InterconnectType(Enum):
     """Inter-device connection types."""
-    NVLINK = "nvlink"           # ~900 GB/s within node
-    UALINK = "ualink"           # ~200 GB/s cross-vendor
-    PCIE = "pcie"               # ~64 GB/s
-    ETHERNET = "ethernet"       # 25-100 Gbps
+
+    NVLINK = "nvlink"  # ~900 GB/s within node
+    UALINK = "ualink"  # ~200 GB/s cross-vendor
+    PCIE = "pcie"  # ~64 GB/s
+    ETHERNET = "ethernet"  # 25-100 Gbps
     INFINITY_FABRIC = "fabric"  # AMD ~800 GB/s within node
 
 
 @dataclass
 class MeshDevice:
     """A single device in a device mesh."""
+
     device_id: int
     vendor: DeviceVendor
     arch: str
@@ -70,8 +71,9 @@ class MeshDevice:
 @dataclass
 class MeshTopology:
     """Topology of a device mesh — how devices are connected."""
+
     bandwidth_matrix: list[list[float]] = field(default_factory=list)  # GB/s, device i to j
-    latency_matrix: list[list[float]] = field(default_factory=list)    # microseconds
+    latency_matrix: list[list[float]] = field(default_factory=list)  # microseconds
     is_uniform: bool = True
 
     # 1 GB/s is well below the gap between common interconnect tiers
@@ -98,10 +100,7 @@ class MeshTopology:
                 return
 
             off_diagonal_values: list[float] = [
-                matrix[i][j]
-                for i in range(n_rows)
-                for j in range(row_length)
-                if i != j
+                matrix[i][j] for i in range(n_rows) for j in range(row_length) if i != j
             ]
 
             if not off_diagonal_values:
@@ -118,6 +117,7 @@ class MeshTopology:
 @dataclass
 class DeviceMesh:
     """A complete device mesh for distributed execution."""
+
     devices: list[MeshDevice] = field(default_factory=list)
     mesh_shape: list[int] = field(default_factory=list)
     topology: MeshTopology = field(default_factory=MeshTopology)
@@ -164,7 +164,7 @@ class DeviceMesh:
         }
 
     @staticmethod
-    def detect_local() -> "DeviceMesh":
+    def detect_local() -> DeviceMesh:
         """Detect local hardware and build a mesh.
 
         This queries nvidia-smi and rocm-smi to find available
@@ -176,9 +176,10 @@ class DeviceMesh:
         # Detect Nvidia GPUs
         try:
             result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.total",
-                 "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=5,
+                ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.strip().split("\n"):
@@ -188,14 +189,16 @@ class DeviceMesh:
                     if len(parts) >= 2:
                         arch = _nvidia_arch_from_name(parts[0])
                         memory_gb = float(parts[1]) / 1024.0
-                        devices.append(MeshDevice(
-                            device_id=device_id,
-                            vendor=DeviceVendor.NVIDIA,
-                            arch=arch,
-                            memory_gb=memory_gb,
-                            compute_tflops=300.0,  # Estimate
-                            interconnect=InterconnectType.NVLINK,
-                        ))
+                        devices.append(
+                            MeshDevice(
+                                device_id=device_id,
+                                vendor=DeviceVendor.NVIDIA,
+                                arch=arch,
+                                memory_gb=memory_gb,
+                                compute_tflops=300.0,  # Estimate
+                                interconnect=InterconnectType.NVLINK,
+                            )
+                        )
                         device_id += 1
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
@@ -204,34 +207,40 @@ class DeviceMesh:
         try:
             result = subprocess.run(
                 ["rocm-smi", "--showproductname", "--showmeminfo", "vram"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.strip().split("\n"):
                     if "Card" in line and "MI" in line:
                         # Parse the device info
-                        devices.append(MeshDevice(
-                            device_id=device_id,
-                            vendor=DeviceVendor.AMD,
-                            arch="gfx942",  # Assume MI300X
-                            memory_gb=192.0,  # Estimate
-                            compute_tflops=500.0,
-                            interconnect=InterconnectType.INFINITY_FABRIC,
-                        ))
+                        devices.append(
+                            MeshDevice(
+                                device_id=device_id,
+                                vendor=DeviceVendor.AMD,
+                                arch="gfx942",  # Assume MI300X
+                                memory_gb=192.0,  # Estimate
+                                compute_tflops=500.0,
+                                interconnect=InterconnectType.INFINITY_FABRIC,
+                            )
+                        )
                         device_id += 1
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
 
         # If no devices found, create a CPU fallback mesh
         if not devices:
-            devices.append(MeshDevice(
-                device_id=0,
-                vendor=DeviceVendor.CPU,
-                arch="x86_64",
-                memory_gb=64.0,
-                compute_tflops=0.5,
-                interconnect=InterconnectType.PCIE,
-            ))
+            devices.append(
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.CPU,
+                    arch="x86_64",
+                    memory_gb=64.0,
+                    compute_tflops=0.5,
+                    interconnect=InterconnectType.PCIE,
+                )
+            )
 
         # Build mesh shape (1D for simplicity)
         mesh_shape = [len(devices)]

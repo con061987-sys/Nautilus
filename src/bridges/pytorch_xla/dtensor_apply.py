@@ -30,6 +30,7 @@ try:
         Replicate,
         Shard,
     )
+
     DTENSOR_AVAILABLE = True
 except ImportError:
     DTENSOR_AVAILABLE = False
@@ -40,6 +41,7 @@ logger = get_logger(__name__)
 @dataclass
 class DTensorPlan:
     """Plan for converting a model to DTensor-based distributed execution."""
+
     parameter_placements: dict[str, tuple[Any, ...]] = field(default_factory=dict)
     input_placements: dict[str, tuple[Any, ...]] = field(default_factory=dict)
     collective_insertions: list[dict[str, Any]] = field(default_factory=list)
@@ -84,6 +86,7 @@ class DTensorApplier:
             DTensorPlan with the per-tensor placements.
         """
         import time
+
         start = time.perf_counter()
 
         if not DTENSOR_AVAILABLE:
@@ -98,7 +101,8 @@ class DTensorApplier:
         try:
             for name, param in model.named_parameters():
                 placement = self._placement_for_tensor(
-                    name, sharding_spec,
+                    name,
+                    sharding_spec,
                 )
                 if placement is not None:
                     plan.parameter_placements[name] = placement

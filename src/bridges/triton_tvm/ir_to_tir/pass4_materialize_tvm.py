@@ -38,7 +38,6 @@ access ops are nested under them, and the op count grows.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from src.common.logging import get_logger
 
@@ -87,16 +86,9 @@ class MaterializeTensorsToTVM:
         for arg_name, arg_type in func.args:
             if not arg_type.is_tensor:
                 continue
-            shape_str = (
-                ", ".join(str(d) for d in arg_type.shape)
-                if arg_type.shape
-                else "1"
-            )
+            shape_str = ", ".join(str(d) for d in arg_type.shape) if arg_type.shape else "1"
             dtype_str = arg_type.element_dtype
-            raw = (
-                f"{arg_name}_buf = T.alloc_buffer(({shape_str}), "
-                f"dtype=\"{dtype_str}\")"
-            )
+            raw = f'{arg_name}_buf = T.alloc_buffer(({shape_str}), dtype="{dtype_str}")'
             alloc = TTGIROperation(
                 kind=OpKind.ALLOC_BUFFER,
                 raw_text=raw,
@@ -111,7 +103,8 @@ class MaterializeTensorsToTVM:
         return alloc_ops
 
     def _materialize_op(
-        self, op: TTGIROperation,
+        self,
+        op: TTGIROperation,
     ) -> TTGIROperation | list[TTGIROperation]:
         """Convert a single op to TVM form (real AST rewrite)."""
         if op.nested_ops:
@@ -148,7 +141,7 @@ class MaterializeTensorsToTVM:
         access_label = "load" if op.kind == OpKind.LOAD else "store"
         result_name = op.result_name or f"%buf_access_{access_label}"
         raw = (
-            f"with T.block(\"compute_{access_label}\"):"
+            f'with T.block("compute_{access_label}"):'
             f"\n    {op.raw_text.replace(chr(10), chr(10) + '    ')}"
         )
         block_op = TTGIROperation(
@@ -168,7 +161,8 @@ class MaterializeTensorsToTVM:
         return block_op
 
     def _wrap_reduction_in_tvm_block(
-        self, op: TTGIROperation,
+        self,
+        op: TTGIROperation,
     ) -> TTGIROperation:
         """Convert a reduction op to a real T.block("reduce") with T.init.
 
@@ -182,7 +176,7 @@ class MaterializeTensorsToTVM:
         result_name = op.result_name or "%reduce_result"
         init_op = TTGIROperation(
             kind=OpKind.TVM_INIT,
-            raw_text=f"T.init(dtype=\"{dtype}\")",
+            raw_text=f'T.init(dtype="{dtype}")',
             name="T.init",
             result_name=f"{result_name}_init",
         )
@@ -190,8 +184,8 @@ class MaterializeTensorsToTVM:
         init_op.attributes["__tvm_reduction_axis"] = str(axis)
 
         raw = (
-            f"with T.block(\"reduce_axis{axis}\"):"
-            f"\n    T.init(dtype=\"{dtype}\")"
+            f'with T.block("reduce_axis{axis}"):'
+            f'\n    T.init(dtype="{dtype}")'
             f"\n    {op.raw_text.replace(chr(10), chr(10) + '    ')}"
         )
         block_op = TTGIROperation(

@@ -24,6 +24,7 @@ from src.common.logging import get_logger
 try:
     import torch
     import torch.fx as fx
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -33,14 +34,16 @@ logger = get_logger(__name__)
 
 class CaptureMode(Enum):
     """How to capture the graph."""
-    TORCH_COMPILE = auto()      # torch.compile() + dynamo.export()
-    TORCH_EXPORT = auto()        # torch.export() direct
-    MANUAL_FX = auto()           # Manual FX symbolic_trace
+
+    TORCH_COMPILE = auto()  # torch.compile() + dynamo.export()
+    TORCH_EXPORT = auto()  # torch.export() direct
+    MANUAL_FX = auto()  # Manual FX symbolic_trace
 
 
 @dataclass
 class GraphMetadata:
     """Metadata about a captured graph."""
+
     model_name: str
     source_hash: str
     input_shapes: list[tuple[int, ...]] = field(default_factory=list)
@@ -65,6 +68,7 @@ class GraphMetadata:
 @dataclass
 class CapturedGraph:
     """A captured PyTorch FX graph ready for StableHLO conversion."""
+
     graph_module: Any  # torch.fx.GraphModule
     metadata: GraphMetadata
     fx_graph_text: str = ""
@@ -96,8 +100,7 @@ class GraphCapture:
     def __init__(self, mode: CaptureMode = CaptureMode.TORCH_EXPORT) -> None:
         if not TORCH_AVAILABLE:
             raise RuntimeError(
-                "PyTorch is required for graph capture. "
-                "Install with: pip install torch"
+                "PyTorch is required for graph capture. Install with: pip install torch"
             )
         self.mode = mode
 
@@ -118,6 +121,7 @@ class GraphCapture:
             CapturedGraph with the FX graph module and metadata.
         """
         import time
+
         start = time.perf_counter()
 
         if model_name is None:
@@ -134,15 +138,18 @@ class GraphCapture:
         try:
             if self.mode == CaptureMode.TORCH_EXPORT:
                 graph_module, output_shapes = self._capture_via_export(
-                    model, example_inputs,
+                    model,
+                    example_inputs,
                 )
             elif self.mode == CaptureMode.TORCH_COMPILE:
                 graph_module, output_shapes = self._capture_via_compile(
-                    model, example_inputs,
+                    model,
+                    example_inputs,
                 )
             else:
                 graph_module, output_shapes = self._capture_via_fx(
-                    model, example_inputs,
+                    model,
+                    example_inputs,
                 )
         except Exception as exc:
             logger.warning("Graph capture failed: %s", exc)
@@ -215,11 +222,7 @@ class GraphCapture:
             # PyTorch 2.4 fallback: dynamo.export returns a tuple
             # (graph_module, guards)
             exported = dynamo.export(compiled, *example_inputs)
-            graph_module = (
-                exported[0]
-                if isinstance(exported, (list, tuple))
-                else exported
-            )
+            graph_module = exported[0] if isinstance(exported, (list, tuple)) else exported
 
         output_shapes = self._collect_output_shapes(compiled_output)
         return graph_module, output_shapes
@@ -242,9 +245,7 @@ class GraphCapture:
             source = inspect.getsource(model.__class__)
             return hashlib.sha256(source.encode()).hexdigest()
         except (OSError, TypeError):
-            return hashlib.sha256(
-                model.__class__.__module__.encode()
-            ).hexdigest()
+            return hashlib.sha256(model.__class__.__module__.encode()).hexdigest()
 
     def _shape_of(self, tensor: Any) -> tuple[int, ...]:
         """Get the shape of a tensor (returns () for non-tensors)."""
@@ -263,8 +264,5 @@ class GraphCapture:
         if isinstance(outputs, torch.Tensor):
             return [tuple(outputs.shape)]
         if isinstance(outputs, (tuple, list)):
-            return [
-                tuple(o.shape) if isinstance(o, torch.Tensor) else ()
-                for o in outputs
-            ]
+            return [tuple(o.shape) if isinstance(o, torch.Tensor) else () for o in outputs]
         return []

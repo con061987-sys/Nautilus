@@ -27,13 +27,14 @@ from typing import Any
 
 from src.common.logging import get_logger
 
-from .device_mesh import DeviceMesh, DeviceVendor, InterconnectType
+from .device_mesh import DeviceMesh, DeviceVendor
 
 logger = get_logger(__name__)
 
 
 class CollectiveOp(Enum):
     """Types of collective operations."""
+
     ALL_REDUCE = "all_reduce"
     ALL_GATHER = "all_gather"
     REDUCE_SCATTER = "reduce_scatter"
@@ -46,12 +47,13 @@ class CollectiveOp(Enum):
 
 class CommLibrary(Enum):
     """Communication library to use."""
-    NCCL = "nccl"               # Nvidia
-    RCCL = "rccl"               # AMD
-    ONECCL = "oneccl"           # Intel
-    GLOO = "gloo"               # CPU fallback
-    UALINK = "ualink"           # Cross-vendor (emerging)
-    MIXED = "mixed"             # Auto-select per device pair
+
+    NCCL = "nccl"  # Nvidia
+    RCCL = "rccl"  # AMD
+    ONECCL = "oneccl"  # Intel
+    GLOO = "gloo"  # CPU fallback
+    UALINK = "ualink"  # Cross-vendor (emerging)
+    MIXED = "mixed"  # Auto-select per device pair
 
 
 @dataclass
@@ -62,6 +64,7 @@ class CommGroup:
     For heterogeneous clusters, the pipeline creates multiple
     groups (one per vendor) and bridges between them.
     """
+
     group_id: int
     devices: list[int] = field(default_factory=list)
     library: CommLibrary = CommLibrary.GLOO
@@ -104,19 +107,21 @@ class CommBackend:
             devices = self.mesh.get_devices_by_vendor(vendor)
             library = self._select_library_for_vendor(vendor)
             bandwidth = self._estimate_bandwidth(vendor)
-            self._groups.append(CommGroup(
-                group_id=group_id,
-                devices=[d.device_id for d in devices],
-                library=library,
-                bandwidth_gbps=bandwidth,
-            ))
+            self._groups.append(
+                CommGroup(
+                    group_id=group_id,
+                    devices=[d.device_id for d in devices],
+                    library=library,
+                    bandwidth_gbps=bandwidth,
+                )
+            )
             group_id += 1
 
         # Build cross-vendor bridges if heterogeneous
         if self.mesh.is_heterogeneous and len(self.mesh.vendors) > 1:
             vendors = self.mesh.vendors
             for i, v1 in enumerate(vendors):
-                for v2 in vendors[i + 1:]:
+                for v2 in vendors[i + 1 :]:
                     bridge = self._build_cross_vendor_bridge(v1, v2, group_id)
                     self._cross_vendor_bridges[(v1, v2)] = bridge
                     group_id += 1

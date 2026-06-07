@@ -21,17 +21,14 @@ install hint.
 from __future__ import annotations
 
 import hashlib
-import math
 import re
-import struct
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from src.common.errors import (
-    BitExactMismatchError,
     DependencyMissingError,
-    ErrorCode,
     NautilusError,
     ValidationError,
 )
@@ -83,6 +80,7 @@ class MathValidator:
     """Validates that math operations produce bit-exact (or bounded)
     results across different hardware targets.
     """
+
     def __init__(self, default_strictness: StrictnessLevel = StrictnessLevel.ULP_4) -> None:
         self.default_strictness = default_strictness
         self._op_specs: dict[str, MathOpSpec] = {}
@@ -129,6 +127,7 @@ class MathValidator:
             MathValidationReport with validation results.
         """
         import time
+
         start = time.perf_counter()
         spec = self.get_op_spec(kernel_name)
         max_abs_error, max_rel_error, max_ulp_error = self._compute_errors(reference, actual)
@@ -136,7 +135,11 @@ class MathValidator:
             bit_exact = max_ulp_error == 0.0
         else:
             tolerance = spec.tolerance
-            if spec.strictness in (StrictnessLevel.ULP_1, StrictnessLevel.ULP_4, StrictnessLevel.ULP_16):
+            if spec.strictness in (
+                StrictnessLevel.ULP_1,
+                StrictnessLevel.ULP_4,
+                StrictnessLevel.ULP_16,
+            ):
                 bit_exact = max_ulp_error <= tolerance
             else:
                 bit_exact = max_rel_error <= tolerance
@@ -183,8 +186,7 @@ class MathValidator:
             import numpy as np
         except ImportError as exc:
             raise DependencyMissingError(
-                "numpy is required for math validation. Install with: "
-                "pip install numpy",
+                "numpy is required for math validation. Install with: pip install numpy",
             ) from exc
         try:
             ref = np.asarray(reference).flatten()
@@ -252,6 +254,7 @@ class MathValidator:
           is no finite baseline to compare against.
         """
         import numpy as np
+
         ref = np.asarray(ref, dtype=np.float64).flatten()
         act = np.asarray(act, dtype=np.float64).flatten()
         n = min(ref.size, act.size)
@@ -382,17 +385,9 @@ class MathValidator:
         if brace_idx == -1:
             return self._wrap_with_ttgir_attrs_block(ir_text, attrs)
         if "module attributes" in ir_text[:brace_idx]:
-            return (
-                ir_text[: brace_idx + 1]
-                + f"\n  {attrs},"
-                + ir_text[brace_idx + 1:]
-            )
+            return ir_text[: brace_idx + 1] + f"\n  {attrs}," + ir_text[brace_idx + 1 :]
         if ir_text[module_idx:brace_idx].strip() == "module":
-            return (
-                ir_text[:brace_idx]
-                + " attributes {" + attrs + "} "
-                + ir_text[brace_idx:]
-            )
+            return ir_text[:brace_idx] + " attributes {" + attrs + "} " + ir_text[brace_idx:]
         return self._wrap_with_ttgir_attrs_block(ir_text, attrs)
 
     def _inject_mlir_attributes(self, ir_text: str) -> str:
@@ -414,17 +409,9 @@ class MathValidator:
         if brace_idx == -1:
             return self._wrap_with_mlir_attrs_block(ir_text, attrs)
         if "module attributes" in ir_text[:brace_idx]:
-            return (
-                ir_text[: brace_idx + 1]
-                + f"\n  {attrs},"
-                + ir_text[brace_idx + 1:]
-            )
+            return ir_text[: brace_idx + 1] + f"\n  {attrs}," + ir_text[brace_idx + 1 :]
         if ir_text[module_idx:brace_idx].strip() == "module":
-            return (
-                ir_text[:brace_idx]
-                + " attributes {" + attrs + "} "
-                + ir_text[brace_idx:]
-            )
+            return ir_text[:brace_idx] + " attributes {" + attrs + "} " + ir_text[brace_idx:]
         return self._wrap_with_mlir_attrs_block(ir_text, attrs)
 
     def _inject_llvm_attributes(self, ir_text: str) -> str:
@@ -447,9 +434,7 @@ class MathValidator:
             f'"strict-fp" '
             f"}}\n"
         )
-        sentinel_comment = (
-            f"; nautilus.bit_exact: strict-fp attribute group #{attr_group_id}\n"
-        )
+        sentinel_comment = f"; nautilus.bit_exact: strict-fp attribute group #{attr_group_id}\n"
         injection = sentinel_comment + attr_group_def
         if f"attributes #{attr_group_id} = " in ir_text:
             return ir_text
@@ -464,21 +449,17 @@ class MathValidator:
                     new_line = line.rstrip()[:-1].rstrip() + f" #{attr_group_id} {{"
                     out_lines.append(new_line)
                 else:
-                    out_lines.append(line + f"  ;; nautilus.bit_exact: would attach attrs here")
+                    out_lines.append(line + "  ;; nautilus.bit_exact: would attach attrs here")
             else:
                 out_lines.append(line)
         annotated = "\n".join(out_lines)
         return injection + annotated
 
     def _wrap_with_ttgir_attrs_block(self, ir_text: str, attrs: str) -> str:
-        return (
-            f"module attributes {{ {attrs} }} {{\n{ir_text}\n}}\n"
-        )
+        return f"module attributes {{ {attrs} }} {{\n{ir_text}\n}}\n"
 
     def _wrap_with_mlir_attrs_block(self, ir_text: str, attrs: str) -> str:
-        return (
-            f"module attributes {{ {attrs} }} {{\n{ir_text}\n}}\n"
-        )
+        return f"module attributes {{ {attrs} }} {{\n{ir_text}\n}}\n"
 
     def hash_tensor(self, tensor: Any) -> str:
         """Compute a deterministic hash of a tensor's bit pattern.
@@ -487,6 +468,7 @@ class MathValidator:
         """
         try:
             import numpy as np
+
             arr = np.asarray(tensor)
             return hashlib.sha256(arr.tobytes()).hexdigest()
         except ImportError as exc:

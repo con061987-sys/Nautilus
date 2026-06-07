@@ -34,6 +34,7 @@ try:
     import tvm
     from tvm.script import tir as T
     from tvm.tir import PrimFunc
+
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
@@ -48,6 +49,7 @@ logger = get_logger(__name__)
 @dataclass(frozen=True)
 class CompiledMatmul:
     """A Triton-compiled matmul ready to be called from TVM via tvm.extern."""
+
     name: str
     source_hash: str
     cubin_path: Path  # or hsaco, spv depending on target
@@ -104,9 +106,7 @@ class ExternMatmulBuilder:
             CompiledMatmul ready to be referenced from a TVM TIR.
         """
         if bounds.m is None or bounds.n is None or bounds.k is None:
-            raise ValueError(
-                f"Cannot build matmul without M/N/K bounds: {bounds}"
-            )
+            raise ValueError(f"Cannot build matmul without M/N/K bounds: {bounds}")
 
         cache_key = f"{name}:{bounds.m}:{bounds.n}:{bounds.k}:{bounds.data_dtype}:{target}"
         if cache_key in self._cache:
@@ -115,7 +115,9 @@ class ExternMatmulBuilder:
         # Generate Triton source
         triton_source = self._generate_triton_matmul(
             name=name,
-            m=bounds.m, n=bounds.n, k=bounds.k,
+            m=bounds.m,
+            n=bounds.n,
+            k=bounds.k,
             dtype=bounds.data_dtype,
             num_warps=self.default_num_warps,
             num_stages=self.default_num_stages,
@@ -136,13 +138,20 @@ class ExternMatmulBuilder:
                 "num_warps": self.default_num_warps,
                 "num_stages": self.default_num_stages,
             },
-            m=bounds.m, n=bounds.n, k=bounds.k,
+            m=bounds.m,
+            n=bounds.n,
+            k=bounds.k,
             dtype=bounds.data_dtype,
         )
         self._cache[cache_key] = result
         logger.info(
             "Built matmul: name=%s m=%d n=%d k=%d target=%s → %s",
-            name, bounds.m, bounds.n, bounds.k, target, binary_path,
+            name,
+            bounds.m,
+            bounds.n,
+            bounds.k,
+            target,
+            binary_path,
         )
         return result
 
@@ -179,11 +188,16 @@ class ExternMatmulBuilder:
                 T.tvm_call_cpacked(
                     "triton_matmul_run",
                     T.tvm_stack_make_array(
-                        A.data, B.data, C.data,
+                        A.data,
+                        B.data,
+                        C.data,
                         T.tvm_stack_make_shape(
-                            matmul.m, matmul.k,
-                            matmul.k, matmul.n,
-                            matmul.m, matmul.n,
+                            matmul.m,
+                            matmul.k,
+                            matmul.k,
+                            matmul.n,
+                            matmul.m,
+                            matmul.n,
                         ),
                         T.float32(0.0),  # alpha
                         T.float32(0.0),  # beta
@@ -200,7 +214,9 @@ class ExternMatmulBuilder:
     def _generate_triton_matmul(
         self,
         name: str,
-        m: int, n: int, k: int,
+        m: int,
+        n: int,
+        k: int,
         dtype: str,
         num_warps: int,
         num_stages: int,
@@ -297,7 +313,10 @@ def {name}(A, B):
 
         # Write source to a temp file
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, dir=str(self.cache_dir),
+            mode="w",
+            suffix=".py",
+            delete=False,
+            dir=str(self.cache_dir),
         ) as f:
             f.write(triton_source)
             source_file = Path(f.name)
@@ -351,13 +370,21 @@ def {name}(A, B):
         try:
             # Try the triton_aot CLI (Triton 3.5+)
             cmd = [
-                "python", "-m", "triton.tools.aot",
-                "--source", str(source_file),
-                "--target", target,
-                "--output", str(output_path),
+                "python",
+                "-m",
+                "triton.tools.aot",
+                "--source",
+                str(source_file),
+                "--target",
+                target,
+                "--output",
+                str(output_path),
             ]
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=300,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,
             )
             if result.returncode == 0:
                 return
@@ -386,8 +413,13 @@ def {name}(A, B):
 
             # Create a fake tensor for compilation
             import torch
-            A = torch.zeros(128, 128, device="cuda" if target == "cuda" else "cpu", dtype=torch.float32)
-            B = torch.zeros(128, 128, device="cuda" if target == "cuda" else "cpu", dtype=torch.float32)
+
+            A = torch.zeros(
+                128, 128, device="cuda" if target == "cuda" else "cpu", dtype=torch.float32
+            )
+            B = torch.zeros(
+                128, 128, device="cuda" if target == "cuda" else "cpu", dtype=torch.float32
+            )
 
             # Trigger JIT compile
             grid = (1,)

@@ -16,9 +16,10 @@ from __future__ import annotations
 import signal
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Any, Iterator
+from dataclasses import dataclass
+from typing import Any
 
 from src.common.logging import get_logger
 
@@ -27,24 +28,23 @@ logger = get_logger(__name__)
 
 class StageTimeoutError(Exception):
     """Raised when a stage exceeds its time budget."""
+
     def __init__(self, stage_name: str, budget_s: float, elapsed_s: float):
         self.stage_name = stage_name
         self.budget_s = budget_s
         self.elapsed_s = elapsed_s
         super().__init__(
-            f"Stage '{stage_name}' timed out after {elapsed_s:.1f}s "
-            f"(budget was {budget_s:.1f}s)"
+            f"Stage '{stage_name}' timed out after {elapsed_s:.1f}s (budget was {budget_s:.1f}s)"
         )
 
 
 class TotalBudgetExceededError(Exception):
     """Raised when the cumulative elapsed time exceeds the total budget."""
+
     def __init__(self, budget_s: float, elapsed_s: float):
         self.budget_s = budget_s
         self.elapsed_s = elapsed_s
-        super().__init__(
-            f"Total bridge budget exhausted: {elapsed_s:.1f}s > {budget_s:.1f}s"
-        )
+        super().__init__(f"Total bridge budget exhausted: {elapsed_s:.1f}s > {budget_s:.1f}s")
 
 
 @dataclass
@@ -55,6 +55,7 @@ class StageBudgets:
     the sum of all stage budgets but enforced separately so that
     a fast stage cannot give time to a slow one.
     """
+
     extract_s: float = 5.0
     build_tir_s: float = 10.0
     tune_s: float = 600.0
@@ -68,9 +69,14 @@ class StageBudgets:
     def total_s(self) -> float:
         """Sum of all stage budgets (for total budget enforcement)."""
         return (
-            self.extract_s + self.build_tir_s + self.tune_s +
-            self.map_config_s + self.recompile_s + self.aot_compile_s +
-            self.link_s + self.validate_s
+            self.extract_s
+            + self.build_tir_s
+            + self.tune_s
+            + self.map_config_s
+            + self.recompile_s
+            + self.aot_compile_s
+            + self.link_s
+            + self.validate_s
         )
 
     def for_stage(self, stage_name: str) -> float:
@@ -124,7 +130,8 @@ class TimeoutManager:
                 timed_out.set()
                 logger.warning(
                     "Stage '%s' exceeded budget of %.1fs",
-                    name, budget,
+                    name,
+                    budget,
                 )
 
         timer = threading.Thread(target=_enforcer, daemon=True)
@@ -142,7 +149,9 @@ class TimeoutManager:
             if elapsed > budget:
                 logger.warning(
                     "Stage '%s' took %.1fs (budget was %.1fs)",
-                    name, elapsed, budget,
+                    name,
+                    elapsed,
+                    budget,
                 )
 
     def check_total_budget(self) -> float:

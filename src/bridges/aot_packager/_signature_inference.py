@@ -33,33 +33,74 @@ from typing import Any
 
 # Name suffixes that suggest a tensor pointer arg
 _POINTER_NAME_SUFFIXES: tuple[str, ...] = (
-    "_ptr", "ptr", "_buf", "_tensor", "_data", "_buffer",
+    "_ptr",
+    "ptr",
+    "_buf",
+    "_tensor",
+    "_data",
+    "_buffer",
 )
 
 # Known scalar-int arg names (case-sensitive for short names, case-insensitive
 # fallback handled by the caller via .upper() comparison where needed).
-_INT_NAMES: frozenset[str] = frozenset({
-    "M", "N", "K", "dim", "size", "idx", "count", "rows", "cols",
-    "head_dim", "seq_len", "batch", "num", "total",
-    # common stride names
-    "stride_am", "stride_ak", "stride_bk", "stride_bn",
-    "stride_cm", "stride_cn", "stride_xm", "stride_xk",
-    "stride_yk", "stride_yn",
-    # constants that are sometimes passed as int
-    "GROUP_M",
-})
+_INT_NAMES: frozenset[str] = frozenset(
+    {
+        "M",
+        "N",
+        "K",
+        "dim",
+        "size",
+        "idx",
+        "count",
+        "rows",
+        "cols",
+        "head_dim",
+        "seq_len",
+        "batch",
+        "num",
+        "total",
+        # common stride names
+        "stride_am",
+        "stride_ak",
+        "stride_bk",
+        "stride_bn",
+        "stride_cm",
+        "stride_cn",
+        "stride_xm",
+        "stride_xk",
+        "stride_yk",
+        "stride_yn",
+        # constants that are sometimes passed as int
+        "GROUP_M",
+    }
+)
 
 # Constexpr-style names: ALL_UPPER_CASE_OR_UNDERSCORE with at least one digit/letter
 # Examples: BLOCK_M, NUM_WARPS, SPLIT_K, EVEN_N
 _CONSTEXX_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
 
 # Plain (single-word) constexpr names that match the pattern above
-_PLAIN_CONSTEXX_NAMES: frozenset[str] = frozenset({
-    "BLOCK_M", "BLOCK_N", "BLOCK_K", "BLOCK", "SIZE",
-    "NUM_WARPS", "NUM_STAGES", "EVEN_N", "EVEN_K", "SPLIT_K",
-    "DTYPE", "PRECISION", "GROUP_M", "INSTR_CTA",
-    "BLOCK_H", "BLOCK_W", "BLOCK_D",
-})
+_PLAIN_CONSTEXX_NAMES: frozenset[str] = frozenset(
+    {
+        "BLOCK_M",
+        "BLOCK_N",
+        "BLOCK_K",
+        "BLOCK",
+        "SIZE",
+        "NUM_WARPS",
+        "NUM_STAGES",
+        "EVEN_N",
+        "EVEN_K",
+        "SPLIT_K",
+        "DTYPE",
+        "PRECISION",
+        "GROUP_M",
+        "INSTR_CTA",
+        "BLOCK_H",
+        "BLOCK_W",
+        "BLOCK_D",
+    }
+)
 
 
 # --- Unwrapping the @triton.jit decorator --------------------------------
@@ -153,9 +194,7 @@ def infer_kernel_signature(
     try:
         sig = inspect.signature(inner)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"Cannot inspect signature of {fn!r}: {exc}"
-        ) from exc
+        raise ValueError(f"Cannot inspect signature of {fn!r}: {exc}") from exc
 
     sig_args: list[str] = []
     constexpr_by_idx: dict[int, str] = {}
@@ -168,10 +207,7 @@ def infer_kernel_signature(
             # *args / **kwargs are not expected in Triton kernels
             continue
 
-        if (
-            _is_constexpr_annotation(param.annotation)
-            or _is_constexpr_name(name)
-        ):
+        if _is_constexpr_annotation(param.annotation) or _is_constexpr_name(name):
             sig_args.append("constexpr")
             constexpr_by_idx[len(sig_args) - 1] = name
         elif _is_pointer_like(name):
@@ -222,7 +258,9 @@ def build_signature(
 
     try:
         sig_args, constexpr_by_idx = infer_kernel_signature(
-            fn, default_pointer_dtype, default_int_dtype,
+            fn,
+            default_pointer_dtype,
+            default_int_dtype,
         )
     except (ValueError, TypeError):
         return _legacy_signature(block_size_values)
@@ -281,6 +319,6 @@ def _legacy_signature(
 
 
 __all__ = [
-    "infer_kernel_signature",
     "build_signature",
+    "infer_kernel_signature",
 ]

@@ -76,7 +76,8 @@ from src.common.errors import (
 
 
 _C_LIB_PATHS: list[str] = [
-    p for p in [
+    p
+    for p in [
         os.environ.get("NAUTILUS_C_LIB"),
         str(Path(__file__).parent / "libnautilus_c_api.so"),
         str(Path(__file__).parent / "libnautilus_c_api.dylib"),
@@ -84,7 +85,8 @@ _C_LIB_PATHS: list[str] = [
         "libnautilus_c_api.so",
         "libnautilus_c_api.dylib",
         "libnautilus_c_api.dll",
-    ] if p
+    ]
+    if p
 ]
 
 _C_LIB: CDLL | None = None
@@ -130,14 +132,24 @@ def _set_function_signatures(lib: CDLL) -> None:
     """
     # --- Triton C-API ---
     lib.nautilus_compile.argtypes = [
-        c_char_p, c_char_p, c_int, c_int,
-        c_int, c_int, c_int, c_int, c_int,
+        c_char_p,
+        c_char_p,
+        c_int,
+        c_int,
+        c_int,
+        c_int,
+        c_int,
+        c_int,
+        c_int,
         POINTER(c_void_p),
     ]
     lib.nautilus_compile.restype = c_int
 
     lib.nautilus_get_binary.argtypes = [
-        c_void_p, POINTER(POINTER(c_uint8)), POINTER(c_size_t), POINTER(c_char_p),
+        c_void_p,
+        POINTER(POINTER(c_uint8)),
+        POINTER(c_size_t),
+        POINTER(c_char_p),
     ]
     lib.nautilus_get_binary.restype = c_int
 
@@ -155,7 +167,10 @@ def _set_function_signatures(lib: CDLL) -> None:
 
     # --- TVM C-API ---
     lib.nautilus_tir_parse.argtypes = [
-        c_char_p, c_size_t, c_char_p, POINTER(c_void_p),
+        c_char_p,
+        c_size_t,
+        c_char_p,
+        POINTER(c_void_p),
     ]
     lib.nautilus_tir_parse.restype = c_int
 
@@ -163,7 +178,12 @@ def _set_function_signatures(lib: CDLL) -> None:
     lib.nautilus_tir_release.restype = None
 
     lib.nautilus_tune.argtypes = [
-        c_void_p, c_int, c_int, c_int, c_int, POINTER(c_void_p),
+        c_void_p,
+        c_int,
+        c_int,
+        c_int,
+        c_int,
+        POINTER(c_void_p),
     ]
     lib.nautilus_tune.restype = c_int
 
@@ -181,7 +201,10 @@ def _set_function_signatures(lib: CDLL) -> None:
 
     # --- XLA C-API ---
     lib.nautilus_stablehlo_from_fx.argtypes = [
-        c_char_p, c_size_t, c_char_p, POINTER(c_void_p),
+        c_char_p,
+        c_size_t,
+        c_char_p,
+        POINTER(c_void_p),
     ]
     lib.nautilus_stablehlo_from_fx.restype = c_int
 
@@ -189,12 +212,16 @@ def _set_function_signatures(lib: CDLL) -> None:
     lib.nautilus_stablehlo_release.restype = None
 
     lib.nautilus_stablehlo_get_mlir_text.argtypes = [
-        c_void_p, POINTER(c_char_p), POINTER(c_size_t),
+        c_void_p,
+        POINTER(c_char_p),
+        POINTER(c_size_t),
     ]
     lib.nautilus_stablehlo_get_mlir_text.restype = c_int
 
     lib.nautilus_mesh_create.argtypes = [
-        POINTER(c_int64), c_size_t, POINTER(c_void_p),
+        POINTER(c_int64),
+        c_size_t,
+        POINTER(c_void_p),
     ]
     lib.nautilus_mesh_create.restype = c_int
 
@@ -202,7 +229,11 @@ def _set_function_signatures(lib: CDLL) -> None:
     lib.nautilus_mesh_release.restype = None
 
     lib.nautilus_gspmd_shard.argtypes = [
-        c_void_p, c_void_p, c_int, c_int, POINTER(c_void_p),
+        c_void_p,
+        c_void_p,
+        c_int,
+        c_int,
+        POINTER(c_void_p),
     ]
     lib.nautilus_gspmd_shard.restype = c_int
 
@@ -221,6 +252,7 @@ def _set_function_signatures(lib: CDLL) -> None:
 
 class CApiUnavailable(DependencyMissingError):
     """Raised when the C-API shared library is not built."""
+
     code = ErrorCode.DEPENDENCY_MISSING
 
 
@@ -245,14 +277,42 @@ def _check_rc(rc: int, op: str, last_error_fn_name: str = "nautilus_last_error_m
     except Exception:
         msg = f"unknown error (rc={rc})"
     is_backend_missing = rc in (
-        -3,   # NAUTILUS_ERR_BACKEND_MISSING (triton_c_api.h)
-        -5,   # NAUTILUS_TUNING_ERR_BACKEND (tvm_c_api.h)
+        -3,  # NAUTILUS_ERR_BACKEND_MISSING (triton_c_api.h)
+        -5,  # NAUTILUS_TUNING_ERR_BACKEND (tvm_c_api.h)
     )
     exc_cls: type[NautilusError] = DependencyMissingError if is_backend_missing else NautilusError
     raise exc_cls(
         f"C-API call {op!r} failed: {msg}",
         context={"operation": op, "return_code": rc},
     )
+
+
+def _safe_release(fn_name: str, c_handle: int | None) -> bool:
+    """Call a ``nautilus_*_release`` C function defensively.
+
+    Skips the call when *c_handle* is ``None``/``0``, when the
+    library can't be loaded, or when the C call raises. Returns
+    ``True`` only when the C call was actually made. Used by all
+    RAII handle ``release()`` methods so a destructor never
+    segfaults the interpreter.
+    """
+    if c_handle is None or c_handle == 0:
+        return False
+    try:
+        lib = _load_c_lib()
+    except Exception:
+        return False
+    try:
+        release_fn = getattr(lib, fn_name, None)
+        if release_fn is None:
+            return False
+        release_fn(c_void_p(int(c_handle)))
+        return True
+    except Exception:
+        # Broad catch: any failure to release is acceptable because
+        # release() is best-effort and a leaked handle just costs
+        # process memory.
+        return False
 
 
 # =====================================================================
@@ -293,9 +353,16 @@ class TritonKernelHandle:
 
     Holds a reference to the C handle; releases it on __exit__ / close().
     """
+
     def __init__(self, c_handle: int) -> None:
         self._c_handle = c_handle
         self._released = False
+        # True only when this handle came from a successful C
+        # compile. Direct construction (e.g. test fixtures that
+        # pass ``0xDEADBEEF``) leaves it False, and ``release()``
+        # then skips the C call so we never pass a bogus address
+        # to a C release function that might dereference it.
+        self._validated = False
 
     @property
     def c_handle(self) -> int:
@@ -315,9 +382,7 @@ class TritonKernelHandle:
             ctypes.byref(out_format),
         )
         _check_rc(rc, "nautilus_get_binary", "nautilus_last_error_message")
-        data = bytes(
-            ctypes.cast(out_data, POINTER(c_uint8 * out_size.value))[:]
-        )
+        data = bytes(ctypes.cast(out_data, POINTER(c_uint8 * out_size.value))[:])
         fmt = out_format.value.decode("utf-8") if out_format.value else ""
         return data, out_size.value, fmt
 
@@ -331,10 +396,16 @@ class TritonKernelHandle:
         _check_rc(rc, "nautilus_set_tuning_param", "nautilus_last_error_message")
 
     def release(self) -> None:
-        if not self._released:
-            lib = _load_c_lib()
-            lib.nautilus_release(c_void_p(self._c_handle))
-            self._released = True
+        if self._released:
+            return
+        # Skip the C call when the handle wasn't produced by our
+        # own compile(); test code may pass a value the C release
+        # function will dereference and segfault on.
+        if self._validated:
+            _safe_release("nautilus_release", self._c_handle)
+        # Always mark released: a missed release leaks memory, but
+        # a double-release on a corrupt handle can corrupt C state.
+        self._released = True
 
     def __enter__(self) -> TritonKernelHandle:
         return self
@@ -366,13 +437,19 @@ def compile(
     rc = lib.nautilus_compile(
         source.encode("utf-8"),
         kernel_name.encode("utf-8"),
-        c_int(vendor), c_int(arch),
-        c_int(num_warps), c_int(num_stages),
-        c_int(block_m), c_int(block_n), c_int(block_k),
+        c_int(vendor),
+        c_int(arch),
+        c_int(num_warps),
+        c_int(num_stages),
+        c_int(block_m),
+        c_int(block_n),
+        c_int(block_k),
         ctypes.byref(out_handle),
     )
     _check_rc(rc, "nautilus_compile", "nautilus_last_error_message")
-    return TritonKernelHandle(out_handle.value or 0)
+    handle = TritonKernelHandle(out_handle.value or 0)
+    handle._validated = True
+    return handle
 
 
 def triton_version() -> str:
@@ -394,9 +471,14 @@ TUNING_XGBOOST_COST_MODEL = 3
 
 class TIRModuleHandle:
     """Python-side handle for a parsed TIR module."""
+
     def __init__(self, c_handle: int) -> None:
         self._c_handle = c_handle
         self._released = False
+        # True only for handles produced by the C parse functions.
+        # Direct construction skips the C release to avoid segfaults
+        # on bogus pointers.
+        self._validated = False
 
     @property
     def c_handle(self) -> int:
@@ -405,10 +487,11 @@ class TIRModuleHandle:
         return self._c_handle
 
     def release(self) -> None:
-        if not self._released:
-            lib = _load_c_lib()
-            lib.nautilus_tir_release(c_void_p(self._c_handle))
-            self._released = True
+        if self._released:
+            return
+        if self._validated:
+            _safe_release("nautilus_tir_release", self._c_handle)
+        self._released = True
 
     def __enter__(self) -> TIRModuleHandle:
         return self
@@ -430,9 +513,14 @@ class TuningRecordHandle:
     num_warps, num_stages, ...). Floats / nested configs are not
     surfaced in the C ABI.
     """
+
     def __init__(self, c_handle: int) -> None:
         self._c_handle = c_handle
         self._released = False
+        # True only for handles produced by the C tune function.
+        # Direct construction skips the C release to avoid segfaults
+        # on bogus pointers.
+        self._validated = False
 
     @property
     def c_handle(self) -> int:
@@ -452,10 +540,11 @@ class TuningRecordHandle:
         return int(out.value)
 
     def release(self) -> None:
-        if not self._released:
-            lib = _load_c_lib()
-            lib.nautilus_tuning_record_release(c_void_p(self._c_handle))
-            self._released = True
+        if self._released:
+            return
+        if self._validated:
+            _safe_release("nautilus_tuning_record_release", self._c_handle)
+        self._released = True
 
     def __enter__(self) -> TuningRecordHandle:
         return self
@@ -482,12 +571,15 @@ def tir_parse(text: str, target: str) -> TIRModuleHandle:
     out_handle = c_void_p()
     encoded = text.encode("utf-8")
     rc = lib.nautilus_tir_parse(
-        encoded, c_size_t(len(encoded)),
+        encoded,
+        c_size_t(len(encoded)),
         target.encode("utf-8"),
         ctypes.byref(out_handle),
     )
     _check_rc(rc, "nautilus_tir_parse", "nautilus_tvm_last_error_message")
-    return TIRModuleHandle(out_handle.value or 0)
+    handle = TIRModuleHandle(out_handle.value or 0)
+    handle._validated = True
+    return handle
 
 
 def tune(
@@ -513,7 +605,9 @@ def tune(
         ctypes.byref(out_handle),
     )
     _check_rc(rc, "nautilus_tune", "nautilus_tvm_last_error_message")
-    return TuningRecordHandle(out_handle.value or 0)
+    handle = TuningRecordHandle(out_handle.value or 0)
+    handle._validated = True
+    return handle
 
 
 def tvm_version() -> str:
@@ -536,9 +630,11 @@ SHARD_TENSOR_PARALLEL = 4
 
 class StableHLOHandle:
     """Python-side handle for a StableHLO module."""
+
     def __init__(self, c_handle: int) -> None:
         self._c_handle = c_handle
         self._released = False
+        self._validated = False
 
     @property
     def c_handle(self) -> int:
@@ -563,10 +659,11 @@ class StableHLOHandle:
         return text, out_len.value
 
     def release(self) -> None:
-        if not self._released:
-            lib = _load_c_lib()
-            lib.nautilus_stablehlo_release(c_void_p(self._c_handle))
-            self._released = True
+        if self._released:
+            return
+        if self._validated:
+            _safe_release("nautilus_stablehlo_release", self._c_handle)
+        self._released = True
 
     def __enter__(self) -> StableHLOHandle:
         return self
@@ -583,9 +680,11 @@ class StableHLOHandle:
 
 class MeshHandle:
     """Python-side handle for a device mesh."""
+
     def __init__(self, c_handle: int) -> None:
         self._c_handle = c_handle
         self._released = False
+        self._validated = False
 
     @property
     def c_handle(self) -> int:
@@ -594,10 +693,11 @@ class MeshHandle:
         return self._c_handle
 
     def release(self) -> None:
-        if not self._released:
-            lib = _load_c_lib()
-            lib.nautilus_mesh_release(c_void_p(self._c_handle))
-            self._released = True
+        if self._released:
+            return
+        if self._validated:
+            _safe_release("nautilus_mesh_release", self._c_handle)
+        self._released = True
 
     def __enter__(self) -> MeshHandle:
         return self
@@ -614,9 +714,11 @@ class MeshHandle:
 
 class ShardingSpecHandle:
     """Python-side handle for a GSPMD sharding spec."""
+
     def __init__(self, c_handle: int) -> None:
         self._c_handle = c_handle
         self._released = False
+        self._validated = False
 
     @property
     def c_handle(self) -> int:
@@ -625,10 +727,11 @@ class ShardingSpecHandle:
         return self._c_handle
 
     def release(self) -> None:
-        if not self._released:
-            lib = _load_c_lib()
-            lib.nautilus_sharding_spec_release(c_void_p(self._c_handle))
-            self._released = True
+        if self._released:
+            return
+        if self._validated:
+            _safe_release("nautilus_sharding_spec_release", self._c_handle)
+        self._released = True
 
     def __enter__(self) -> ShardingSpecHandle:
         return self
@@ -643,9 +746,7 @@ class ShardingSpecHandle:
             pass
 
 
-def stablehlo_from_fx(
-    fx_graph_json: str, function_name: str
-) -> StableHLOHandle:
+def stablehlo_from_fx(fx_graph_json: str, function_name: str) -> StableHLOHandle:
     """Build a StableHLO module from a serialized TorchFX graph.
 
     Args:
@@ -657,12 +758,15 @@ def stablehlo_from_fx(
     out_handle = c_void_p()
     encoded = fx_graph_json.encode("utf-8")
     rc = lib.nautilus_stablehlo_from_fx(
-        encoded, c_size_t(len(encoded)),
+        encoded,
+        c_size_t(len(encoded)),
         function_name.encode("utf-8"),
         ctypes.byref(out_handle),
     )
     _check_rc(rc, "nautilus_stablehlo_from_fx", "nautilus_xla_last_error_message")
-    return StableHLOHandle(out_handle.value or 0)
+    handle = StableHLOHandle(out_handle.value or 0)
+    handle._validated = True
+    return handle
 
 
 def mesh_create(axes: list[int]) -> MeshHandle:
@@ -674,11 +778,14 @@ def mesh_create(axes: list[int]) -> MeshHandle:
     out_handle = c_void_p()
     arr = (c_int64 * len(axes))(*axes)
     rc = lib.nautilus_mesh_create(
-        arr, c_size_t(len(axes)),
+        arr,
+        c_size_t(len(axes)),
         ctypes.byref(out_handle),
     )
     _check_rc(rc, "nautilus_mesh_create", "nautilus_xla_last_error_message")
-    return MeshHandle(out_handle.value or 0)
+    handle = MeshHandle(out_handle.value or 0)
+    handle._validated = True
+    return handle
 
 
 def gspmd_shard(
@@ -698,7 +805,9 @@ def gspmd_shard(
         ctypes.byref(out_handle),
     )
     _check_rc(rc, "nautilus_gspmd_shard", "nautilus_xla_last_error_message")
-    return ShardingSpecHandle(out_handle.value or 0)
+    handle = ShardingSpecHandle(out_handle.value or 0)
+    handle._validated = True
+    return handle
 
 
 def xla_version() -> str:
@@ -726,6 +835,7 @@ def is_available() -> bool:
 
 class _TritonNamespace:
     """Re-exports Triton C-API functions as attributes."""
+
     compile = staticmethod(compile)
     triton_version = staticmethod(triton_version)
     TritonKernelHandle = TritonKernelHandle
@@ -759,6 +869,7 @@ class _TritonNamespace:
 
 class _TvmNamespace:
     """Re-exports TVM MetaSchedule C-API functions as attributes."""
+
     tir_parse = staticmethod(tir_parse)
     tune = staticmethod(tune)
     tvm_version = staticmethod(tvm_version)
@@ -773,6 +884,7 @@ class _TvmNamespace:
 
 class _XlaNamespace:
     """Re-exports XLA C-API functions as attributes."""
+
     stablehlo_from_fx = staticmethod(stablehlo_from_fx)
     mesh_create = staticmethod(mesh_create)
     gspmd_shard = staticmethod(gspmd_shard)

@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.bridges.aot_packager.intel_backend import (
     IntelBackend,
     IntelCompilationResult,
     IntelTarget,
 )
 
-SAMPLE_KERNEL = '''
+SAMPLE_KERNEL = """
 import triton
 import triton.language as tl
 
@@ -35,7 +33,7 @@ def sample_matmul(
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
     acc += tl.dot(a, b)
     tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+"""
 
 
 class TestIntelBackend:

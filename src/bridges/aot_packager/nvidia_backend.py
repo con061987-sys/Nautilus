@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 try:
     from packaging.specifiers import SpecifierSet
@@ -61,6 +61,7 @@ log = get_logger("nautilus.aot.nvidia")
 
 class NvidiaArch(str, Enum):
     """CUDA compute capabilities."""
+
     SM_70 = "sm_70"
     SM_75 = "sm_75"
     SM_80 = "sm_80"
@@ -99,9 +100,11 @@ class NvidiaBackend:
          not a 6-line stub)
       4. Write to cache; on next identical request, return cached
     """
+
     # Range covers 3.x and 4.x; intentionally not pinned to a
     # micro-version per the project's drift strategy.
     SUPPORTED_TRITON_VERSIONS = ">=3.0,<5.0"
+
     def __init__(
         self,
         target_arch: NvidiaArch = NvidiaArch.SM_90,
@@ -110,10 +113,13 @@ class NvidiaBackend:
         capture_cubin: bool = True,
     ) -> None:
         self.target_arch = target_arch
-        self.cache_dir = Path(cache_dir or os.environ.get(
-            "NAUTILUS_NVIDIA_CACHE",
-            str(Path.home() / ".cache" / "nautilus" / "nvidia"),
-        ))
+        self.cache_dir = Path(
+            cache_dir
+            or os.environ.get(
+                "NAUTILUS_NVIDIA_CACHE",
+                str(Path.home() / ".cache" / "nautilus" / "nvidia"),
+            )
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timeout_seconds = timeout_seconds
         self.capture_cubin = capture_cubin
@@ -140,7 +146,13 @@ class NvidiaBackend:
         start = time.perf_counter()
 
         cache_key = self._compute_cache_key(
-            kernel_source, kernel_name, block_m, block_n, block_k, num_warps, num_stages,
+            kernel_source,
+            kernel_name,
+            block_m,
+            block_n,
+            block_k,
+            num_warps,
+            num_stages,
         )
         cached = self._check_cache(cache_key)
         if cached is not None:
@@ -160,8 +172,11 @@ class NvidiaBackend:
             ptx_text, cubin_bytes = self._run_triton_compile(
                 kernel_source=kernel_source,
                 kernel_name=kernel_name,
-                block_m=block_m, block_n=block_n, block_k=block_k,
-                num_warps=num_warps, num_stages=num_stages,
+                block_m=block_m,
+                block_n=block_n,
+                block_k=block_k,
+                num_warps=num_warps,
+                num_stages=num_stages,
             )
         except TritonMissingError:
             raise
@@ -178,8 +193,11 @@ class NvidiaBackend:
                 context={
                     "arch": self.target_arch.value,
                     "kernel": kernel_name,
-                    "block_m": block_m, "block_n": block_n, "block_k": block_k,
-                    "num_warps": num_warps, "num_stages": num_stages,
+                    "block_m": block_m,
+                    "block_n": block_n,
+                    "block_k": block_k,
+                    "num_warps": num_warps,
+                    "num_stages": num_stages,
                 },
             ) from exc
 
@@ -284,7 +302,7 @@ class NvidiaBackend:
                         context={"kernel_name": kernel_name},
                     )
 
-                from triton.compiler import ASTSource  # type: ignore[attr-defined]
+                from triton.compiler import ASTSource
 
                 signature, constexprs = build_signature(
                     fn,
@@ -304,17 +322,23 @@ class NvidiaBackend:
                 # of upstream helper changes.
                 arg_names: list[str] = list(getattr(fn, "arg_names", []) or [])
                 if arg_names and all(isinstance(k, int) for k in signature):
-                    signature = {
-                        arg_names[i]: dtype
-                        for i, dtype in signature.items()
-                        if i < len(arg_names)
-                    }
+                    signature = cast(
+                        dict[int, str],
+                        {
+                            arg_names[i]: dtype
+                            for i, dtype in signature.items()
+                            if i < len(arg_names)
+                        },
+                    )
                 if arg_names and all(isinstance(k, int) for k in constexprs):
-                    constexprs = {
-                        (idx,): value
-                        for idx, value in constexprs.items()
-                        if idx < len(arg_names)
-                    }
+                    constexprs = cast(
+                        dict[int, Any],
+                        {
+                            (idx,): value
+                            for idx, value in constexprs.items()
+                            if idx < len(arg_names)
+                        },
+                    )
                 source = ASTSource(
                     fn=fn,
                     signature=signature,
@@ -360,10 +384,12 @@ class NvidiaBackend:
         gpu_target_cls: Any = None
         try:
             from triton.backends.compiler import GPUTarget as _NewGPUTarget
+
             gpu_target_cls = _NewGPUTarget
         except ImportError:
             try:
                 from triton.compiler import GPUTarget as _LegacyGPUTarget
+
                 gpu_target_cls = _LegacyGPUTarget
             except ImportError:
                 return arch_str if arch_str else "cuda"
@@ -397,13 +423,20 @@ class NvidiaBackend:
         if not ptx_text:
             return False
         markers = [
-            ".version", ".target", ".address_size",
-            ".entry", ".visible", ".func",
+            ".version",
+            ".target",
+            ".address_size",
+            ".entry",
+            ".visible",
+            ".func",
         ]
         has_marker = any(m in ptx_text for m in markers)
         if not has_marker:
-            log.warning("PTX missing standard markers", kernel=kernel_name,
-                        first_line=ptx_text.splitlines()[0] if ptx_text else "")
+            log.warning(
+                "PTX missing standard markers",
+                kernel=kernel_name,
+                first_line=ptx_text.splitlines()[0] if ptx_text else "",
+            )
             return False
         line_count = ptx_text.count("\n")
         if line_count < 5:
@@ -421,17 +454,20 @@ class NvidiaBackend:
         num_warps: int,
         num_stages: int,
     ) -> str:
-        payload = json.dumps({
-            "source": kernel_source,
-            "name": kernel_name,
-            "arch": self.target_arch.value,
-            "block_m": block_m,
-            "block_n": block_n,
-            "block_k": block_k,
-            "num_warps": num_warps,
-            "num_stages": num_stages,
-            "triton_version": self._triton_version,
-        }, sort_keys=True)
+        payload = json.dumps(
+            {
+                "source": kernel_source,
+                "name": kernel_name,
+                "arch": self.target_arch.value,
+                "block_m": block_m,
+                "block_n": block_n,
+                "block_k": block_k,
+                "num_warps": num_warps,
+                "num_stages": num_stages,
+                "triton_version": self._triton_version,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def _check_cache(self, cache_key: str) -> dict[str, Path] | None:
@@ -450,6 +486,7 @@ class NvidiaBackend:
     def _detect_triton_version(self) -> str:
         try:
             import triton
+
             return getattr(triton, "__version__", "unknown")
         except ImportError:
             return "unavailable"
@@ -465,9 +502,15 @@ class NvidiaBackend:
         warned but do not raise — the user may be running a forked
         build (e.g. nvidia internal triton) with a non-PEP-440 tag.
         """
-        if not _PACKAGING_AVAILABLE or not version_str or version_str in {
-            "unknown", "unavailable",
-        }:
+        if (
+            not _PACKAGING_AVAILABLE
+            or not version_str
+            or version_str
+            in {
+                "unknown",
+                "unavailable",
+            }
+        ):
             return
         try:
             parsed = Version(version_str)

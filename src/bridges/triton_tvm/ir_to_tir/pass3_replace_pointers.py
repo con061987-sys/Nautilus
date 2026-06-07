@@ -21,7 +21,6 @@ dialect and is what TVM TIR's external_call expects.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from src.common.logging import get_logger
 
@@ -59,7 +58,8 @@ class ReplacePointersWithMemRefs:
         )
 
     def _convert_arg_types(
-        self, args: list[tuple[str, TTGIRType]],
+        self,
+        args: list[tuple[str, TTGIRType]],
     ) -> list[tuple[str, TTGIRType]]:
         """Convert !tt.ptr<...> argument types to memref<...>."""
         new_args: list[tuple[str, TTGIRType]] = []
@@ -88,10 +88,16 @@ class ReplacePointersWithMemRefs:
     def _dtype_to_mlir(self, dtype: str) -> str:
         """Map canonical dtype to MLIR form."""
         mapping = {
-            "float32": "f32", "float16": "f16", "float64": "f64",
+            "float32": "f32",
+            "float16": "f16",
+            "float64": "f64",
             "bfloat16": "bf16",
-            "int32": "i32", "int64": "i64", "int8": "i8",
-            "uint32": "ui32", "uint64": "ui64", "uint8": "ui8",
+            "int32": "i32",
+            "int64": "i64",
+            "int8": "i8",
+            "uint32": "ui32",
+            "uint64": "ui64",
+            "uint8": "ui8",
             "bool": "i1",
         }
         return mapping.get(dtype, dtype)

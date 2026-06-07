@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.bridges.cuda_ingest.parser import (
     CudaKernel,
     CudaParser,
-    CudaStatement,
 )
 from src.bridges.cuda_ingest.shared_memory import (
     SharedMemAllocation,
@@ -15,7 +12,7 @@ from src.bridges.cuda_ingest.shared_memory import (
     SharedMemPlan,
 )
 
-SAMPLE_KERNEL_WITH_SHMEM = '''
+SAMPLE_KERNEL_WITH_SHMEM = """
 __global__ void matmul_with_shmem(
     const float* A, const float* B, float* C,
     int M, int N, int K
@@ -33,7 +30,7 @@ __global__ void matmul_with_shmem(
         }
     }
 }
-'''
+"""
 
 
 def make_kernel_with_shmem() -> CudaKernel:
@@ -79,8 +76,16 @@ class TestSharedMemoryAnalyzer:
         # Create allocations that will trigger warnings
         plan = SharedMemPlan()
         plan.allocations = [
-            SharedMemAllocation(name="data", element_type="float", array_size=64, is_static=True, raw_declaration=""),
-            SharedMemAllocation(name="other", element_type="float", array_size=128, is_static=True, raw_declaration=""),
+            SharedMemAllocation(
+                name="data", element_type="float", array_size=64, is_static=True, raw_declaration=""
+            ),
+            SharedMemAllocation(
+                name="other",
+                element_type="float",
+                array_size=128,
+                is_static=True,
+                raw_declaration="",
+            ),
         ]
         warnings = analyzer._analyze_bank_conflicts(plan.allocations)
         assert len(warnings) > 0
@@ -89,8 +94,11 @@ class TestSharedMemoryAnalyzer:
         """Static allocation should produce tl.zeros."""
         analyzer = SharedMemoryAnalyzer()
         alloc = SharedMemAllocation(
-            name="tile", element_type="float", array_size=256,
-            is_static=True, raw_declaration="",
+            name="tile",
+            element_type="float",
+            array_size=256,
+            is_static=True,
+            raw_declaration="",
         )
         code = analyzer.generate_triton_allocation(alloc)
         assert "tile_smem" in code
@@ -102,8 +110,11 @@ class TestSharedMemoryAnalyzer:
         """Dynamic allocation should use BLOCK_SIZE."""
         analyzer = SharedMemoryAnalyzer()
         alloc = SharedMemAllocation(
-            name="data", element_type="float", array_size=0,
-            is_static=False, raw_declaration="",
+            name="data",
+            element_type="float",
+            array_size=0,
+            is_static=False,
+            raw_declaration="",
         )
         code = analyzer.generate_triton_allocation(alloc)
         assert "BLOCK_SIZE" in code
@@ -123,12 +134,12 @@ class TestSharedMemoryAnalyzer:
 
     def test_no_shared_memory(self) -> None:
         """A kernel without __shared__ should produce an empty plan."""
-        source = '''
+        source = """
 __global__ void no_shmem(float* x) {
     int i = threadIdx.x;
     x[i] = 1.0f;
 }
-'''
+"""
         parser = CudaParser()
         kernels = parser.parse_source(source)
         analyzer = SharedMemoryAnalyzer()

@@ -12,6 +12,7 @@ The tests are stdlib-only (no torch) and exercise the public API
 plus the private serializers to keep coverage focused on the
 hardening surface.
 """
+
 from __future__ import annotations
 
 import pickle
@@ -68,7 +69,8 @@ class TestCheckpointLoopRace:
     """
 
     def test_latest_model_saved_under_contention(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         """N rapid requests coalesce to 1 checkpoint, but the
         saved checkpoint must reflect the LATEST request — the
@@ -91,12 +93,9 @@ class TestCheckpointLoopRace:
                     break
                 time.sleep(0.05)
             with cp._lock:
-                assert cp._pending_model is None, (
-                    "Loop did not clear pending slot under lock"
-                )
+                assert cp._pending_model is None, "Loop did not clear pending slot under lock"
                 assert len(cp._checkpoints) == 1, (
-                    f"Expected 1 coalesced checkpoint, got "
-                    f"{len(cp._checkpoints)}"
+                    f"Expected 1 coalesced checkpoint, got {len(cp._checkpoints)}"
                 )
                 saved = cp._checkpoints[0]
             model_bytes = (saved.path / "model.state").read_bytes()
@@ -109,7 +108,8 @@ class TestCheckpointLoopRace:
             cp.stop()
 
     def test_claim_clears_pending_atomically(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         """The loop clears the pending slot under the same lock
         the caller uses to set it. Verified by running the
@@ -137,7 +137,8 @@ class TestCheckpointLoopRace:
             cp.stop()
 
     def test_request_checkpoint_locked_writes(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         """request_checkpoint writes model/optimizer under self._lock."""
         cfg = CheckpointConfig(
@@ -162,7 +163,9 @@ class TestDeserializeSecurity:
     attacker bytes by default."""
 
     def test_no_torch_no_msgpack_default_raises(
-        self, storage_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        storage_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """With torch+msgpack hidden, default config raises
         DependencyMissingError (not the legacy-pickle fallback)."""
@@ -178,7 +181,9 @@ class TestDeserializeSecurity:
             cp._deserialize_state(payload)
 
     def test_unsafe_pickle_fallback_opt_in(
-        self, storage_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        storage_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Tests can opt into pickle via CheckpointConfig."""
         cfg = CheckpointConfig(
@@ -192,13 +197,15 @@ class TestDeserializeSecurity:
         assert cp._deserialize_state(payload) == {"hello": "world"}
 
     def test_unsafe_pickle_fallback_default_false(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         cfg = CheckpointConfig()
         assert cfg.unsafe_pickle_fallback is False
 
     def test_serialize_deserialize_roundtrip(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         """End-to-end save + load via msgpack path (no torch)."""
         cfg = CheckpointConfig(storage_path=str(storage_path))
@@ -212,7 +219,9 @@ class TestDeserializeSecurity:
         assert loaded == state
 
     def test_torch_load_called_with_weights_only_true(
-        self, storage_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        storage_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """If torch is available, weights_only=True is passed."""
         cfg = CheckpointConfig(storage_path=str(storage_path))
@@ -254,7 +263,8 @@ class TestPublicAPIUnchanged:
         assert SCHEMA_VERSION == 2
 
     def test_checkpoint_info_creation(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         cfg = CheckpointConfig(storage_path=str(storage_path))
         cp = AsyncCheckpointer(cfg)
@@ -264,7 +274,8 @@ class TestPublicAPIUnchanged:
         assert (info.path / "model.state").exists()
 
     def test_recover_latest_returns_state(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         cfg = CheckpointConfig(storage_path=str(storage_path))
         cp = AsyncCheckpointer(cfg)
@@ -276,7 +287,8 @@ class TestPublicAPIUnchanged:
         assert model_state == state
 
     def test_on_node_failure_triggers_recovery(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         cfg = CheckpointConfig(storage_path=str(storage_path))
         cp = AsyncCheckpointer(cfg)
@@ -284,7 +296,8 @@ class TestPublicAPIUnchanged:
         assert cp.on_node_failure("node-0") is True
 
     def test_on_node_failure_no_checkpoint(
-        self, storage_path: Path,
+        self,
+        storage_path: Path,
     ) -> None:
         cfg = CheckpointConfig(storage_path=str(storage_path))
         cp = AsyncCheckpointer(cfg)

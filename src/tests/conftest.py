@@ -17,18 +17,19 @@ captured warnings, and any explicitly attached artifacts to the directory.
 Files are named ``{test_name}-{timestamp}-{slug}.{ext}`` with microsecond
 ISO-8601 timestamps so re-runs don't clobber each other.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import re
 import shutil
-import sys
+from collections.abc import Iterator
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -56,21 +57,25 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     has_torch_xla = False
     try:
         import torch  # noqa: F401
+
         has_torch = True
     except ImportError:
         pass
     try:
         import tvm  # noqa: F401
+
         has_tvm = True
     except ImportError:
         pass
     try:
         import triton  # noqa: F401
+
         has_triton = True
     except ImportError:
         pass
     try:
         import torch_xla  # noqa: F401
+
         has_torch_xla = True
     except ImportError:
         pass
@@ -78,7 +83,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         markers = {m.name for m in item.iter_markers()}
         if "gpu" in markers and not has_gpu:
-            item.add_marker(pytest.mark.skip(reason="No GPU detected (nvidia-smi/rocm-smi/lspci missing)"))
+            item.add_marker(
+                pytest.mark.skip(reason="No GPU detected (nvidia-smi/rocm-smi/lspci missing)")
+            )
         if "cuda" in markers and not has_cuda:
             item.add_marker(pytest.mark.skip(reason="CUDA toolkit not installed"))
         if "rocm" in markers and not has_rocm:
@@ -102,7 +109,9 @@ def repo_root() -> Path:
 
 @pytest.fixture(scope="session")
 def any_gpu_available() -> bool:
-    return bool(shutil.which("nvidia-smi") or Path("/opt/rocm").exists() or shutil.which("spirv-val"))
+    return bool(
+        shutil.which("nvidia-smi") or Path("/opt/rocm").exists() or shutil.which("spirv-val")
+    )
 
 
 @pytest.fixture
@@ -221,7 +230,10 @@ class EvidenceCapture:
         if self._finalized:
             # Finalize is idempotent but post-finalize attach is a no-op so
             # fixture teardown order doesn't blow up.
-            return self.evidence_dir / f"{self.test_name}-{self._timestamp}-{_safe_filename_slug(slug or name)}.{ext}"
+            return (
+                self.evidence_dir
+                / f"{self.test_name}-{self._timestamp}-{_safe_filename_slug(slug or name)}.{ext}"
+            )
         path = self.evidence_dir / (
             f"{self.test_name}-{self._timestamp}-{_safe_filename_slug(slug or name)}.{ext}"
         )
@@ -271,8 +283,7 @@ class EvidenceCapture:
             self.attach("summary", "\n".join(summary_lines) + "\n", ext="txt", slug="summary")
             if self._log_records:
                 logs = "\n".join(
-                    f"[{rec.levelname}] {rec.name}: {rec.getMessage()}"
-                    for rec in self._log_records
+                    f"[{rec.levelname}] {rec.name}: {rec.getMessage()}" for rec in self._log_records
                 )
                 self.attach("warnings", logs + "\n", ext="log", slug="warnings")
         except Exception:
@@ -306,7 +317,7 @@ def evidence_capture(
         yield None
         return
     cap = EvidenceCapture(test_name=request.node.name, evidence_dir=evidence_dir)
-    request.node._evidence_capture = cap  # type: ignore[attr-defined]
+    request.node._evidence_capture = cap
     try:
         yield cap
     finally:
@@ -348,6 +359,7 @@ def _try_import(module_path: str, attr: str | None = None) -> Any:
     fixture setup.
     """
     import importlib
+
     mod = importlib.import_module(module_path)
     if attr is None:
         return mod
@@ -378,7 +390,8 @@ def auto_tuning_bridge(
     if _use_real_backend(request):
         try:
             TritonTVMBridge = _try_import(
-                "src.bridges.triton_tvm.bridge_orchestrator", "TritonTVMBridge",
+                "src.bridges.triton_tvm.bridge_orchestrator",
+                "TritonTVMBridge",
             )
         except ImportError as exc:
             pytest.skip(f"TritonTVMBridge not importable: {exc}")
@@ -396,16 +409,20 @@ def auto_tuning_bridge(
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
         TritonTVMBridge = _try_import(
-            "src.bridges.triton_tvm.bridge_orchestrator", "TritonTVMBridge",
+            "src.bridges.triton_tvm.bridge_orchestrator",
+            "TritonTVMBridge",
         )
         MappedTuningConfig = _try_import(
-            "src.bridges.triton_tvm.config_mapper", "MappedTuningConfig",
+            "src.bridges.triton_tvm.config_mapper",
+            "MappedTuningConfig",
         )
         MetaScheduleAdapter = _try_import(
-            "src.bridges.triton_tvm.metaschedule_adapter", "MetaScheduleAdapter",
+            "src.bridges.triton_tvm.metaschedule_adapter",
+            "MetaScheduleAdapter",
         )
         IRCapture = _try_import(
-            "src.bridges.triton_tvm.ir_capture", "IRCapture",
+            "src.bridges.triton_tvm.ir_capture",
+            "IRCapture",
         )
     except ImportError as exc:
         pytest.skip(f"triton_tvm bridge not importable: {exc}")
@@ -426,8 +443,8 @@ def auto_tuning_bridge(
         stack.enter_context(patch.object(IRCapture, "capture_for_source", fake_capture))
         stack.enter_context(patch.object(IRCapture, "capture_from_text", fake_capture))
         # Expose the mocks for tests that want to assert call counts.
-        bridge._mock_tune = fake_tune  # type: ignore[attr-defined]
-        bridge._mock_capture = fake_capture  # type: ignore[attr-defined]
+        bridge._mock_tune = fake_tune
+        bridge._mock_capture = fake_capture
         yield bridge
 
 
@@ -455,7 +472,8 @@ def aot_packager(
     if _use_real_backend(request):
         try:
             FatBinaryBuilder = _try_import(
-                "src.bridges.aot_packager.builder", "FatBinaryBuilder",
+                "src.bridges.aot_packager.builder",
+                "FatBinaryBuilder",
             )
         except ImportError as exc:
             pytest.skip(f"FatBinaryBuilder not importable: {exc}")
@@ -469,31 +487,40 @@ def aot_packager(
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
         FatBinaryBuilder = _try_import(
-            "src.bridges.aot_packager.builder", "FatBinaryBuilder",
+            "src.bridges.aot_packager.builder",
+            "FatBinaryBuilder",
         )
         AMDBackend = _try_import(
-            "src.bridges.aot_packager.amd_backend", "AMDBackend",
+            "src.bridges.aot_packager.amd_backend",
+            "AMDBackend",
         )
         IntelBackend = _try_import(
-            "src.bridges.aot_packager.intel_backend", "IntelBackend",
+            "src.bridges.aot_packager.intel_backend",
+            "IntelBackend",
         )
         NvidiaBackend = _try_import(
-            "src.bridges.aot_packager.nvidia_backend", "NvidiaBackend",
+            "src.bridges.aot_packager.nvidia_backend",
+            "NvidiaBackend",
         )
         FatBinaryLinker = _try_import(
-            "src.bridges.aot_packager.linker", "FatBinaryLinker",
+            "src.bridges.aot_packager.linker",
+            "FatBinaryLinker",
         )
         AMDCompilationResult = _try_import(
-            "src.bridges.aot_packager.amd_backend", "AMDCompilationResult",
+            "src.bridges.aot_packager.amd_backend",
+            "AMDCompilationResult",
         )
         IntelCompilationResult = _try_import(
-            "src.bridges.aot_packager.intel_backend", "IntelCompilationResult",
+            "src.bridges.aot_packager.intel_backend",
+            "IntelCompilationResult",
         )
         NvidiaCompilationResult = _try_import(
-            "src.bridges.aot_packager.nvidia_backend", "NvidiaCompilationResult",
+            "src.bridges.aot_packager.nvidia_backend",
+            "NvidiaCompilationResult",
         )
         LinkingResult = _try_import(
-            "src.bridges.aot_packager.linker", "LinkingResult",
+            "src.bridges.aot_packager.linker",
+            "LinkingResult",
         )
     except ImportError as exc:
         pytest.skip(f"aot_packager bridge not importable: {exc}")
@@ -509,15 +536,22 @@ def aot_packager(
     fake_cubin = b"\x7fELF" + b"\x00" * 12 + b"cubin-mock"
 
     amd_mock_result = AMDCompilationResult(
-        success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
+        success=True,
+        arch="gfx942",
+        hsaco_bytes=fake_hsaco,
         compilation_time_s=0.001,
     )
     intel_mock_result = IntelCompilationResult(
-        success=True, target="xe_hpg", spv_bytes=fake_spv,
+        success=True,
+        target="xe_hpg",
+        spv_bytes=fake_spv,
         compilation_time_s=0.001,
     )
     nvidia_mock_result = NvidiaCompilationResult(
-        success=True, arch="sm_90", ptx_text=fake_ptx_text, cubin_bytes=fake_cubin,
+        success=True,
+        arch="sm_90",
+        ptx_text=fake_ptx_text,
+        cubin_bytes=fake_cubin,
         compilation_time_s=0.001,
     )
     # LinkingResult.output_path is normally a Path written by the linker; we
@@ -526,8 +560,11 @@ def aot_packager(
     linking_output = clean_cache / "mock_kernel.fat.o"
     linking_output.write_bytes(b"\x7fELF" + b"\x00" * 16 + b"fat-mock")
     linking_mock_result = LinkingResult(
-        success=True, output_path=linking_output, output_size=linking_output.stat().st_size,
-        linking_time_s=0.001, linker_version="mock-lld",
+        success=True,
+        output_path=linking_output,
+        output_size=linking_output.stat().st_size,
+        linking_time_s=0.001,
+        linker_version="mock-lld",
     )
 
     builder = FatBinaryBuilder(cache_dir=str(clean_cache))
@@ -545,12 +582,16 @@ def aot_packager(
         stack.enter_context(patch.object(FatBinaryLinker, "link_fat_binary", link_call))
         stack.enter_context(patch.object(builder, "_compile_runtime_stub", stub_call))
         # Mock validator (no hardware) so the optional validation stage is a no-op.
-        stack.enter_context(patch.object(builder.validator, "validate", MagicMock(return_value=MagicMock(is_usable=True))))
-        builder._mock_amd = amd_compile  # type: ignore[attr-defined]
-        builder._mock_intel = intel_compile  # type: ignore[attr-defined]
-        builder._mock_nvidia = nvidia_compile  # type: ignore[attr-defined]
-        builder._mock_link = link_call  # type: ignore[attr-defined]
-        builder._mock_stub = stub_call  # type: ignore[attr-defined]
+        stack.enter_context(
+            patch.object(
+                builder.validator, "validate", MagicMock(return_value=MagicMock(is_usable=True))
+            )
+        )
+        builder._mock_amd = amd_compile
+        builder._mock_intel = intel_compile
+        builder._mock_nvidia = nvidia_compile
+        builder._mock_link = link_call
+        builder._mock_stub = stub_call
         yield builder
 
 
@@ -578,7 +619,8 @@ def sharding_bridge(
     if _use_real_backend(request):
         try:
             AutoShardingBridge = _try_import(
-                "src.bridges.pytorch_xla.pipeline_orchestrator", "AutoShardingBridge",
+                "src.bridges.pytorch_xla.pipeline_orchestrator",
+                "AutoShardingBridge",
             )
         except ImportError as exc:
             pytest.skip(f"AutoShardingBridge not importable: {exc}")
@@ -593,28 +635,35 @@ def sharding_bridge(
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
         AutoShardingBridge = _try_import(
-            "src.bridges.pytorch_xla.pipeline_orchestrator", "AutoShardingBridge",
+            "src.bridges.pytorch_xla.pipeline_orchestrator",
+            "AutoShardingBridge",
         )
         GSPMDRunner = _try_import(
-            "src.bridges.pytorch_xla.gspmd_runner", "GSPMDRunner",
+            "src.bridges.pytorch_xla.gspmd_runner",
+            "GSPMDRunner",
         )
         GraphCapture = _try_import(
-            "src.bridges.pytorch_xla.graph_capture", "GraphCapture",
+            "src.bridges.pytorch_xla.graph_capture",
+            "GraphCapture",
         )
         StableHLOExporter = _try_import(
-            "src.bridges.pytorch_xla.stablehlo_export", "StableHLOExporter",
+            "src.bridges.pytorch_xla.stablehlo_export",
+            "StableHLOExporter",
         )
         GSPMDResult = _try_import(
-            "src.bridges.pytorch_xla.gspmd_runner", "GSPMDResult",
+            "src.bridges.pytorch_xla.gspmd_runner",
+            "GSPMDResult",
         )
         ShardingSpec = _try_import(
-            "src.bridges.pytorch_xla.gspmd_runner", "ShardingSpec",
+            "src.bridges.pytorch_xla.gspmd_runner",
+            "ShardingSpec",
         )
     except ImportError as exc:
         pytest.skip(f"pytorch_xla bridge not importable: {exc}")
 
-    fake_sharding_spec = MagicMock(spec=ShardingSpec) if not isinstance(ShardingSpec, type) \
-        else MagicMock()
+    fake_sharding_spec = (
+        MagicMock(spec=ShardingSpec) if not isinstance(ShardingSpec, type) else MagicMock()
+    )
     fake_gspmd_result = MagicMock()
     fake_gspmd_result.is_usable = True
     fake_gspmd_result.success = True
@@ -641,11 +690,13 @@ def sharding_bridge(
     with ExitStack() as stack:
         stack.enter_context(patch.object(GSPMDRunner, "run", gspmd_run))
         stack.enter_context(patch.object(GraphCapture, "capture", graph_capture))
-        stack.enter_context(patch.object(StableHLOExporter, "export_from_captured", stablehlo_export))
+        stack.enter_context(
+            patch.object(StableHLOExporter, "export_from_captured", stablehlo_export)
+        )
         bridge = AutoShardingBridge(enable_circuit_breakers=False)
-        bridge._mock_gspmd = gspmd_run  # type: ignore[attr-defined]
-        bridge._mock_graph = graph_capture  # type: ignore[attr-defined]
-        bridge._mock_stablehlo = stablehlo_export  # type: ignore[attr-defined]
+        bridge._mock_gspmd = gspmd_run
+        bridge._mock_graph = graph_capture
+        bridge._mock_stablehlo = stablehlo_export
         yield bridge
 
 
@@ -671,7 +722,8 @@ def cuda_ingestor(
     if _use_real_backend(request):
         try:
             CudaKernelCompiler = _try_import(
-                "src.bridges.cuda_ingest.kernel_compiler", "CudaKernelCompiler",
+                "src.bridges.cuda_ingest.kernel_compiler",
+                "CudaKernelCompiler",
             )
         except ImportError as exc:
             pytest.skip(f"CudaKernelCompiler not importable: {exc}")
@@ -686,16 +738,20 @@ def cuda_ingestor(
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
         CudaKernelCompiler = _try_import(
-            "src.bridges.cuda_ingest.kernel_compiler", "CudaKernelCompiler",
+            "src.bridges.cuda_ingest.kernel_compiler",
+            "CudaKernelCompiler",
         )
         CudaParser = _try_import(
-            "src.bridges.cuda_ingest.parser", "CudaParser",
+            "src.bridges.cuda_ingest.parser",
+            "CudaParser",
         )
         TreeSitterCudaParser = _try_import(
-            "src.bridges.cuda_ingest.parser", "TreeSitterCudaParser",
+            "src.bridges.cuda_ingest.parser",
+            "TreeSitterCudaParser",
         )
         CudaKernel = _try_import(
-            "src.bridges.cuda_ingest.parser", "CudaKernel",
+            "src.bridges.cuda_ingest.parser",
+            "CudaKernel",
         )
     except ImportError as exc:
         pytest.skip(f"cuda_ingest bridge not importable: {exc}")
@@ -727,5 +783,5 @@ def cuda_ingestor(
         # seam. Both phases call into Triton/TVM/AOT; we don't want that.
         compiler.enable_phase1_tuning = False
         compiler.enable_phase2_aot = False
-        compiler._mock_parse = fake_parse  # type: ignore[attr-defined]
+        compiler._mock_parse = fake_parse
         yield compiler

@@ -56,10 +56,12 @@ class TestTVMOptions:
 
     def test_from_dict_ignores_unknown_keys(self) -> None:
         """Unknown keys in the dict should be ignored (or moved to extras)."""
-        opts = TVMOptions.from_dict({
-            "max_trials": 128,
-            "unknown_key": "value",
-        })
+        opts = TVMOptions.from_dict(
+            {
+                "max_trials": 128,
+                "unknown_key": "value",
+            }
+        )
         assert opts.max_trials == 128
         assert "unknown_key" in opts.extra
 

@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.bridges.aot_packager.amd_backend import (
     AMDArch,
     AMDBackend,
     AMDCompilationResult,
 )
 
-SAMPLE_KERNEL = '''
+SAMPLE_KERNEL = """
 import triton
 import triton.language as tl
 
@@ -35,7 +33,7 @@ def sample_matmul(
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
     acc += tl.dot(a, b)
     tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+"""
 
 
 class TestAMDBackend:
@@ -62,8 +60,11 @@ class TestAMDBackend:
         result = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
             kernel_name="test_matmul",
-            block_m=128, block_n=128, block_k=32,
-            num_warps=8, num_stages=3,
+            block_m=128,
+            block_n=128,
+            block_k=32,
+            num_warps=8,
+            num_stages=3,
         )
         assert isinstance(result, AMDCompilationResult)
         assert result.arch == "gfx942"
@@ -78,12 +79,16 @@ class TestAMDBackend:
         result1 = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
             kernel_name="cache_test",
-            block_m=128, block_n=128, block_k=32,
+            block_m=128,
+            block_n=128,
+            block_k=32,
         )
         result2 = backend.compile_kernel(
             kernel_source=SAMPLE_KERNEL,
             kernel_name="cache_test",
-            block_m=128, block_n=128, block_k=32,
+            block_m=128,
+            block_n=128,
+            block_k=32,
         )
         # If both compiled, the second should be a cache hit
         if result1.is_usable and result2.is_usable:

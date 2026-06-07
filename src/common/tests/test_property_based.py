@@ -11,7 +11,6 @@ Uses Hypothesis to test that:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -32,6 +31,7 @@ class TestCommonInvariants:
     @settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow])
     def test_tuning_config_roundtrip(self, block_m: int, block_n: int, block_k: int) -> None:
         from src.common.types import TuningConfig
+
         c = TuningConfig(block_m=block_m, block_n=block_n, block_k=block_k)
         assert c.block_m == block_m
         assert c.block_n == block_n
@@ -45,6 +45,7 @@ class TestCommonInvariants:
     @settings(max_examples=20)
     def test_mesh_shape_total_devices(self, axes: list[int]) -> None:
         from src.common.types import MeshShape
+
         m = MeshShape(axes=tuple(axes))
         # total_devices is the product of axes
         expected = 1
@@ -61,17 +62,23 @@ class TestCommonInvariants:
     @settings(max_examples=20)
     def test_fat_binary_dedupes_by_vendor_arch(self, n: int) -> None:
         from src.common.types import Arch, FatBinary, KernelSection, SectionFormat, Vendor
+
         fb = FatBinary(kernel_name="k")
         for i in range(n):
-            fb.add_section(KernelSection(
-                vendor=Vendor.NVIDIA, arch=Arch.SM_90,
-                format=SectionFormat.PTX, data=f"x{i}".encode(),
-            ))
+            fb.add_section(
+                KernelSection(
+                    vendor=Vendor.NVIDIA,
+                    arch=Arch.SM_90,
+                    format=SectionFormat.PTX,
+                    data=f"x{i}".encode(),
+                )
+            )
         assert len(fb.sections) == 1  # all same vendor+arch
-        assert fb.sections[0].data == f"x{n-1}".encode()  # last write wins
+        assert fb.sections[0].data == f"x{n - 1}".encode()  # last write wins
 
     def test_error_codes_unique(self) -> None:
         from src.common.errors import ErrorCode
+
         codes = [c.value for c in ErrorCode]
         assert len(codes) == len(set(codes))
 
@@ -83,6 +90,7 @@ class TestCommonInvariants:
         """Each arch's vendor should be deterministic."""
         # Check all arches
         from src.common.types import Arch, Vendor
+
         for arch in Arch:
             assert isinstance(arch.vendor, Vendor)
             # Same arch always maps to same vendor
@@ -97,6 +105,7 @@ class TestCommonInvariants:
         """Mesh axes must be < len(mesh.axes)."""
         from src.common.errors import ConfigError
         from src.common.types import MeshShape, ShardingSpecLite, TensorShardingLite
+
         axes = tuple([axis_size] * n_axes)
         m = MeshShape(axes=axes)
         bad = TensorShardingLite(

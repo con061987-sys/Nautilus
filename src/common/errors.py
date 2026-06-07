@@ -120,9 +120,7 @@ class NautilusError(Exception):
         super().__init__(self.message)
         # Capture the call-site traceback for debugging
         if not self._traceback:
-            self._traceback = "".join(
-                traceback.format_stack(limit=8)[:-1]
-            )
+            self._traceback = "".join(traceback.format_stack(limit=8)[:-1])
         if self.cause is not None and not self.__cause__:
             self.__cause__ = self.cause
 
@@ -387,6 +385,7 @@ class TotalBudgetExceededError(NautilusError):
 @dataclass
 class BridgeError(NautilusError):
     """Generic bridge error for unspecified failures."""
+
     code: ErrorCode = ErrorCode.BRIDGE_ERROR
 
 
@@ -398,6 +397,7 @@ class CallbackError(NautilusError):
     Distinct from BridgeError so callers can pattern-match on the
     callback failure mode without inspecting messages.
     """
+
     code: ErrorCode = ErrorCode.CALLBACK_FAILED
 
 

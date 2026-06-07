@@ -1,41 +1,23 @@
 """Pytest conftest for pytorch_xla bridge tests.
 
 Re-exports the ``sharding_bridge`` fixture from the project-level
-test harness and registers the CLI options required by those fixtures.
+test harness (``src/tests/conftest.py``).
+
+The ``--evidence-dir`` and ``--use-real-backend`` CLI options plus
+the ``use_real_backend`` / ``evidence`` markers are registered by
+the project-level conftest. Re-registering them here would cause a
+pytest conflict (group.addoption on an already-registered name
+fails in strict mode) so we only import the fixture.
 """
+
 from __future__ import annotations
 
-import pytest
-
-
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """Register CLI options used by the project-level bridge fixtures."""
-    group = parser.getgroup("harness", "Bridge harness options")
-    group.addoption(
-        "--evidence-dir",
-        action="store",
-        default=None,
-        help="Directory to write evidence files.",
-    )
-    group.addoption(
-        "--use-real-backend",
-        action="store_true",
-        default=False,
-        help="Use real (non-mocked) backends in bridge fixtures.",
-    )
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    """Register custom markers used by the harness fixtures."""
-    config.addinivalue_line(
-        "markers",
-        "use_real_backend: opt this test into real (non-mocked) bridge backends.",
-    )
-    config.addinivalue_line(
-        "markers",
-        "evidence: tag a test that intentionally writes evidence artifacts.",
-    )
-
-
-# Re-export the sharding_bridge fixture from the project-level harness.
+from src.tests.conftest import aot_packager  # noqa: F401
+from src.tests.conftest import auto_tuning_bridge  # noqa: F401
+from src.tests.conftest import clean_cache  # noqa: F401
+from src.tests.conftest import cuda_ingestor  # noqa: F401
+from src.tests.conftest import evidence_capture  # noqa: F401
+from src.tests.conftest import evidence_dir  # noqa: F401
+from src.tests.conftest import repo_root  # noqa: F401
 from src.tests.conftest import sharding_bridge  # noqa: E402, F401
+from src.tests.conftest import any_gpu_available  # noqa: F401

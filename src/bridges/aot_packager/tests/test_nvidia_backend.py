@@ -10,7 +10,7 @@ from src.bridges.aot_packager.nvidia_backend import (
     NvidiaCompilationResult,
 )
 
-SAMPLE_KERNEL = '''
+SAMPLE_KERNEL = """
 import triton
 import triton.language as tl
 
@@ -33,7 +33,7 @@ def sample_matmul(
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
     acc += tl.dot(a, b)
     tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+"""
 
 
 class TestNvidiaBackend:

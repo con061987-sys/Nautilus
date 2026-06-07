@@ -50,8 +50,9 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    import torch  # type: ignore[import-not-found]
-    import torch.distributed as dist  # type: ignore[import-not-found]
+    import torch
+    import torch.distributed as dist
+
     TORCH_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised in torch-less envs
     torch = None  # type: ignore[assignment]
@@ -110,10 +111,7 @@ def detect_p2p_capability(
     if src.vendor == dst.vendor and src.interconnect in high_bw_intra:
         return P2PCapability.FULL
 
-    if (
-        src.interconnect == InterconnectType.UALINK
-        and dst.interconnect == InterconnectType.UALINK
-    ):
+    if src.interconnect == InterconnectType.UALINK and dst.interconnect == InterconnectType.UALINK:
         return P2PCapability.FULL
 
     if (
@@ -524,7 +522,7 @@ class RCCLBackend(_TorchDistributedBackend):
     _library = CommLibrary.RCCL
     _vendor = DeviceVendor.AMD
     _torch_backend_name = "nccl"  # RCCL reuses the "nccl" backend name
-    _device_kind = "cuda"          # ROCm presents itself as cuda to torch
+    _device_kind = "cuda"  # ROCm presents itself as cuda to torch
 
     def _probe_availability(self) -> bool:
         """RCCL needs the nccl backend name *and* an AMD device on cuda."""
@@ -789,13 +787,13 @@ def make_backend(
 
 
 __all__ = [
+    "TORCH_AVAILABLE",
     "CollectiveBackend",
-    "NCCLBackend",
-    "RCCLBackend",
-    "oneCCLBackend",
     "CrossVendorBridge",
+    "NCCLBackend",
     "P2PCapability",
+    "RCCLBackend",
     "detect_p2p_capability",
     "make_backend",
-    "TORCH_AVAILABLE",
+    "oneCCLBackend",
 ]

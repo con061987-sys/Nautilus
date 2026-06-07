@@ -17,7 +17,7 @@ Production features:
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from src.common.logging import get_logger
@@ -37,6 +37,7 @@ try:
         FatBinaryConfig,
         FatBinaryResult,
     )
+
     FAT_BINARY_AVAILABLE = True
 except ImportError:
     FAT_BINARY_AVAILABLE = False
@@ -47,6 +48,7 @@ logger = get_logger(__name__)
 @dataclass
 class ShardExecutionResult:
     """Result of executing a single shard."""
+
     shard_id: int
     vendor: str
     arch: str
@@ -133,7 +135,8 @@ class ShardExecutor:
                         "StableHLO module has no mlir_text; cannot translate to Triton"
                     )
                 kernel_source = self._generate_shard_source(
-                    stablehlo_mlir_text, kernel_name=kernel_name,
+                    stablehlo_mlir_text,
+                    kernel_name=kernel_name,
                 )
                 config = FatBinaryConfig(
                     kernel_name=kernel_name,

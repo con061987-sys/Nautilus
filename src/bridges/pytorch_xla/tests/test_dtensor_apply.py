@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.bridges.pytorch_xla.device_mesh import (
     DeviceMesh,
     DeviceVendor,

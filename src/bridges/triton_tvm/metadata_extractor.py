@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-import types
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -23,6 +22,7 @@ class KernelMetadata:
     mathematical structure. It contains everything needed to construct
     an equivalent TVM TIR PrimFunc for MetaSchedule tuning.
     """
+
     # Kernel identity
     kernel_name: str
     source_hash: str  # SHA-256 of kernel source (body only, no filename)
@@ -48,9 +48,9 @@ class KernelMetadata:
     is_elementwise: bool = False
 
     # Matmul-specific (if applicable)
-    matmul_m: Optional[int] = None
-    matmul_n: Optional[int] = None
-    matmul_k: Optional[int] = None
+    matmul_m: int | None = None
+    matmul_n: int | None = None
+    matmul_k: int | None = None
 
     def __post_init__(self) -> None:
         """Validate metadata fields."""
@@ -68,10 +68,17 @@ class KernelMetadata:
         """
         parts = [
             self.source_hash,
-            str(self.grid_0), str(self.grid_1), str(self.grid_2),
-            str(self.num_warps), str(self.num_stages), str(self.num_ctas),
-            str(self.arg_shapes), str(self.arg_dtypes),
-            str(self.matmul_m), str(self.matmul_n), str(self.matmul_k),
+            str(self.grid_0),
+            str(self.grid_1),
+            str(self.grid_2),
+            str(self.num_warps),
+            str(self.num_stages),
+            str(self.num_ctas),
+            str(self.arg_shapes),
+            str(self.arg_dtypes),
+            str(self.matmul_m),
+            str(self.matmul_n),
+            str(self.matmul_k),
         ]
         return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
@@ -229,6 +236,7 @@ class MetadataExtractor:
 def _torch_dtype_to_str(dtype: torch.dtype) -> str:
     """Map torch.dtype to string representation."""
     import torch  # local import: helper must work independently of extract_from_call
+
     mapping = {
         torch.float32: "float32",
         torch.float16: "float16",

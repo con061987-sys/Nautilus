@@ -142,7 +142,7 @@ class BenchmarkResult:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> BenchmarkResult:
         """Deserialize. Silently drops unknown keys for forward compat."""
-        known = {f for f in cls.__dataclass_fields__}  # type: ignore[attr-defined]
+        known = {f for f in cls.__dataclass_fields__}
         filtered = {k: v for k, v in data.items() if k in known}
         return cls(**filtered)
 

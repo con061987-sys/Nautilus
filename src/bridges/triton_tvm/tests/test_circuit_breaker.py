@@ -172,8 +172,14 @@ class TestDefaultBreakers:
         """All expected breakers should be present."""
         breakers = get_default_breakers()
         expected = {
-            "triton_compile", "triton_aot", "tvm_tune", "tvm_compile",
-            "aotriton", "oneapi", "fat_binary_link", "hardware_validation",
+            "triton_compile",
+            "triton_aot",
+            "tvm_tune",
+            "tvm_compile",
+            "aotriton",
+            "oneapi",
+            "fat_binary_link",
+            "hardware_validation",
         }
         assert set(breakers.keys()) == expected
 
@@ -181,7 +187,10 @@ class TestDefaultBreakers:
         """Each breaker should have a non-default configuration."""
         breakers = get_default_breakers()
         # tvm_tune should have a longer cooldown than triton_compile
-        assert breakers["tvm_tune"].config.cooldown_seconds > breakers["triton_compile"].config.cooldown_seconds
+        assert (
+            breakers["tvm_tune"].config.cooldown_seconds
+            > breakers["triton_compile"].config.cooldown_seconds
+        )
 
     def test_breakers_are_registered(self) -> None:
         """Each default breaker should be in the global registry."""
@@ -339,9 +348,7 @@ class TestLRUCacheProperties:
             elif op == "get":
                 got = cache.get(k)
                 expected = ref_get(k)
-                assert got == expected, (
-                    f"get({k!r}) returned {got!r}, oracle returned {expected!r}"
-                )
+                assert got == expected, f"get({k!r}) returned {got!r}, oracle returned {expected!r}"
             elif op == "touch":
                 try:
                     got = cache[k]
@@ -352,21 +359,16 @@ class TestLRUCacheProperties:
                     f"touch({k!r}) returned {got!r}, oracle returned {expected!r}"
                 )
 
-            assert len(cache) <= maxsize, (
-                f"size {len(cache)} > maxsize {maxsize} after {op}({k!r})"
-            )
+            assert len(cache) <= maxsize, f"size {len(cache)} > maxsize {maxsize} after {op}({k!r})"
             assert set(cache.keys()) == set(ref_data.keys()), (
-                f"key sets diverge: cache={set(cache.keys())}, "
-                f"ref={set(ref_data.keys())}"
+                f"key sets diverge: cache={set(cache.keys())}, ref={set(ref_data.keys())}"
             )
             for key in ref_data:
                 assert cache[key] == ref_data[key], (
-                    f"value for {key!r} differs: cache={cache[key]!r}, "
-                    f"ref={ref_data[key]!r}"
+                    f"value for {key!r} differs: cache={cache[key]!r}, ref={ref_data[key]!r}"
                 )
             assert list(cache.keys()) == list(ref_data.keys()), (
-                f"iteration order diverges: cache={list(cache.keys())}, "
-                f"ref={list(ref_data.keys())}"
+                f"iteration order diverges: cache={list(cache.keys())}, ref={list(ref_data.keys())}"
             )
 
     @given(
@@ -398,6 +400,5 @@ class TestLRUCacheProperties:
             f"of LRU {expected_lru!r}. cache now contains {list(cache.keys())!r}"
         )
         assert expected_lru not in cache, (
-            f"LRU key {expected_lru!r} should have been evicted, not the "
-            f"touched key {victim!r}"
+            f"LRU key {expected_lru!r} should have been evicted, not the touched key {victim!r}"
         )

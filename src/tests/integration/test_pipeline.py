@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -25,7 +24,6 @@ from src.cli.commands.pipeline import (
     Pipeline,
     PipelineContext,
     PipelineStage,
-    StageOutcome,
     _parse_mesh,
     _parse_targets,
     _register_handlers,
@@ -33,11 +31,8 @@ from src.cli.commands.pipeline import (
 )
 from src.common.errors import (
     ConfigError,
-    DependencyMissingError,
-    NautilusError,
 )
 from src.common.types import Arch, HardwareTarget, Vendor
-
 
 EXAMPLE_KERNEL = textwrap.dedent('''
     import triton
@@ -81,7 +76,12 @@ class TestPipelineStage:
 
     def test_values(self) -> None:
         assert PipelineStage.values() == [
-            "capture", "shard", "extract", "tune", "build", "dispatch",
+            "capture",
+            "shard",
+            "extract",
+            "tune",
+            "build",
+            "dispatch",
         ]
 
     def test_from_str_valid(self) -> None:
@@ -102,9 +102,12 @@ class TestPipelineStage:
         suffix = PipelineStage.stages_from(PipelineStage.BUILD)
         assert [s.value for s in suffix] == ["build", "dispatch"]
         # From dispatch
-        assert [s.value for s in PipelineStage.stages_from(
-            PipelineStage.DISPATCH,
-        )] == ["dispatch"]
+        assert [
+            s.value
+            for s in PipelineStage.stages_from(
+                PipelineStage.DISPATCH,
+            )
+        ] == ["dispatch"]
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +209,7 @@ class TestCliRegistration:
 
     def test_pipeline_in_cli(self) -> None:
         from src.cli.main import cli as main_cli
+
         assert "pipeline" in main_cli.commands
 
     def test_pipeline_help(self) -> None:
@@ -244,13 +248,17 @@ class TestPipelineDryRun:
     """Dry-run must execute no expensive stage and still produce a plan."""
 
     def test_dry_run_all_stages(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         kernel = _make_kernel_file(tmp_path)
         ctx = _make_context(tmp_path, kernel)
         targets = [HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)]
         pipeline = Pipeline(
-            ctx=ctx, targets=targets, dry_run=True,
+            ctx=ctx,
+            targets=targets,
+            dry_run=True,
         )
         # Patch the stage handlers to make sure dry-run NEVER calls them.
         called = {"n": 0}
@@ -264,7 +272,9 @@ class TestPipelineDryRun:
                 # Dispatch always runs (it just emits a plan).
                 continue
             monkeypatch.setitem(
-                _STAGE_HANDLERS_DICT(), stage, _spy,
+                _STAGE_HANDLERS_DICT(),
+                stage,
+                _spy,
             )
 
         outcomes = pipeline.run()
@@ -273,8 +283,7 @@ class TestPipelineDryRun:
         # All 6 stages report success in dry-run.
         assert len(outcomes) == 6
         assert all(o.success for o in outcomes)
-        assert all(o.dry_run for o in outcomes
-                   if o.stage != PipelineStage.DISPATCH)
+        assert all(o.dry_run for o in outcomes if o.stage != PipelineStage.DISPATCH)
         # State was not persisted (dry-run).
         assert not (tmp_path / "out" / "state.json").exists()
 
@@ -283,6 +292,7 @@ def _STAGE_HANDLERS_DICT():
     """Return the live registry of stage handlers (re-bound on first call)."""
     _register_handlers()
     from src.cli.commands.pipeline import _STAGE_HANDLERS
+
     return _STAGE_HANDLERS
 
 
@@ -290,13 +300,16 @@ class TestPipelineResume:
     """--resume-from must use state.json from a previous run."""
 
     def test_resume_without_state_fails(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         kernel = _make_kernel_file(tmp_path)
         ctx = _make_context(tmp_path, kernel)
         targets = [HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)]
         pipeline = Pipeline(
-            ctx=ctx, targets=targets,
+            ctx=ctx,
+            targets=targets,
             resume_from=PipelineStage.BUILD,
         )
         with pytest.raises(ConfigError) as excinfo:
@@ -304,7 +317,9 @@ class TestPipelineResume:
         assert "Cannot resume" in str(excinfo.value)
 
     def test_resume_with_state(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         kernel = _make_kernel_file(tmp_path)
         ctx = _make_context(tmp_path, kernel)
@@ -315,13 +330,18 @@ class TestPipelineResume:
         ctx.captured_graph_text = EXAMPLE_KERNEL
         ctx.captured_graph_hash = "abc123"
         ctx.extracted_kernels = [
-            {"name": "matmul_kernel", "source_hash": "abc123",
-             "lines": 1, "shard_id": 0},
+            {"name": "matmul_kernel", "source_hash": "abc123", "lines": 1, "shard_id": 0},
         ]
-        ctx.tuning_configs = {"matmul_kernel": {
-            "block_m": 128, "block_n": 128, "block_k": 32,
-            "num_warps": 4, "num_stages": 3, "num_ctas": 1,
-        }}
+        ctx.tuning_configs = {
+            "matmul_kernel": {
+                "block_m": 128,
+                "block_n": 128,
+                "block_k": 32,
+                "num_warps": 4,
+                "num_stages": 3,
+                "num_ctas": 1,
+            }
+        }
         ctx.mesh_axes = [1]
         ctx.shard_count = 1
         ctx.sharding_cache_key = "k1"
@@ -333,28 +353,37 @@ class TestPipelineResume:
         targets = [HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)]
         # Make the build stage a no-op so we don't depend on lld.
         from src.cli.commands.pipeline import _STAGE_HANDLERS
+
         captured_stages = []
 
         real_build = _STAGE_HANDLERS[PipelineStage.BUILD]
 
         def _spy_build():
             captured_stages.append("build")
-            return {"output_path": str(out / "stub.fat.o"),
-                    "vendors": ["nvidia"], "skipped": [],
-                    "elapsed_s": 0.0}
+            return {
+                "output_path": str(out / "stub.fat.o"),
+                "vendors": ["nvidia"],
+                "skipped": [],
+                "elapsed_s": 0.0,
+            }
 
         monkeypatch.setitem(
-            _STAGE_HANDLERS, PipelineStage.BUILD, _spy_build,
+            _STAGE_HANDLERS,
+            PipelineStage.BUILD,
+            _spy_build,
         )
         try:
             pipeline = Pipeline(
-                ctx=ctx, targets=targets,
+                ctx=ctx,
+                targets=targets,
                 resume_from=PipelineStage.BUILD,
             )
             outcomes = pipeline.run()
         finally:
             monkeypatch.setitem(
-                _STAGE_HANDLERS, PipelineStage.BUILD, real_build,
+                _STAGE_HANDLERS,
+                PipelineStage.BUILD,
+                real_build,
             )
 
         # Build + Dispatch should have run.
@@ -371,7 +400,8 @@ class TestPipelineStageFailure:
     """A stage failure should produce a typed NautilusError naming the stage."""
 
     def test_capture_failure_on_missing_file(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         ctx = _make_context(tmp_path, tmp_path / "missing.py")
         targets = [HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)]
@@ -387,13 +417,19 @@ class TestPipelineStageFailure:
         assert len(outcomes) == 1
 
     def test_click_command_propagates_error(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            [str(tmp_path / "missing.py"), "--target", "nvidia/sm_90",
-             "--output-dir", str(tmp_path / "out")],
+            [
+                str(tmp_path / "missing.py"),
+                "--target",
+                "nvidia/sm_90",
+                "--output-dir",
+                str(tmp_path / "out"),
+            ],
         )
         # Click catches the exception and exits non-zero.
         assert result.exit_code != 0
@@ -406,7 +442,9 @@ class TestPipelineGracefulDegradation:
     """Missing optional dependencies must NOT crash the pipeline."""
 
     def test_pipeline_runs_with_deps_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Use a kernel file so capture has something to find.
         kernel = _make_kernel_file(tmp_path)
@@ -415,10 +453,10 @@ class TestPipelineGracefulDegradation:
 
         # Force TVM/Triton bridge to fail to import so tune degrades.
         import builtins
+
         original_import = builtins.__import__
 
-        def _blocked_import(name, globals=None, locals=None,  # noqa: ANN001
-                            fromlist=(), level=0):
+        def _blocked_import(name, globals=None, locals=None, fromlist=(), level=0):
             if name.startswith("src.bridges.triton_tvm"):
                 raise ImportError("simulated missing triton_tvm")
             if name.startswith("src.bridges.aot_packager"):
@@ -448,7 +486,8 @@ class TestPipelineHappyPath:
     """Full pipeline run on a kernel file (no torch / TVM / lld)."""
 
     def test_kernel_pipeline_runs_to_completion(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         kernel = _make_kernel_file(tmp_path)
         runner = CliRunner()
@@ -456,16 +495,17 @@ class TestPipelineHappyPath:
             cli,
             [
                 str(kernel),
-                "--target", "nvidia/sm_90",
-                "--output-dir", str(tmp_path / "out"),
-                "--trials", "1",
+                "--target",
+                "nvidia/sm_90",
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--trials",
+                "1",
             ],
         )
         # The pipeline may succeed or may report skipped vendors.
         # Either way, exit code is 0 (graceful degradation).
-        assert result.exit_code in (0, 2), (
-            f"unexpected exit: {result.output}\n{result.exception}"
-        )
+        assert result.exit_code in (0, 2), f"unexpected exit: {result.output}\n{result.exception}"
         # The per-stage summary must appear in stdout.
         assert "PIPELINE SUMMARY" in result.output
         assert "capture" in result.output
@@ -477,7 +517,8 @@ class TestPipelineHappyPath:
         assert (tmp_path / "out" / "dispatch_plan.json").exists()
 
     def test_dry_run_via_click(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         kernel = _make_kernel_file(tmp_path)
         runner = CliRunner()
@@ -485,8 +526,10 @@ class TestPipelineHappyPath:
             cli,
             [
                 str(kernel),
-                "--target", "nvidia/sm_90",
-                "--output-dir", str(tmp_path / "out"),
+                "--target",
+                "nvidia/sm_90",
+                "--output-dir",
+                str(tmp_path / "out"),
                 "--dry-run",
             ],
         )
@@ -515,6 +558,7 @@ class TestHandlerRegistration:
     def test_all_stages_have_handlers(self) -> None:
         _register_handlers()
         from src.cli.commands.pipeline import _STAGE_HANDLERS
+
         for stage in PipelineStage:
             assert stage in _STAGE_HANDLERS
             assert callable(_STAGE_HANDLERS[stage])

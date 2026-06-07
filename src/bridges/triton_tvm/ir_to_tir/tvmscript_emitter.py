@@ -152,7 +152,7 @@ class TVMScriptEmitter:
         shape = arg_type.shape or (1,)
         shape_str = ", ".join(str(d) for d in shape)
         dtype = arg_type.element_dtype
-        return f"{clean_name}: T.Buffer(({shape_str}), \"{dtype}\")"
+        return f'{clean_name}: T.Buffer(({shape_str}), "{dtype}")'
 
     def _emit_alloc_buffers(self, func: TTGIRFunction) -> list[str]:
         """Emit T.alloc_buffer for every tensor arg.
@@ -173,7 +173,7 @@ class TVMScriptEmitter:
             shape_str = ", ".join(str(d) for d in shape)
             decls.append(
                 f"    {clean_name}_buf = T.alloc_buffer(({shape_str}), "
-                f"dtype=\"{arg_type.element_dtype}\")",
+                f'dtype="{arg_type.element_dtype}")',
             )
         return decls
 
@@ -430,7 +430,10 @@ class TVMScriptEmitter:
     # ------------------------------------------------------------------
 
     def _emit_binary_op(
-        self, op: TTGIROperation, indent: int, fn_name: str,
+        self,
+        op: TTGIROperation,
+        indent: int,
+        fn_name: str,
     ) -> list[str]:
         """Emit a binary arithmetic op as ``result = fn(a, b)``."""
         prefix = "    " * indent
@@ -444,7 +447,10 @@ class TVMScriptEmitter:
         return [f"{prefix}{result} = {fn_name}({a}, {b})"]
 
     def _emit_unary_op(
-        self, op: TTGIROperation, indent: int, fn_name: str,
+        self,
+        op: TTGIROperation,
+        indent: int,
+        fn_name: str,
     ) -> list[str]:
         """Emit a unary op as ``result = fn(a)``."""
         prefix = "    " * indent
@@ -546,8 +552,7 @@ class TVMScriptEmitter:
         args = f"{a}, {b}" + (f", {c}" if c else "")
         return [
             f"{prefix}# tt.dot survived dot-split; emitting extern call",
-            f"{prefix}{result} = T.tvm_call_cpacked("
-            f"\"nautilus_matmul\", {args})",
+            f'{prefix}{result} = T.tvm_call_cpacked("nautilus_matmul", {args})',
         ]
 
     # ------------------------------------------------------------------
@@ -555,7 +560,9 @@ class TVMScriptEmitter:
     # ------------------------------------------------------------------
 
     def _emit_get_program_id(
-        self, op: TTGIROperation, indent: int,
+        self,
+        op: TTGIROperation,
+        indent: int,
     ) -> list[str]:
         """Emit ``pid = T.launch_thread(axis, 1)`` for ``tt.get_program_id``."""
         prefix = "    " * indent
@@ -564,7 +571,9 @@ class TVMScriptEmitter:
         return [f"{prefix}{result} = T.launch_thread({axis}, 1)"]
 
     def _emit_get_num_programs(
-        self, op: TTGIROperation, indent: int,
+        self,
+        op: TTGIROperation,
+        indent: int,
     ) -> list[str]:
         """Emit ``n = T.launch_thread(axis, 1)`` for ``tt.get_num_programs``."""
         prefix = "    " * indent

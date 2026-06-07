@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import functools
 import json
-import os
 import platform
 import re
 import shlex
@@ -43,14 +42,13 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from src.common.errors import (
     HardwareNotFoundError,
     HardwareProbeError,
 )
 from src.common.types import Vendor
-
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -76,14 +74,15 @@ class GpuVendor(str, Enum):
 
 class LinkType(str, Enum):
     """Interconnect link between two devices (or device<->host)."""
+
     PCIE = "pcie"
     NVLINK = "nvlink"
     NVSWITCH = "nvswitch"
     INFINITY_FABRIC = "infinity_fabric"
     XELINK = "xelink"
-    QPI = "qpi"               # Intel CPU <-> CPU
-    UALINK = "ualink"          # Universal Accelerator Link
-    HOST_RAM = "host_ram"     # Fallback: cross-device via host memory
+    QPI = "qpi"  # Intel CPU <-> CPU
+    UALINK = "ualink"  # Universal Accelerator Link
+    HOST_RAM = "host_ram"  # Fallback: cross-device via host memory
     UNKNOWN = "unknown"
 
 
@@ -108,6 +107,7 @@ PCI_VENDOR_FOR_GPU: dict[GpuVendor, str] = {
 @dataclass(frozen=True)
 class HostInfo:
     """Information about the host CPU/system."""
+
     cpu_vendor: CpuVendor
     cpu_model: str
     os: str
@@ -120,16 +120,17 @@ class HostInfo:
 @dataclass(frozen=True)
 class DeviceInfo:
     """A single GPU/accelerator device detected on the system."""
+
     vendor: GpuVendor
     device_id: int
     device_path: str
     arch: str
     model: str
     driver_version: str
-    pcie_bdf: str = ""               # e.g. "0000:01:00.0"
-    numa_node: int = -1              # -1 = unknown / not applicable
-    pcie_gen: int = 0                # 0 = unknown
-    pcie_width: int = 0              # 0 = unknown
+    pcie_bdf: str = ""  # e.g. "0000:01:00.0"
+    numa_node: int = -1  # -1 = unknown / not applicable
+    pcie_gen: int = 0  # 0 = unknown
+    pcie_width: int = 0  # 0 = unknown
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -145,13 +146,14 @@ class DeviceInfo:
 @dataclass(frozen=True)
 class TopologyLink:
     """Interconnect between two devices (or device<->host)."""
+
     source_id: int
     target_id: int
     bandwidth_gbps: float
     link_type: LinkType
     pcie_gen: int = 0
     pcie_width: int = 0
-    measured: bool = False           # True if a tool reported it; False if PCIe-gen fallback
+    measured: bool = False  # True if a tool reported it; False if PCIe-gen fallback
 
 
 @dataclass(frozen=True)
@@ -168,6 +170,7 @@ class DeviceTopology:
         host: HostInfo for the system hosting these devices.
         numa_nodes: {device_id: numa_node}. -1 means unknown.
     """
+
     devices: list[DeviceInfo]
     bandwidth_gbps: dict[tuple[int, int], float]
     links: list[TopologyLink]
@@ -275,7 +278,9 @@ def detect_host_vendor() -> CpuVendor:
         try:
             out = subprocess.run(
                 ["sysctl", "-n", "machdep.cpu.vendor"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if out.returncode == 0:
                 value = out.stdout.strip().lower()
@@ -293,7 +298,9 @@ def detect_host_vendor() -> CpuVendor:
         try:
             out = subprocess.run(
                 ["wmic", "cpu", "get", "manufacturer"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if out.returncode == 0:
                 value = out.stdout.lower()
@@ -323,7 +330,9 @@ def get_host_info() -> HostInfo:
         try:
             out = subprocess.run(
                 ["sysctl", "-n", "machdep.cpu.brand_string"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if out.returncode == 0:
                 model = out.stdout.strip()
@@ -528,12 +537,14 @@ def _is_char_device(path: Path) -> bool:
         return False
     if _is_linux():
         import stat
+
         return stat.S_ISCHR(st.st_mode)
     return path.exists()
 
 
-def scan_nvidia_devices(dev_root: Path | None = None,
-                        proc_root: Path | None = None) -> list[DeviceInfo]:
+def scan_nvidia_devices(
+    dev_root: Path | None = None, proc_root: Path | None = None
+) -> list[DeviceInfo]:
     """Dynamically scan for Nvidia devices.
 
     Sources (all optional, all consulted):
@@ -601,31 +612,36 @@ def scan_nvidia_devices(dev_root: Path | None = None,
         width = 0
         bdf = ""
         for d in _pci_device_dirs():
-            if _pci_vendor_for_dir(d) == PCI_VENDOR_NVIDIA and _is_display_class(_pci_class_for_dir(d)):
+            if _pci_vendor_for_dir(d) == PCI_VENDOR_NVIDIA and _is_display_class(
+                _pci_class_for_dir(d)
+            ):
                 # We cannot map proc index to BDF without a helper; use first match.
                 bdf = d.name
                 numa = _numa_node_for_pci_dir(d)
                 gen = _pcie_gen_for_dir(d)
                 width = _pcie_width_for_dir(d)
                 break
-        devices.append(DeviceInfo(
-            vendor=GpuVendor.NVIDIA,
-            device_id=idx,
-            device_path=path,
-            arch="",
-            model="",
-            driver_version=driver_version,
-            pcie_bdf=bdf,
-            numa_node=numa,
-            pcie_gen=gen,
-            pcie_width=width,
-            raw={"proc_indices": sorted(proc_indices)},
-        ))
+        devices.append(
+            DeviceInfo(
+                vendor=GpuVendor.NVIDIA,
+                device_id=idx,
+                device_path=path,
+                arch="",
+                model="",
+                driver_version=driver_version,
+                pcie_bdf=bdf,
+                numa_node=numa,
+                pcie_gen=gen,
+                pcie_width=width,
+                raw={"proc_indices": sorted(proc_indices)},
+            )
+        )
     return devices
 
 
-def scan_amd_devices(dev_root: Path | None = None,
-                     sysfs_pci: Path | None = None) -> list[DeviceInfo]:
+def scan_amd_devices(
+    dev_root: Path | None = None, sysfs_pci: Path | None = None
+) -> list[DeviceInfo]:
     """Dynamically scan for AMD devices.
 
     Sources:
@@ -668,24 +684,27 @@ def scan_amd_devices(dev_root: Path | None = None,
             path = str(render_paths[i][1])
         elif has_kfd:
             path = str(dev_root / "kfd")
-        devices.append(DeviceInfo(
-            vendor=GpuVendor.AMD,
-            device_id=i,
-            device_path=path,
-            arch="",
-            model="",
-            driver_version=_amd_driver_version_linux(),
-            pcie_bdf=bdf,
-            numa_node=_numa_node_for_pci_dir(dev_dir),
-            pcie_gen=_pcie_gen_for_dir(dev_dir),
-            pcie_width=_pcie_width_for_dir(dev_dir),
-            raw={"has_kfd": has_kfd},
-        ))
+        devices.append(
+            DeviceInfo(
+                vendor=GpuVendor.AMD,
+                device_id=i,
+                device_path=path,
+                arch="",
+                model="",
+                driver_version=_amd_driver_version_linux(),
+                pcie_bdf=bdf,
+                numa_node=_numa_node_for_pci_dir(dev_dir),
+                pcie_gen=_pcie_gen_for_dir(dev_dir),
+                pcie_width=_pcie_width_for_dir(dev_dir),
+                raw={"has_kfd": has_kfd},
+            )
+        )
     return devices
 
 
-def scan_intel_devices(dev_root: Path | None = None,
-                       sysfs_pci: Path | None = None) -> list[DeviceInfo]:
+def scan_intel_devices(
+    dev_root: Path | None = None, sysfs_pci: Path | None = None
+) -> list[DeviceInfo]:
     """Dynamically scan for Intel devices.
 
     Sources:
@@ -714,19 +733,21 @@ def scan_intel_devices(dev_root: Path | None = None,
             path = str(render_paths[i])
         else:
             path = str(dev_dir)
-        devices.append(DeviceInfo(
-            vendor=GpuVendor.INTEL,
-            device_id=i,
-            device_path=path,
-            arch="",
-            model="",
-            driver_version=_intel_driver_version_linux(),
-            pcie_bdf=bdf,
-            numa_node=_numa_node_for_pci_dir(dev_dir),
-            pcie_gen=_pcie_gen_for_dir(dev_dir),
-            pcie_width=_pcie_width_for_dir(dev_dir),
-            raw={},
-        ))
+        devices.append(
+            DeviceInfo(
+                vendor=GpuVendor.INTEL,
+                device_id=i,
+                device_path=path,
+                arch="",
+                model="",
+                driver_version=_intel_driver_version_linux(),
+                pcie_bdf=bdf,
+                numa_node=_numa_node_for_pci_dir(dev_dir),
+                pcie_gen=_pcie_gen_for_dir(dev_dir),
+                pcie_width=_pcie_width_for_dir(dev_dir),
+                raw={},
+            )
+        )
     return devices
 
 
@@ -742,7 +763,9 @@ def _lspci_gpu_entries() -> list[dict[str, str]]:
     try:
         out = subprocess.run(
             ["lspci", "-nn", "-mm"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except subprocess.TimeoutExpired as exc:
         raise HardwareProbeError(
@@ -804,7 +827,10 @@ def _amd_driver_version_linux() -> str:
     if shutil.which("rocm-info"):
         try:
             out = subprocess.run(
-                ["rocm-info"], capture_output=True, text=True, timeout=5,
+                ["rocm-info"],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if out.returncode == 0:
                 m = re.search(r"Version\s*:\s*([0-9.]+)", out.stdout)
@@ -826,7 +852,10 @@ def _intel_driver_version_linux() -> str:
     if shutil.which("vainfo"):
         try:
             out = subprocess.run(
-                ["vainfo"], capture_output=True, text=True, timeout=5,
+                ["vainfo"],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if out.returncode == 0:
                 m = re.search(r"Driver version\s*:\s*([0-9.]+)", out.stdout)
@@ -849,7 +878,9 @@ def _macos_gpu_info() -> list[DeviceInfo]:
     try:
         out = subprocess.run(
             ["system_profiler", "-json", "SPDisplaysDataType"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return []
@@ -874,14 +905,16 @@ def _macos_gpu_info() -> list[DeviceInfo]:
             vendor = GpuVendor.NVIDIA
         else:
             vendor = GpuVendor.UNKNOWN
-        devices.append(DeviceInfo(
-            vendor=vendor,
-            device_id=len(devices),
-            device_path="system_profiler",
-            arch=chipset,
-            model=model,
-            driver_version=entry.get("spdisplays_metal", ""),
-        ))
+        devices.append(
+            DeviceInfo(
+                vendor=vendor,
+                device_id=len(devices),
+                device_path="system_profiler",
+                arch=chipset,
+                model=model,
+                driver_version=entry.get("spdisplays_metal", ""),
+            )
+        )
     return devices
 
 
@@ -928,12 +961,16 @@ def enumerate_devices() -> tuple[DeviceInfo, ...]:
         for i, d in enumerate(nv):
             if i < len(nv_pci):
                 d = DeviceInfo(
-                    vendor=d.vendor, device_id=d.device_id, device_path=d.device_path,
+                    vendor=d.vendor,
+                    device_id=d.device_id,
+                    device_path=d.device_path,
                     arch=nv_pci[i].get("device_id", "") or d.arch,
                     model=nv_pci[i].get("device", "") or d.model,
                     driver_version=d.driver_version,
-                    pcie_bdf=d.pcie_bdf, numa_node=d.numa_node,
-                    pcie_gen=d.pcie_gen, pcie_width=d.pcie_width,
+                    pcie_bdf=d.pcie_bdf,
+                    numa_node=d.numa_node,
+                    pcie_gen=d.pcie_gen,
+                    pcie_width=d.pcie_width,
                     raw={**d.raw, "lspci": nv_pci[i]},
                 )
             devices.append(d)
@@ -941,12 +978,16 @@ def enumerate_devices() -> tuple[DeviceInfo, ...]:
         for i, d in enumerate(amd):
             if i < len(amd_pci):
                 d = DeviceInfo(
-                    vendor=d.vendor, device_id=d.device_id, device_path=d.device_path,
+                    vendor=d.vendor,
+                    device_id=d.device_id,
+                    device_path=d.device_path,
                     arch=amd_pci[i].get("device_id", "") or d.arch,
                     model=amd_pci[i].get("device", "") or d.model,
                     driver_version=d.driver_version,
-                    pcie_bdf=d.pcie_bdf, numa_node=d.numa_node,
-                    pcie_gen=d.pcie_gen, pcie_width=d.pcie_width,
+                    pcie_bdf=d.pcie_bdf,
+                    numa_node=d.numa_node,
+                    pcie_gen=d.pcie_gen,
+                    pcie_width=d.pcie_width,
                     raw={**d.raw, "lspci": amd_pci[i]},
                 )
             devices.append(d)
@@ -954,12 +995,16 @@ def enumerate_devices() -> tuple[DeviceInfo, ...]:
         for i, d in enumerate(intel):
             if i < len(intel_pci):
                 d = DeviceInfo(
-                    vendor=d.vendor, device_id=d.device_id, device_path=d.device_path,
+                    vendor=d.vendor,
+                    device_id=d.device_id,
+                    device_path=d.device_path,
                     arch=intel_pci[i].get("device_id", "") or d.arch,
                     model=intel_pci[i].get("device", "") or d.model,
                     driver_version=d.driver_version,
-                    pcie_bdf=d.pcie_bdf, numa_node=d.numa_node,
-                    pcie_gen=d.pcie_gen, pcie_width=d.pcie_width,
+                    pcie_bdf=d.pcie_bdf,
+                    numa_node=d.numa_node,
+                    pcie_gen=d.pcie_gen,
+                    pcie_width=d.pcie_width,
                     raw={**d.raw, "lspci": intel_pci[i]},
                 )
             devices.append(d)
@@ -971,9 +1016,17 @@ def enumerate_devices() -> tuple[DeviceInfo, ...]:
         if shutil.which("wmic"):
             try:
                 out = subprocess.run(
-                    ["wmic", "path", "win32_VideoController", "get",
-                     "Name,AdapterCompatibility,DriverVersion", "/format:list"],
-                    capture_output=True, text=True, timeout=10,
+                    [
+                        "wmic",
+                        "path",
+                        "win32_VideoController",
+                        "get",
+                        "Name,AdapterCompatibility,DriverVersion",
+                        "/format:list",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
                 for block in out.stdout.split("\n\n"):
                     entry: dict[str, str] = {}
@@ -993,14 +1046,16 @@ def enumerate_devices() -> tuple[DeviceInfo, ...]:
                         vendor = GpuVendor.INTEL
                     else:
                         vendor = GpuVendor.UNKNOWN
-                    devices.append(DeviceInfo(
-                        vendor=vendor,
-                        device_id=len(devices),
-                        device_path="wmic",
-                        arch="",
-                        model=name,
-                        driver_version=entry.get("DriverVersion", ""),
-                    ))
+                    devices.append(
+                        DeviceInfo(
+                            vendor=vendor,
+                            device_id=len(devices),
+                            device_path="wmic",
+                            arch="",
+                            model=name,
+                            driver_version=entry.get("DriverVersion", ""),
+                        )
+                    )
             except subprocess.TimeoutExpired as exc:
                 raise HardwareProbeError(
                     "wmic timed out",
@@ -1101,10 +1156,14 @@ def _nvidia_pcie_link_query() -> dict[int, tuple[int, int]]:
         return {}
     try:
         out = subprocess.run(
-            ["nvidia-smi",
-             "--query-gpu=index,pcie.link.gen.current,pcie.link.width.current",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=10,
+            [
+                "nvidia-smi",
+                "--query-gpu=index,pcie.link.gen.current,pcie.link.width.current",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return {}
@@ -1135,7 +1194,9 @@ def _amd_pcie_link_query() -> dict[int, tuple[int, int]]:
     try:
         out = subprocess.run(
             ["rocm-smi", "--showlinkinfo"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return {}
@@ -1170,7 +1231,9 @@ def _nvidia_nvlink_topology() -> dict[tuple[int, int], float]:
     try:
         out = subprocess.run(
             ["nvidia-smi", "topo", "-m"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return {}
@@ -1199,7 +1262,7 @@ def _nvidia_nvlink_topology() -> dict[tuple[int, int], float]:
     # but more conservatively we report 25.0 Gbps per "NV1" link and skip
     # ambiguous entries. 0 (no link) is reported as 0 Gbps.
     result: dict[tuple[int, int], float] = {}
-    for line in lines[lines.index(header) + 1:]:
+    for line in lines[lines.index(header) + 1 :]:
         parts = re.split(r"\s+", line.strip())
         if not parts or not parts[0].startswith("GPU"):
             continue
@@ -1280,10 +1343,12 @@ def _sort_numa_first(devices: list[DeviceInfo]) -> list[DeviceInfo]:
 
     Devices with unknown NUMA (numa_node == -1) are grouped at the end.
     """
+
     def key(d: DeviceInfo) -> tuple[int, int, int]:
         # unknown NUMA at the end: use 10**9 as the sort key
         numa_key = d.numa_node if d.numa_node >= 0 else 10**9
         return (numa_key, d.vendor.value, d.device_id)
+
     return sorted(devices, key=key)
 
 
@@ -1314,13 +1379,21 @@ def discover_topology() -> DeviceTopology:
         for d in devices:
             if d.vendor == GpuVendor.NVIDIA and d.device_id in nv_link:
                 gen, width = nv_link[d.device_id]
-                enriched.append(DeviceInfo(
-                    vendor=d.vendor, device_id=d.device_id, device_path=d.device_path,
-                    arch=d.arch, model=d.model, driver_version=d.driver_version,
-                    pcie_bdf=d.pcie_bdf, numa_node=d.numa_node,
-                    pcie_gen=gen or d.pcie_gen, pcie_width=width or d.pcie_width,
-                    raw=d.raw,
-                ))
+                enriched.append(
+                    DeviceInfo(
+                        vendor=d.vendor,
+                        device_id=d.device_id,
+                        device_path=d.device_path,
+                        arch=d.arch,
+                        model=d.model,
+                        driver_version=d.driver_version,
+                        pcie_bdf=d.pcie_bdf,
+                        numa_node=d.numa_node,
+                        pcie_gen=gen or d.pcie_gen,
+                        pcie_width=width or d.pcie_width,
+                        raw=d.raw,
+                    )
+                )
             else:
                 enriched.append(d)
         devices = enriched
@@ -1331,13 +1404,21 @@ def discover_topology() -> DeviceTopology:
         for d in devices:
             if d.vendor == GpuVendor.AMD and d.device_id in amd_link:
                 gen, width = amd_link[d.device_id]
-                enriched.append(DeviceInfo(
-                    vendor=d.vendor, device_id=d.device_id, device_path=d.device_path,
-                    arch=d.arch, model=d.model, driver_version=d.driver_version,
-                    pcie_bdf=d.pcie_bdf, numa_node=d.numa_node,
-                    pcie_gen=gen or d.pcie_gen, pcie_width=width or d.pcie_width,
-                    raw=d.raw,
-                ))
+                enriched.append(
+                    DeviceInfo(
+                        vendor=d.vendor,
+                        device_id=d.device_id,
+                        device_path=d.device_path,
+                        arch=d.arch,
+                        model=d.model,
+                        driver_version=d.driver_version,
+                        pcie_bdf=d.pcie_bdf,
+                        numa_node=d.numa_node,
+                        pcie_gen=gen or d.pcie_gen,
+                        pcie_width=width or d.pcie_width,
+                        raw=d.raw,
+                    )
+                )
             else:
                 enriched.append(d)
         devices = enriched
@@ -1350,13 +1431,21 @@ def discover_topology() -> DeviceTopology:
     # 0..N-1 in NUMA-friendly order. This is the contract callers expect.
     renumbered: list[DeviceInfo] = []
     for new_id, d in enumerate(devices):
-        renumbered.append(DeviceInfo(
-            vendor=d.vendor, device_id=new_id, device_path=d.device_path,
-            arch=d.arch, model=d.model, driver_version=d.driver_version,
-            pcie_bdf=d.pcie_bdf, numa_node=d.numa_node,
-            pcie_gen=d.pcie_gen, pcie_width=d.pcie_width,
-            raw=d.raw,
-        ))
+        renumbered.append(
+            DeviceInfo(
+                vendor=d.vendor,
+                device_id=new_id,
+                device_path=d.device_path,
+                arch=d.arch,
+                model=d.model,
+                driver_version=d.driver_version,
+                pcie_bdf=d.pcie_bdf,
+                numa_node=d.numa_node,
+                pcie_gen=d.pcie_gen,
+                pcie_width=d.pcie_width,
+                raw=d.raw,
+            )
+        )
     devices = renumbered
 
     # Probe NVLink / vendor-specific inter-device links.
@@ -1413,7 +1502,9 @@ def format_device_summary() -> str:
         lines.append("  (none detected)")
     for d in topo.devices:
         numa = f"numa={d.numa_node}" if d.numa_node >= 0 else "numa=?"
-        pcie = f"pcie={d.pcie_gen}x{d.pcie_width}" if d.pcie_gen > 0 and d.pcie_width > 0 else "pcie=?"
+        pcie = (
+            f"pcie={d.pcie_gen}x{d.pcie_width}" if d.pcie_gen > 0 and d.pcie_width > 0 else "pcie=?"
+        )
         lines.append(
             f"  [{d.device_id}] {d.vendor.value}: {d.model or 'unknown'} "
             f"arch={d.arch} path={d.device_path} {numa} {pcie} "

@@ -49,6 +49,7 @@ logger = get_logger(__name__)
 @dataclass
 class FatBinaryConfig:
     """Configuration for fat binary construction."""
+
     kernel_name: str
     kernel_source: str
 
@@ -82,6 +83,7 @@ class FatBinaryConfig:
 @dataclass
 class FatBinaryResult:
     """Result of the complete fat binary build."""
+
     success: bool
     fat_binary: FatBinary | None = None
     output_path: Path | None = None
@@ -134,10 +136,13 @@ class FatBinaryBuilder:
         cache_dir: str | None = None,
         validation_mode: ValidationMode = ValidationMode.SKIP,
     ) -> None:
-        self.cache_dir = Path(cache_dir or os.environ.get(
-            "NAUTILUS_FAT_BINARY_CACHE",
-            str(Path.home() / ".cache" / "nautilus" / "fat_binary"),
-        ))
+        self.cache_dir = Path(
+            cache_dir
+            or os.environ.get(
+                "NAUTILUS_FAT_BINARY_CACHE",
+                str(Path.home() / ".cache" / "nautilus" / "fat_binary"),
+            )
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize per-vendor backends
@@ -193,13 +198,15 @@ class FatBinaryBuilder:
             amd_result = self._build_amd(config)
             stage_times["amd"] = time.perf_counter() - t0
             if amd_result.is_usable and amd_result.hsaco_bytes is not None:
-                fat_binary.add_section(KernelSection(
-                    vendor="amd",
-                    arch=amd_result.arch,
-                    format=SectionFormat.HSACO,
-                    data=amd_result.hsaco_bytes,
-                    metadata={"compilation_time_s": amd_result.compilation_time_s},
-                ))
+                fat_binary.add_section(
+                    KernelSection(
+                        vendor="amd",
+                        arch=amd_result.arch,
+                        format=SectionFormat.HSACO,
+                        data=amd_result.hsaco_bytes,
+                        metadata={"compilation_time_s": amd_result.compilation_time_s},
+                    )
+                )
 
         intel_result = None
         if not config.skip_intel:
@@ -207,13 +214,15 @@ class FatBinaryBuilder:
             intel_result = self._build_intel(config)
             stage_times["intel"] = time.perf_counter() - t0
             if intel_result.is_usable and intel_result.spv_bytes is not None:
-                fat_binary.add_section(KernelSection(
-                    vendor="intel",
-                    arch=intel_result.target,
-                    format=SectionFormat.SPV,
-                    data=intel_result.spv_bytes,
-                    metadata={"compilation_time_s": intel_result.compilation_time_s},
-                ))
+                fat_binary.add_section(
+                    KernelSection(
+                        vendor="intel",
+                        arch=intel_result.target,
+                        format=SectionFormat.SPV,
+                        data=intel_result.spv_bytes,
+                        metadata={"compilation_time_s": intel_result.compilation_time_s},
+                    )
+                )
 
         nvidia_result = None
         if not config.skip_nvidia:
@@ -221,13 +230,15 @@ class FatBinaryBuilder:
             nvidia_result = self._build_nvidia(config)
             stage_times["nvidia"] = time.perf_counter() - t0
             if nvidia_result.is_usable and nvidia_result.ptx_text is not None:
-                fat_binary.add_section(KernelSection(
-                    vendor="nvidia",
-                    arch=nvidia_result.arch,
-                    format=SectionFormat.PTX,
-                    data=nvidia_result.ptx_text.encode("utf-8"),
-                    metadata={"compilation_time_s": nvidia_result.compilation_time_s},
-                ))
+                fat_binary.add_section(
+                    KernelSection(
+                        vendor="nvidia",
+                        arch=nvidia_result.arch,
+                        format=SectionFormat.PTX,
+                        data=nvidia_result.ptx_text.encode("utf-8"),
+                        metadata={"compilation_time_s": nvidia_result.compilation_time_s},
+                    )
+                )
 
         apple_result = None
         if not config.skip_apple:
@@ -240,18 +251,33 @@ class FatBinaryBuilder:
                 elif apple_result.air_bytes is not None:
                     apple_fmt = SectionFormat.AIR
                 else:
-                    apple_fmt = SectionFormat.METALLIB
-                fat_binary.add_section(KernelSection(
-                    vendor="apple",
-                    arch=apple_result.target,
-                    format=apple_fmt,
-                    data=apple_result.output_bytes,
-                    metadata={
-                        "compilation_time_s": apple_result.compilation_time_s,
-                        "used_triton_metal_target": apple_result.used_triton_metal_target,
-                        "xcrun_version": apple_result.xcrun_version,
-                    },
-                ))
+                    # Only MSL text is available. The linker only
+                    # embeds metallib / air binaries, so we must skip
+                    # the Apple section to avoid putting unparseable
+                    # source into the fat binary.
+                    logger.warning(
+                        "Apple backend produced only MSL text; "
+                        "no metallib or AIR bytes available. "
+                        "Skipping the Apple section. To embed an Apple "
+                        "section, install the Xcode Command Line Tools "
+                        "and ensure `xcrun metallib` is on PATH.",
+                        target=apple_result.target,
+                        kernel=config.kernel_name,
+                    )
+                if apple_result.metallib_bytes is not None or apple_result.air_bytes is not None:
+                    fat_binary.add_section(
+                        KernelSection(
+                            vendor="apple",
+                            arch=apple_result.target,
+                            format=apple_fmt,
+                            data=apple_result.output_bytes,
+                            metadata={
+                                "compilation_time_s": apple_result.compilation_time_s,
+                                "used_triton_metal_target": apple_result.used_triton_metal_target,
+                                "xcrun_version": apple_result.xcrun_version,
+                            },
+                        )
+                    )
 
         # Stage 2: Compile the C runtime stub
         t0 = time.perf_counter()
@@ -265,8 +291,12 @@ class FatBinaryBuilder:
 
         t0 = time.perf_counter()
         linking_result = self.linker.link_fat_binary(
-            nvidia_ptx=nvidia_result.ptx_text.encode("utf-8") if nvidia_result and nvidia_result.ptx_text else None,
-            nvidia_cubin=nvidia_result.cubin_bytes if nvidia_result and nvidia_result.cubin_bytes else None,
+            nvidia_ptx=nvidia_result.ptx_text.encode("utf-8")
+            if nvidia_result and nvidia_result.ptx_text
+            else None,
+            nvidia_cubin=nvidia_result.cubin_bytes
+            if nvidia_result and nvidia_result.cubin_bytes
+            else None,
             amd_hsaco=amd_result.hsaco_bytes if amd_result and amd_result.hsaco_bytes else None,
             intel_spv=intel_result.spv_bytes if intel_result and intel_result.spv_bytes else None,
             apple_metallib=self._apple_link_bytes(apple_result),
@@ -290,13 +320,18 @@ class FatBinaryBuilder:
                     (section.format == SectionFormat.HSACO and amd_result)
                     or (section.format == SectionFormat.SPV and intel_result)
                     or (section.format == SectionFormat.PTX and nvidia_result)
-                    or (section.format in (SectionFormat.METALLIB, SectionFormat.AIR) and apple_result)
+                    or (
+                        section.format in (SectionFormat.METALLIB, SectionFormat.AIR)
+                        and apple_result
+                    )
                 ):
-                    validation_results.append(self.validator.validate(
-                        binary_path=binary_path,
-                        vendor=section.vendor,
-                        arch=section.arch,
-                    ))
+                    validation_results.append(
+                        self.validator.validate(
+                            binary_path=binary_path,
+                            vendor=section.vendor,
+                            arch=section.arch,
+                        )
+                    )
             stage_times["validation"] = time.perf_counter() - t0
 
         # Check if at least one vendor compiled
@@ -412,7 +447,8 @@ class FatBinaryBuilder:
             )
 
     def _apple_link_bytes(
-        self, apple_result: MetalCompilationResult | None,
+        self,
+        apple_result: MetalCompilationResult | None,
     ) -> bytes | None:
         """Choose which Apple artifact bytes to embed in the fat binary.
 
@@ -467,13 +503,18 @@ class FatBinaryBuilder:
             )
         try:
             cmd = [
-                "gcc", "-c",
+                "gcc",
+                "-c",
                 "-fPIC",
-                "-o", str(output_path),
+                "-o",
+                str(output_path),
                 str(stub_path),
             ]
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if result.returncode != 0 or not output_path.exists():
                 raise CompilationError(
@@ -498,6 +539,7 @@ class FatBinaryBuilder:
         the package's bundled .c file via importlib.resources.
         """
         from importlib import resources
+
         try:
             return (resources.files("src.bridges.aot_packager") / "runtime_stub.c").read_text()
         except (FileNotFoundError, ModuleNotFoundError):

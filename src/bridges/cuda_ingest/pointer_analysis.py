@@ -44,6 +44,7 @@ logger = get_logger(__name__)
 @dataclass
 class PointerAccess:
     """A single pointer access in CUDA code."""
+
     name: str
     indices: list[str] = field(default_factory=list)  # e.g. ['i', 'j']
     is_write: bool = False
@@ -55,6 +56,7 @@ class PointerAccess:
 @dataclass
 class PointerLayout:
     """Layout of a multi-dimensional pointer in CUDA."""
+
     name: str
     element_type: str
     dimensions: int
@@ -91,6 +93,7 @@ class AliasInfo:
       storage came from (e.g. "kernel parameter", "shared memory
       allocation `tile`", "local address-of").
     """
+
     name: str
     may_alias: set[str] = field(default_factory=set)
     is_restrict: bool = False
@@ -123,24 +126,24 @@ class PointerAnalyzer:
 
     # Pattern for pointer accesses: name[idx1][idx2]... = value
     POINTER_ACCESS_RE = re.compile(
-        r'(\w+)\s*((?:\[[^\]]+\])+)\s*(=|\+=|-=|\*=|/=|\+\+|--)?',
+        r"(\w+)\s*((?:\[[^\]]+\])+)\s*(=|\+=|-=|\*=|/=|\+\+|--)?",
     )
     # Pattern for parameter declarations like "float* A" or
     # "const float* __restrict__ A". The optional `__restrict__`
     # marker is captured so the analyzer can mark the layout
     # accordingly.
     POINTER_PARAM_RE = re.compile(
-        r'(?:const\s+)?(\w+(?:\s*\*+)?)\s*\**\s*(\w+)\s*'
-        r'(?:\[[^\]]*\])?\s*(?:__restrict__|restrict)?',
+        r"(?:const\s+)?(\w+(?:\s*\*+)?)\s*\**\s*(\w+)\s*"
+        r"(?:\[[^\]]*\])?\s*(?:__restrict__|restrict)?",
     )
     # Pattern for restrict detection in the raw type text — the
     # parser may not always surface `__restrict__` in the cleaned
     # type, so we also re-scan.
-    _RESTRICT_RE = re.compile(r'\b(?:__restrict__|restrict)\b')
+    _RESTRICT_RE = re.compile(r"\b(?:__restrict__|restrict)\b")
     # Local pointer declaration in body; group 1 = name, group 2 = optional
     # initializer (used for alias-class inheritance downstream).
     _LOCAL_PTR_DECL_RE = re.compile(
-        r'^\s*(?:const\s+)?\w+\s*\*+\s*(\w+)\s*(?:=\s*(.+?))?\s*;\s*$',
+        r"^\s*(?:const\s+)?\w+\s*\*+\s*(\w+)\s*(?:=\s*(.+?))?\s*;\s*$",
     )
 
     def analyze_kernel(self, kernel: Any) -> dict[str, PointerLayout]:
@@ -263,7 +266,9 @@ class PointerAnalyzer:
         return None
 
     def _layout_from_param(
-        self, param: dict[str, str], kernel: Any,
+        self,
+        param: dict[str, str],
+        kernel: Any,
     ) -> PointerLayout | None:
         """Determine a pointer's layout from its parameter declaration."""
         type_str = param.get("type", "")
@@ -320,7 +325,7 @@ class PointerAnalyzer:
             if name not in layouts:
                 continue
             index_str = match.group(2)
-            indices = re.findall(r'\[([^\]]+)\]', index_str)
+            indices = re.findall(r"\[([^\]]+)\]", index_str)
             if len(indices) > layouts[name].dimensions:
                 layouts[name].dimensions = len(indices)
                 layouts[name].shape_expr = indices
@@ -343,7 +348,9 @@ class PointerAnalyzer:
                 )
 
     def get_tenso_creation(
-        self, layout: PointerLayout, block_size: int | None = None,
+        self,
+        layout: PointerLayout,
+        block_size: int | None = None,
     ) -> str:
         """Generate the Triton code to create a tensor for this pointer.
 

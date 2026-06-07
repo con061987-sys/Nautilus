@@ -8,27 +8,22 @@ Two layers of testing:
 
 from __future__ import annotations
 
-import re
-import string
-
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from src.bridges.pytorch_xla.collective_insertion import (
     CollectiveInserter,
-    CollectiveInsertionResult,
     CollectiveType,
     InsertedCollective,
     _collective_volume_bytes,
-    _emit_collectives,
     _extract_func_arg_types,
     _parse_tensor_shape_and_dtype,
     _plan_collectives,
     _tensor_bytes,
     plan_and_insert,
 )
-from src.bridges.pytorch_xla.comm_backend import CollectiveOp, CommBackend, CommLibrary
+from src.bridges.pytorch_xla.comm_backend import CommLibrary
 from src.bridges.pytorch_xla.device_mesh import (
     DeviceMesh,
     DeviceVendor,
@@ -93,13 +88,14 @@ def _make_mesh(
         MeshDevice(
             device_id=i,
             vendor=vendor,
-            arch="sm_90" if vendor == DeviceVendor.NVIDIA else (
-                "gfx942" if vendor == DeviceVendor.AMD else "intel_gaudi2"
-            ),
+            arch="sm_90"
+            if vendor == DeviceVendor.NVIDIA
+            else ("gfx942" if vendor == DeviceVendor.AMD else "intel_gaudi2"),
             memory_gb=80.0,
             compute_tflops=900.0,
             interconnect=(
-                InterconnectType.NVLINK if vendor == DeviceVendor.NVIDIA
+                InterconnectType.NVLINK
+                if vendor == DeviceVendor.NVIDIA
                 else InterconnectType.INFINITY_FABRIC
                 if vendor == DeviceVendor.AMD
                 else InterconnectType.ETHERNET
@@ -138,7 +134,10 @@ class TestTensorShapeParsing:
         ],
     )
     def test_parse_valid(
-        self, type_str: str, expected_shape: tuple[int, ...], expected_dtype: str,
+        self,
+        type_str: str,
+        expected_shape: tuple[int, ...],
+        expected_dtype: str,
     ) -> None:
         shape, dtype = _parse_tensor_shape_and_dtype(type_str)
         assert shape == expected_shape
@@ -165,7 +164,10 @@ class TestTensorBytes:
         ],
     )
     def test_tensor_bytes(
-        self, shape: tuple[int, ...], dtype: str, expected: int,
+        self,
+        shape: tuple[int, ...],
+        dtype: str,
+        expected: int,
     ) -> None:
         assert _tensor_bytes(shape, dtype) == expected
 
@@ -285,12 +287,14 @@ module {
 }
 """
         small_mod = StableHLOModule(
-            mlir_text=small_mlir, function_name="small",
+            mlir_text=small_mlir,
+            function_name="small",
             input_specs=[{"name": "A", "shape": [4, 4], "dtype": "f32"}],
             is_usable=True,
         )
         big_mod = StableHLOModule(
-            mlir_text=big_mlir, function_name="big",
+            mlir_text=big_mlir,
+            function_name="big",
             input_specs=[{"name": "A", "shape": [256, 256], "dtype": "f32"}],
             is_usable=True,
         )
@@ -364,7 +368,9 @@ class TestCommLibrarySelection:
     def test_heterogeneous_mesh_uses_mixed(self) -> None:
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 900.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1300.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1300.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         mod = _make_module()
@@ -489,7 +495,8 @@ module {
 }
 """
         mod = StableHLOModule(
-            mlir_text=mlir, function_name="branchy",
+            mlir_text=mlir,
+            function_name="branchy",
             input_specs=[{"name": "A", "shape": [8, 8], "dtype": "f32"}],
             is_usable=True,
         )
@@ -512,7 +519,9 @@ class TestCommBackendWiring:
     def test_heterogeneous_mesh_backend_usage(self) -> None:
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 900.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1300.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1300.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         mod = _make_module()
@@ -559,7 +568,9 @@ class TestCollectiveInserterClass:
 
     def test_unusable_module_returns_error_result(self) -> None:
         mod = StableHLOModule(
-            mlir_text="", function_name="bad", is_usable=False,
+            mlir_text="",
+            function_name="bad",
+            is_usable=False,
         )
         inserter = CollectiveInserter()
         result = inserter.insert(mod, ShardingSpec(mesh_shape=[4]))
@@ -669,7 +680,9 @@ class TestPropertyCollectivePlan:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_plan_count_matches_axes(
-        self, spec: ShardingSpec, module: StableHLOModule,
+        self,
+        spec: ShardingSpec,
+        module: StableHLOModule,
     ) -> None:
         """For each sharded tensor with K axes, the plan has 4*K collectives."""
         plan = _plan_collectives(spec, module, mesh=None)
@@ -677,8 +690,7 @@ class TestPropertyCollectivePlan:
         for ts in spec.tensor_shardings.values():
             expected += 4 * len(ts.mesh_axes)
         assert len(plan) == expected, (
-            f"plan={len(plan)}, expected={expected}, "
-            f"tensor_shardings={spec.tensor_shardings}"
+            f"plan={len(plan)}, expected={expected}, tensor_shardings={spec.tensor_shardings}"
         )
 
     @given(spec=_sharding_specs(), module=_stablehlo_modules())
@@ -688,16 +700,16 @@ class TestPropertyCollectivePlan:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_plan_covers_all_four_collective_types(
-        self, spec: ShardingSpec, module: StableHLOModule,
+        self,
+        spec: ShardingSpec,
+        module: StableHLOModule,
     ) -> None:
         """If any tensor is sharded, every collective type must appear."""
         plan = _plan_collectives(spec, module, mesh=None)
         if not plan:
             return  # All replicated — nothing to assert
         types = {c.collective_type for c in plan}
-        assert types == set(CollectiveType), (
-            f"missing types: {set(CollectiveType) - types}"
-        )
+        assert types == set(CollectiveType), f"missing types: {set(CollectiveType) - types}"
 
     @given(spec=_sharding_specs(), module=_stablehlo_modules())
     @settings(
@@ -706,7 +718,9 @@ class TestPropertyCollectivePlan:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_each_collective_has_valid_comm_library(
-        self, spec: ShardingSpec, module: StableHLOModule,
+        self,
+        spec: ShardingSpec,
+        module: StableHLOModule,
     ) -> None:
         """Every collective must have a real CommLibrary value."""
         plan = _plan_collectives(spec, module, mesh=None)
@@ -720,25 +734,25 @@ class TestPropertyCollectivePlan:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_estimated_bytes_are_computed_from_shape(
-        self, spec: ShardingSpec, module: StableHLOModule,
+        self,
+        spec: ShardingSpec,
+        module: StableHLOModule,
     ) -> None:
         """Bytes are not hardcoded; they follow the cost model exactly."""
         plan = _plan_collectives(spec, module, mesh=None)
         for c in plan:
             if c.num_devices <= 1:
-                assert c.estimated_bytes == 0, (
-                    f"single-device mesh should have 0 bytes for {c}"
-                )
+                assert c.estimated_bytes == 0, f"single-device mesh should have 0 bytes for {c}"
             else:
                 # Re-derive the expected volume from the cost model
                 # and assert equality.
                 expected = _collective_volume_bytes(
-                    c.collective_type, _tensor_bytes(c.tensor_shape, c.dtype),
+                    c.collective_type,
+                    _tensor_bytes(c.tensor_shape, c.dtype),
                     c.num_devices,
                 )
                 assert c.estimated_bytes == expected, (
-                    f"volume mismatch for {c}: "
-                    f"plan={c.estimated_bytes}, expected={expected}"
+                    f"volume mismatch for {c}: plan={c.estimated_bytes}, expected={expected}"
                 )
 
     @given(spec=_sharding_specs(), module=_stablehlo_modules())
@@ -748,7 +762,9 @@ class TestPropertyCollectivePlan:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_emit_produces_parseable_mlir(
-        self, spec: ShardingSpec, module: StableHLOModule,
+        self,
+        spec: ShardingSpec,
+        module: StableHLOModule,
     ) -> None:
         """For any spec, the emitted MLIR contains a func.func and a return."""
         result = plan_and_insert(module, spec)
@@ -765,7 +781,9 @@ class TestPropertyCollectivePlan:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_total_bytes_equals_sum_of_inserted(
-        self, spec: ShardingSpec, module: StableHLOModule,
+        self,
+        spec: ShardingSpec,
+        module: StableHLOModule,
     ) -> None:
         """The reported total_bytes must equal the sum of the plan."""
         result = plan_and_insert(module, spec)
@@ -788,7 +806,10 @@ class TestPropertyCommBackend:
         suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
     )
     def test_backend_selection_by_vendor(
-        self, n_nvidia: int, n_amd: int, n_intel: int,
+        self,
+        n_nvidia: int,
+        n_amd: int,
+        n_intel: int,
     ) -> None:
         """A homogeneous vendor mesh picks the matching comm library."""
         assume(n_nvidia + n_amd + n_intel >= 1)
@@ -796,22 +817,40 @@ class TestPropertyCommBackend:
         devices: list[MeshDevice] = []
         did = 0
         for _ in range(n_nvidia):
-            devices.append(MeshDevice(
-                did, DeviceVendor.NVIDIA, "sm_90", 80, 900,
-                InterconnectType.NVLINK,
-            ))
+            devices.append(
+                MeshDevice(
+                    did,
+                    DeviceVendor.NVIDIA,
+                    "sm_90",
+                    80,
+                    900,
+                    InterconnectType.NVLINK,
+                )
+            )
             did += 1
         for _ in range(n_amd):
-            devices.append(MeshDevice(
-                did, DeviceVendor.AMD, "gfx942", 192, 1300,
-                InterconnectType.INFINITY_FABRIC,
-            ))
+            devices.append(
+                MeshDevice(
+                    did,
+                    DeviceVendor.AMD,
+                    "gfx942",
+                    192,
+                    1300,
+                    InterconnectType.INFINITY_FABRIC,
+                )
+            )
             did += 1
         for _ in range(n_intel):
-            devices.append(MeshDevice(
-                did, DeviceVendor.INTEL, "intel_gaudi2", 96, 900,
-                InterconnectType.ETHERNET,
-            ))
+            devices.append(
+                MeshDevice(
+                    did,
+                    DeviceVendor.INTEL,
+                    "intel_gaudi2",
+                    96,
+                    900,
+                    InterconnectType.ETHERNET,
+                )
+            )
             did += 1
 
         mesh = DeviceMesh(devices=devices, mesh_shape=[len(devices)])

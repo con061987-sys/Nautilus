@@ -42,12 +42,14 @@ from src.common.types import (
 
 class LogSink:
     """Abstract sink for log records. Implementations are thread-safe."""
+
     def emit(self, record: dict[str, Any]) -> None: ...
     def flush(self) -> None: ...
 
 
 class StdoutLogSink(LogSink):
     """Writes one JSON object per line to a stream (default stdout)."""
+
     def __init__(self, stream: TextIO | None = None) -> None:
         self._lock = threading.Lock()
         self._stream = stream or sys.stdout
@@ -71,6 +73,7 @@ class StdoutLogSink(LogSink):
 
 class JsonLogSink(LogSink):
     """Writes JSON to a file path. Atomic line writes."""
+
     def __init__(self, path: str) -> None:
         self._path = path
         self._lock = threading.Lock()
@@ -86,6 +89,7 @@ class JsonLogSink(LogSink):
 
 class NullLogSink(LogSink):
     """Discards all records. For tests that want to silence logging."""
+
     def emit(self, record: dict[str, Any]) -> None:
         pass
 
@@ -95,6 +99,7 @@ class NullLogSink(LogSink):
 
 class CompositeLogSink(LogSink):
     """Fan out to multiple sinks."""
+
     def __init__(self, sinks: list[LogSink]) -> None:
         self._sinks = sinks
 
@@ -139,6 +144,7 @@ def configure_logging(
 
 class _HumanReadableSink(LogSink):
     """Pretty-prints records for human reading. For development only."""
+
     _COLORS = {
         LogLevel.DEBUG: "\033[90m",
         LogLevel.INFO: "\033[36m",
@@ -159,16 +165,11 @@ class _HumanReadableSink(LogSink):
                 ts = record.get("ts", datetime.now(timezone.utc).isoformat())
                 msg = record.get("msg", "")
                 color = self._COLORS.get(level, "")
-                self._stream.write(
-                    f"{color}[{level.value.upper()}]{self._RESET} {ts} {msg}\n"
-                )
+                self._stream.write(f"{color}[{level.value.upper()}]{self._RESET} {ts} {msg}\n")
                 # Drop any extra fields besides level/ts/msg
-                extras = {k: v for k, v in record.items()
-                          if k not in ("level", "ts", "msg")}
+                extras = {k: v for k, v in record.items() if k not in ("level", "ts", "msg")}
                 if extras:
-                    self._stream.write(
-                        "  " + json.dumps(extras, default=str) + "\n"
-                    )
+                    self._stream.write("  " + json.dumps(extras, default=str) + "\n")
                 self._stream.flush()
             except Exception:
                 pass
@@ -191,6 +192,7 @@ configure_logging()
 @dataclass
 class _ActiveSpan:
     """Currently-active span for thread-local lookup."""
+
     span: Span
 
 
@@ -230,6 +232,7 @@ class Span:
         with Span("build_fat_binary", kernel="matmul") as sp:
             ...  # add stages via stage(sp, "name")
     """
+
     def __init__(
         self,
         operation: str,
@@ -304,6 +307,7 @@ def span(operation: str, **metadata: Any) -> Iterator[Span]:
 
 class StageLog:
     """A single stage within a span."""
+
     def __init__(self, parent: Span, name: str) -> None:
         self._parent = parent
         self._name = name
@@ -374,6 +378,7 @@ class _NautilusLogger:
     Supports debug/info/warning/error/critical plus a private `_emit`
     for structured span/stage events.
     """
+
     def __init__(self, name: str) -> None:
         self._name = name
         # Mirror to stdlib logging so third-party libs (pytest) capture too

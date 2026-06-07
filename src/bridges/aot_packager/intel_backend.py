@@ -48,7 +48,6 @@ import importlib
 import importlib.util
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -63,7 +62,6 @@ from src.common.errors import (
     CompilationError,
     CompilationOutputMissingError,
     DependencyMissingError,
-    LLVMError,
 )
 from src.common.logging import get_logger
 
@@ -112,11 +110,7 @@ class IntelCompilationResult:
 
     @property
     def is_usable(self) -> bool:
-        return (
-            self.success
-            and self.spv_bytes is not None
-            and len(self.spv_bytes) > 32
-        )
+        return self.success and self.spv_bytes is not None and len(self.spv_bytes) > 32
 
 
 class IntelBackend:
@@ -279,14 +273,11 @@ class IntelBackend:
             reasons: list[str] = []
             if not has_l0:
                 reasons.append(
-                    "Level Zero loader (libze_loader.so) not loadable; "
-                    "install Intel oneAPI runtime"
+                    "Level Zero loader (libze_loader.so) not loadable; install Intel oneAPI runtime"
                 )
             if not has_render:
                 if not render_nodes:
-                    reasons.append(
-                        "no /dev/dri/renderD* nodes present"
-                    )
+                    reasons.append("no /dev/dri/renderD* nodes present")
                 else:
                     reasons.append(
                         f"no /dev/dri/renderD* node backed by Intel "
@@ -338,7 +329,12 @@ class IntelBackend:
         self._detection_cache = detection
 
         cache_key = self._compute_cache_key(
-            triton_kernel_ir, kernel_name, block_m, block_n, block_k, num_warps,
+            triton_kernel_ir,
+            kernel_name,
+            block_m,
+            block_n,
+            block_k,
+            num_warps,
         )
         cached = self._check_cache(cache_key)
         if cached is not None:
@@ -356,13 +352,16 @@ class IntelBackend:
 
         try:
             spv_bytes = self._run_spirv_compile(
-                triton_kernel_ir, kernel_name, block_m, block_n, block_k, num_warps,
+                triton_kernel_ir,
+                kernel_name,
+                block_m,
+                block_n,
+                block_k,
+                num_warps,
             )
         except DependencyMissingError as exc:
             elapsed = time.perf_counter() - start
-            msg = (
-                f"DependencyMissingError: {exc.message}"
-            )
+            msg = f"DependencyMissingError: {exc.message}"
             log.warning(
                 "Intel AOT compile skipped: dependency missing",
                 kernel=kernel_name,
@@ -410,7 +409,8 @@ class IntelBackend:
         if not self._validate_spirv(spv_bytes):
             log.warning(
                 "spirv-val failed or missing; SPIR-V may be invalid",
-                kernel=kernel_name, size=len(spv_bytes),
+                kernel=kernel_name,
+                size=len(spv_bytes),
             )
 
         spv_path = self._cache_path_for(cache_key)
@@ -419,8 +419,10 @@ class IntelBackend:
         elapsed = time.perf_counter() - start
         log.info(
             "Intel AOT compile complete",
-            kernel=kernel_name, target=self.target.value,
-            spv_size=len(spv_bytes), elapsed_s=elapsed,
+            kernel=kernel_name,
+            target=self.target.value,
+            spv_size=len(spv_bytes),
+            elapsed_s=elapsed,
         )
         return IntelCompilationResult(
             success=True,
@@ -448,7 +450,12 @@ class IntelBackend:
         Use this when you need exception-based control flow.
         """
         result = self.compile_kernel(
-            triton_kernel_ir, kernel_name, block_m, block_n, block_k, num_warps,
+            triton_kernel_ir,
+            kernel_name,
+            block_m,
+            block_n,
+            block_k,
+            num_warps,
         )
         if not result.success:
             if result.error_code == "E_DEPENDENCY_MISSING":
@@ -510,9 +517,7 @@ class IntelBackend:
             )
 
         with self._lock:
-            tmp_dir = Path(
-                tempfile.mkdtemp(prefix="nautilus_intel_", dir=str(self.cache_dir))
-            )
+            tmp_dir = Path(tempfile.mkdtemp(prefix="nautilus_intel_", dir=str(self.cache_dir)))
             try:
                 ll_path = tmp_dir / f"{kernel_name}.ll"
                 spv_path = tmp_dir / f"{kernel_name}.spv"
@@ -520,8 +525,13 @@ class IntelBackend:
                 # 1. Primary path: triton.compile(target="xpu") may
                 #    return SPIR-V bytes directly. Try this first.
                 primary_bytes = self._try_xpu_primary(
-                    triton_kernel_ir, kernel_name,
-                    num_warps, block_m, block_n, block_k, spv_path,
+                    triton_kernel_ir,
+                    kernel_name,
+                    num_warps,
+                    block_m,
+                    block_n,
+                    block_k,
+                    spv_path,
                 )
                 if primary_bytes is not None:
                     return primary_bytes
@@ -529,8 +539,13 @@ class IntelBackend:
                 # 2. Fallback: produce LLVM IR (no xpu target), then
                 #    run llvm-spirv if available.
                 self._compile_triton_to_llvm(
-                    triton_kernel_ir, kernel_name,
-                    num_warps, block_m, block_n, block_k, ll_path,
+                    triton_kernel_ir,
+                    kernel_name,
+                    num_warps,
+                    block_m,
+                    block_n,
+                    block_k,
+                    ll_path,
                 )
                 bc_path: Path | None = None
                 if self._llc_path:
@@ -581,8 +596,14 @@ class IntelBackend:
 
         try:
             compiled = self._triton_compile(
-                triton, triton_kernel_ir, kernel_name,
-                num_warps, block_m, block_n, block_k, target="xpu",
+                triton,
+                triton_kernel_ir,
+                kernel_name,
+                num_warps,
+                block_m,
+                block_n,
+                block_k,
+                target="xpu",
             )
         except (AttributeError, KeyError, ValueError) as exc:
             # The XPU target is registered but refused the compile
@@ -627,16 +648,17 @@ class IntelBackend:
             registry = getattr(triton.backends, "backends", None)
             if isinstance(registry, dict) and "xpu" in registry:
                 return True
-        except Exception:  # noqa: BLE001 — defensive
+        except Exception:
             pass
         # Final check: look for an installed entry point that
         # provides the Intel Triton XPU plugin.
         try:
             import importlib.metadata as md
+
             for ep in md.entry_points(group="triton.backends"):
                 if "xpu" in ep.name.lower():
                     return True
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return False
 
@@ -663,7 +685,8 @@ class IntelBackend:
         src_path = ll_path.parent / f"{kernel_name}.py"
         src_path.write_text(triton_kernel_ir)
         spec = importlib.util.spec_from_file_location(
-            f"_intel_{kernel_name}", src_path,
+            f"_intel_{kernel_name}",
+            src_path,
         )
         if spec is None or spec.loader is None:
             raise CompilationError(f"Could not import {kernel_name}")
@@ -680,8 +703,14 @@ class IntelBackend:
         # complete, but fall back to amd if nvidia is missing.
         target = "cuda" if "nvidia" in self._registered_targets(triton) else "amd"
         compiled = self._triton_compile(
-            triton, triton_kernel_ir, kernel_name,
-            num_warps, block_m, block_n, block_k, target=target,
+            triton,
+            triton_kernel_ir,
+            kernel_name,
+            num_warps,
+            block_m,
+            block_n,
+            block_k,
+            target=target,
         )
         asm = compiled.asm
         ll_text = asm.get("ll") or asm.get("llvm")
@@ -698,7 +727,7 @@ class IntelBackend:
             registry = getattr(triton_module.backends, "backends", None)
             if isinstance(registry, dict):
                 return list(registry.keys())
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return []
 
@@ -719,7 +748,7 @@ class IntelBackend:
         same Triton setup (source-file staging, signature
         inference, ASTSource construction).
         """
-        from triton.compiler import ASTSource  # type: ignore[attr-defined]
+        from triton.compiler import ASTSource
 
         # Stage the source so the JITFunction can inspect it via
         # inspect.getsourcelines.
@@ -734,7 +763,8 @@ class IntelBackend:
         src_path.write_text(triton_kernel_ir)
 
         spec = importlib.util.spec_from_file_location(
-            f"_intel_{kernel_name}__{target}", src_path,
+            f"_intel_{kernel_name}__{target}",
+            src_path,
         )
         if spec is None or spec.loader is None:
             raise CompilationError(f"Could not import {kernel_name}")
@@ -763,7 +793,9 @@ class IntelBackend:
         )
         options = {"num_warps": num_warps, "num_stages": 2}
         return triton_module.compiler.compile(
-            src=source, target=target, options=options,
+            src=source,
+            target=target,
+            options=options,
         )
 
     def _run_llc(self, ll_path: Path, bc_path: Path) -> None:
@@ -771,7 +803,9 @@ class IntelBackend:
         try:
             result = subprocess.run(
                 [self._llc_path, str(ll_path), "-o", str(bc_path), "-filetype=obj"],
-                capture_output=True, text=True, timeout=self.timeout_seconds,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
             )
             if result.returncode != 0:
                 log.warning(
@@ -787,11 +821,14 @@ class IntelBackend:
             result = subprocess.run(
                 [
                     self._llvm_spirv_path,
-                    "-o", str(spv_path),
+                    "-o",
+                    str(spv_path),
                     str(input_path),
                     f"--spirv-target={self.target.value}",
                 ],
-                capture_output=True, text=True, timeout=self.timeout_seconds,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
             raise CompilationError(
@@ -812,7 +849,8 @@ class IntelBackend:
             result = subprocess.run(
                 [self._spirv_val_path, "--target-env", "spv1.2"],
                 input=spv_bytes,
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -820,14 +858,26 @@ class IntelBackend:
 
     def _compute_cache_key(
         self,
-        source: str, name: str, block_m: int, block_n: int, block_k: int, num_warps: int,
+        source: str,
+        name: str,
+        block_m: int,
+        block_n: int,
+        block_k: int,
+        num_warps: int,
     ) -> str:
-        payload = json.dumps({
-            "source": source, "name": name, "target": self.target.value,
-            "block_m": block_m, "block_n": block_n, "block_k": block_k,
-            "num_warps": num_warps,
-            "llvm_spirv": self._llvm_spirv_version(),
-        }, sort_keys=True)
+        payload = json.dumps(
+            {
+                "source": source,
+                "name": name,
+                "target": self.target.value,
+                "block_m": block_m,
+                "block_n": block_n,
+                "block_k": block_k,
+                "num_warps": num_warps,
+                "llvm_spirv": self._llvm_spirv_version(),
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def _check_cache(self, cache_key: str) -> Path | None:
@@ -848,7 +898,9 @@ class IntelBackend:
         try:
             result = subprocess.run(
                 [self._llvm_spirv_path, "--version"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 return result.stdout.splitlines()[0] or "unknown"

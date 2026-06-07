@@ -39,25 +39,23 @@ from src.common.hardware import (  # noqa: E402
     DeviceTopology,
     GpuVendor,
     LinkType,
-    TopologyLink,
-    pcie_bandwidth_gbps,
+    invalidate_enumeration_cache,
     parse_pcie_speed_string,
     parse_pcie_width_string,
+    pcie_bandwidth_gbps,
     scan_amd_devices,
     scan_intel_devices,
     scan_nvidia_devices,
-    enumerate_devices,
-    invalidate_enumeration_cache,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers: build fake /dev, /proc, /sys trees for tests
 # ---------------------------------------------------------------------------
 
 
-def _make_nvidia_pci_device(pci_dir: Path, bdf: str, *, numa: int = 0,
-                            gen: int = 4, width: int = 16) -> None:
+def _make_nvidia_pci_device(
+    pci_dir: Path, bdf: str, *, numa: int = 0, gen: int = 4, width: int = 16
+) -> None:
     """Create a fake Nvidia PCI device directory in a fake /sys tree."""
     d = pci_dir / bdf
     d.mkdir(parents=True, exist_ok=True)
@@ -65,31 +63,39 @@ def _make_nvidia_pci_device(pci_dir: Path, bdf: str, *, numa: int = 0,
     (d / "device").write_text("0x1234")
     (d / "class").write_text("0x030000")  # VGA
     (d / "numa_node").write_text(str(numa))
-    (d / "current_link_speed").write_text(f"{['', '2.5', '5.0', '8.0', '16.0', '32.0', '64.0'][gen]} GT/s PCIe")
+    (d / "current_link_speed").write_text(
+        f"{['', '2.5', '5.0', '8.0', '16.0', '32.0', '64.0'][gen]} GT/s PCIe"
+    )
     (d / "current_link_width").write_text(f"{width}")
 
 
-def _make_amd_pci_device(pci_dir: Path, bdf: str, *, numa: int = 0,
-                         gen: int = 4, width: int = 16) -> None:
+def _make_amd_pci_device(
+    pci_dir: Path, bdf: str, *, numa: int = 0, gen: int = 4, width: int = 16
+) -> None:
     d = pci_dir / bdf
     d.mkdir(parents=True, exist_ok=True)
     (d / "vendor").write_text("0x1002")
     (d / "device").write_text("0x73bf")
     (d / "class").write_text("0x030000")
     (d / "numa_node").write_text(str(numa))
-    (d / "current_link_speed").write_text(f"{['', '2.5', '5.0', '8.0', '16.0', '32.0', '64.0'][gen]} GT/s PCIe")
+    (d / "current_link_speed").write_text(
+        f"{['', '2.5', '5.0', '8.0', '16.0', '32.0', '64.0'][gen]} GT/s PCIe"
+    )
     (d / "current_link_width").write_text(f"{width}")
 
 
-def _make_intel_pci_device(pci_dir: Path, bdf: str, *, numa: int = 0,
-                           gen: int = 4, width: int = 16) -> None:
+def _make_intel_pci_device(
+    pci_dir: Path, bdf: str, *, numa: int = 0, gen: int = 4, width: int = 16
+) -> None:
     d = pci_dir / bdf
     d.mkdir(parents=True, exist_ok=True)
     (d / "vendor").write_text("0x8086")
     (d / "device").write_text("0x4905")
     (d / "class").write_text("0x030000")
     (d / "numa_node").write_text(str(numa))
-    (d / "current_link_speed").write_text(f"{['', '2.5', '5.0', '8.0', '16.0', '32.0', '64.0'][gen]} GT/s PCIe")
+    (d / "current_link_speed").write_text(
+        f"{['', '2.5', '5.0', '8.0', '16.0', '32.0', '64.0'][gen]} GT/s PCIe"
+    )
     (d / "current_link_width").write_text(f"{width}")
 
 
@@ -108,6 +114,7 @@ def fake_fs():
     root = Path(os.environ.get("TMPDIR", "/tmp")) / "_nautilus_hw_test"
     if root.exists():
         import shutil
+
         shutil.rmtree(root)
     root.mkdir(parents=True)
     dev_root = root / "dev"
@@ -133,6 +140,7 @@ def fake_fs():
         }
 
     import shutil
+
     shutil.rmtree(root, ignore_errors=True)
 
 
@@ -329,9 +337,7 @@ def test_scan_intel_devices_filters_to_0x8086(fake_fs):
 
 
 def test_scan_intel_devices_no_devices_returns_empty(fake_fs):
-    devs = scan_intel_devices(
-        dev_root=fake_fs["dev"], sysfs_pci=fake_fs["sys_pci"]
-    )
+    devs = scan_intel_devices(dev_root=fake_fs["dev"], sysfs_pci=fake_fs["sys_pci"])
     assert devs == []
 
 
@@ -359,15 +365,42 @@ def test_discover_topology_bandwidth_per_pair(fake_fs):
     """Each device pair gets a symmetric (a,b)/(b,a) entry in bandwidth_gbps."""
     invalidate_enumeration_cache()
     fake_devices = (
-        DeviceInfo(vendor=GpuVendor.NVIDIA, device_id=0, device_path="/dev/nvidia0",
-                   arch="", model="", driver_version="", pcie_bdf="0000:01:00.0",
-                   numa_node=0, pcie_gen=4, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.AMD, device_id=1, device_path="/dev/kfd",
-                   arch="", model="", driver_version="", pcie_bdf="0000:02:00.0",
-                   numa_node=0, pcie_gen=4, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.INTEL, device_id=2, device_path="/dev/dri/renderD130",
-                   arch="", model="", driver_version="", pcie_bdf="0000:03:00.0",
-                   numa_node=1, pcie_gen=4, pcie_width=16),
+        DeviceInfo(
+            vendor=GpuVendor.NVIDIA,
+            device_id=0,
+            device_path="/dev/nvidia0",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="0000:01:00.0",
+            numa_node=0,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.AMD,
+            device_id=1,
+            device_path="/dev/kfd",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="0000:02:00.0",
+            numa_node=0,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.INTEL,
+            device_id=2,
+            device_path="/dev/dri/renderD130",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="0000:03:00.0",
+            numa_node=1,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
     )
     with mock.patch.object(hw, "enumerate_devices", return_value=fake_devices):
         topo = DeviceTopology.discover()
@@ -394,18 +427,54 @@ def test_discover_topology_numa_aware_ordering(fake_fs):
     """Devices in the same NUMA node are adjacent in the returned list."""
     invalidate_enumeration_cache()
     fake_devices = (
-        DeviceInfo(vendor=GpuVendor.AMD, device_id=0, device_path="/p0",
-                   arch="", model="", driver_version="", pcie_bdf="",
-                   numa_node=2, pcie_gen=4, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.NVIDIA, device_id=1, device_path="/p1",
-                   arch="", model="", driver_version="", pcie_bdf="",
-                   numa_node=0, pcie_gen=4, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.INTEL, device_id=2, device_path="/p2",
-                   arch="", model="", driver_version="", pcie_bdf="",
-                   numa_node=0, pcie_gen=4, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.AMD, device_id=3, device_path="/p3",
-                   arch="", model="", driver_version="", pcie_bdf="",
-                   numa_node=2, pcie_gen=4, pcie_width=16),
+        DeviceInfo(
+            vendor=GpuVendor.AMD,
+            device_id=0,
+            device_path="/p0",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="",
+            numa_node=2,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.NVIDIA,
+            device_id=1,
+            device_path="/p1",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.INTEL,
+            device_id=2,
+            device_path="/p2",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.AMD,
+            device_id=3,
+            device_path="/p3",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="",
+            numa_node=2,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
     )
     with mock.patch.object(hw, "enumerate_devices", return_value=fake_devices):
         topo = DeviceTopology.discover()
@@ -418,12 +487,30 @@ def test_discover_topology_pcie_fallback_bandwidth(fake_fs):
     """No nvidia-smi / rocm-smi available → use PCIe gen×width fallback."""
     invalidate_enumeration_cache()
     fake_devices = (
-        DeviceInfo(vendor=GpuVendor.NVIDIA, device_id=0, device_path="/dev/nvidia0",
-                   arch="", model="", driver_version="", pcie_bdf="",
-                   numa_node=0, pcie_gen=3, pcie_width=8),
-        DeviceInfo(vendor=GpuVendor.NVIDIA, device_id=1, device_path="/dev/nvidia1",
-                   arch="", model="", driver_version="", pcie_bdf="",
-                   numa_node=0, pcie_gen=3, pcie_width=8),
+        DeviceInfo(
+            vendor=GpuVendor.NVIDIA,
+            device_id=0,
+            device_path="/dev/nvidia0",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=3,
+            pcie_width=8,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.NVIDIA,
+            device_id=1,
+            device_path="/dev/nvidia1",
+            arch="",
+            model="",
+            driver_version="",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=3,
+            pcie_width=8,
+        ),
     )
     with mock.patch.object(hw, "enumerate_devices", return_value=fake_devices):
         topo = DeviceTopology.discover()
@@ -480,9 +567,7 @@ def test_source_has_no_hardcoded_nvidia_ceiling():
         matches = pat.findall(src)
         # If `/dev/nvidia0`..`/dev/nvidia7` appears literally, that's bad.
         if pat.pattern.startswith("/dev/nvidia"):
-            assert not matches, (
-                f"Found hardcoded /dev/nvidia0..7 reference: {matches}"
-            )
+            assert not matches, f"Found hardcoded /dev/nvidia0..7 reference: {matches}"
         # range(8) is too restrictive to ban globally; we only check the
         # /dev/nvidia pattern above which is the actual regression vector.
 
@@ -495,13 +580,23 @@ def test_source_has_no_hardcoded_nvidia_ceiling():
 def test_cli_inspect_topology_outputs_json(capsys, fake_fs):
     """`nautilus inspect topology` must emit valid JSON with expected shape."""
     from click.testing import CliRunner
+
     from src.cli.commands.inspect import cli
 
     invalidate_enumeration_cache()
     fake_devices = (
-        DeviceInfo(vendor=GpuVendor.NVIDIA, device_id=0, device_path="/dev/nvidia0",
-                   arch="", model="A100", driver_version="535", pcie_bdf="",
-                   numa_node=0, pcie_gen=4, pcie_width=16),
+        DeviceInfo(
+            vendor=GpuVendor.NVIDIA,
+            device_id=0,
+            device_path="/dev/nvidia0",
+            arch="",
+            model="A100",
+            driver_version="535",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
     )
     with mock.patch.object(hw, "enumerate_devices", return_value=fake_devices):
         runner = CliRunner()
@@ -523,6 +618,7 @@ def test_cli_inspect_topology_outputs_json(capsys, fake_fs):
 def test_cli_inspect_topology_zero_gpus(capsys, fake_fs):
     """`nautilus inspect topology` on a 0-GPU system → valid empty JSON."""
     from click.testing import CliRunner
+
     from src.cli.commands.inspect import cli
 
     invalidate_enumeration_cache()
@@ -538,6 +634,7 @@ def test_cli_inspect_topology_zero_gpus(capsys, fake_fs):
 def test_cli_inspect_help_lists_subcommands():
     """`nautilus inspect --help` should list both subcommands."""
     from click.testing import CliRunner
+
     from src.cli.commands.inspect import cli
 
     runner = CliRunner()
@@ -556,15 +653,42 @@ def test_discover_topology_mixed_vendors(fake_fs):
     """Mixed Nvidia + AMD + Intel cluster → all three present, all paired."""
     invalidate_enumeration_cache()
     fake_devices = (
-        DeviceInfo(vendor=GpuVendor.NVIDIA, device_id=0, device_path="/dev/nvidia0",
-                   arch="sm_90", model="H100", driver_version="535", pcie_bdf="",
-                   numa_node=0, pcie_gen=5, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.AMD, device_id=1, device_path="/dev/kfd",
-                   arch="gfx942", model="MI300X", driver_version="6.0", pcie_bdf="",
-                   numa_node=0, pcie_gen=5, pcie_width=16),
-        DeviceInfo(vendor=GpuVendor.INTEL, device_id=2, device_path="/dev/dri/renderD130",
-                   arch="xe_hpg", model="PVC", driver_version="1.0", pcie_bdf="",
-                   numa_node=1, pcie_gen=4, pcie_width=16),
+        DeviceInfo(
+            vendor=GpuVendor.NVIDIA,
+            device_id=0,
+            device_path="/dev/nvidia0",
+            arch="sm_90",
+            model="H100",
+            driver_version="535",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=5,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.AMD,
+            device_id=1,
+            device_path="/dev/kfd",
+            arch="gfx942",
+            model="MI300X",
+            driver_version="6.0",
+            pcie_bdf="",
+            numa_node=0,
+            pcie_gen=5,
+            pcie_width=16,
+        ),
+        DeviceInfo(
+            vendor=GpuVendor.INTEL,
+            device_id=2,
+            device_path="/dev/dri/renderD130",
+            arch="xe_hpg",
+            model="PVC",
+            driver_version="1.0",
+            pcie_bdf="",
+            numa_node=1,
+            pcie_gen=4,
+            pcie_width=16,
+        ),
     )
     with mock.patch.object(hw, "enumerate_devices", return_value=fake_devices):
         topo = DeviceTopology.discover()

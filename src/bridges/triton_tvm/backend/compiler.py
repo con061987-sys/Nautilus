@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from src.common.logging import get_logger
 
@@ -26,16 +27,21 @@ try:
         GPUTarget,
         Language,
     )
+
     TRITON_AVAILABLE = True
 except ImportError:
     TRITON_AVAILABLE = False
+
     # Stub for environments without Triton
     class BaseBackend:  # type: ignore
         def __init__(self, *a: Any, **kw: Any) -> None: ...
+
     class GPUTarget:  # type: ignore
         pass
+
     class Language:  # type: ignore
         pass
+
 
 from . import CAPTURE_KEY_FMT
 from .options import TVMOptions
@@ -51,6 +57,7 @@ _CAPTURE_BUFFER: dict[str, str] = {}
 @dataclass
 class CapturedIR:
     """The IR captured at a specific pipeline stage."""
+
     source_hash: str
     target: str
     stage_name: str  # 'ttir' | 'ttgir' | 'llir' | ...
@@ -77,8 +84,7 @@ class TVMBackend(BaseBackend):
     def __init__(self, target: GPUTarget) -> None:
         if not TRITON_AVAILABLE:
             raise RuntimeError(
-                "Triton is required to use TVMBackend. "
-                "Install with: pip install triton"
+                "Triton is required to use TVMBackend. Install with: pip install triton"
             )
         super().__init__(target)
         self.target_obj = target
@@ -146,7 +152,9 @@ class TVMBackend(BaseBackend):
         original_ttir = stages.get("ttir")
         if original_ttir is not None:
             stages["ttir"] = self._wrap_stage(
-                original_ttir, "ttir", options,
+                original_ttir,
+                "ttir",
+                options,
             )
 
         # Wrap TTGIR stage — captures the hardware-aware TTGIR
@@ -154,14 +162,18 @@ class TVMBackend(BaseBackend):
         original_ttgir = stages.get("ttgir")
         if original_ttgir is not None:
             stages["ttgir"] = self._wrap_stage(
-                original_ttgir, "ttgir", options,
+                original_ttgir,
+                "ttgir",
+                options,
             )
 
         # Wrap LLIR stage — captures the LLVM IR after Triton lowering
         original_llir = stages.get("llir")
         if original_llir is not None:
             stages["llir"] = self._wrap_stage(
-                original_llir, "llir", options,
+                original_llir,
+                "llir",
+                options,
             )
 
         logger.debug(
@@ -201,6 +213,7 @@ class TVMBackend(BaseBackend):
         # Defer import to avoid circular dependency
         try:
             from triton.language.extra import libdevice
+
             return {"libdevice": libdevice}
         except ImportError:
             return {}
@@ -227,6 +240,7 @@ class TVMBackend(BaseBackend):
         not running tuning). When active, it triggers the orchestrator
         asynchronously to avoid blocking the compile.
         """
+
         def wrapped(src: Any, metadata: dict[str, Any]) -> Any:
             # Run the original stage — this produces the IR module
             result = original_stage(src, metadata)
@@ -245,7 +259,8 @@ class TVMBackend(BaseBackend):
                 # Capture must NEVER break the compile path
                 logger.warning(
                     "TVMBackend capture failed at stage=%s: %s",
-                    stage_name, exc,
+                    stage_name,
+                    exc,
                 )
 
             return result
@@ -288,7 +303,9 @@ class TVMBackend(BaseBackend):
 
         logger.debug(
             "Captured IR at stage=%s source=%s..%d_chars",
-            stage_name, source_hash[:12], len(ir_text),
+            stage_name,
+            source_hash[:12],
+            len(ir_text),
         )
 
     @staticmethod

@@ -31,7 +31,8 @@ from src.common.logging import configure_logging
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 @click.option(
-    "--log-level", "-l",
+    "--log-level",
+    "-l",
     type=click.Choice(["debug", "info", "warning", "error"], case_sensitive=False),
     default="info",
     help="Logging verbosity.",

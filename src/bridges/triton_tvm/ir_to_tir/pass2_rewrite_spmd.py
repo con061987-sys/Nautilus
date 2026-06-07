@@ -21,7 +21,6 @@ transformations (split, reorder, bind, etc.).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from src.common.logging import get_logger
 

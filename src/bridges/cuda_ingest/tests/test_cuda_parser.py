@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.bridges.cuda_ingest.parser import (
-    CudaKernel,
     CudaParser,
-    CudaStatement,
     CudaStatementType,
 )
 
-SAMPLE_MATMUL_CUDA = '''
+SAMPLE_MATMUL_CUDA = """
 #include <cuda_runtime.h>
 
 __global__ void matmul_kernel(
@@ -40,17 +36,17 @@ __global__ void matmul_kernel(
 __device__ float helper(float x) {
     return x * 2.0f;
 }
-'''
+"""
 
 
-SAMPLE_SIMPLE_KERNEL = '''
+SAMPLE_SIMPLE_KERNEL = """
 __global__ void vector_add(float* a, float* b, float* c, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         c[i] = a[i] + b[i];
     }
 }
-'''
+"""
 
 
 class TestCudaParser:
@@ -99,10 +95,7 @@ class TestCudaParser:
         parser = CudaParser()
         kernels = parser.parse_source(SAMPLE_MATMUL_CUDA)
         matmul = kernels[0]
-        sync_stmts = [
-            s for s in matmul.body
-            if s.stmt_type == CudaStatementType.SYNC_THREADS
-        ]
+        sync_stmts = [s for s in matmul.body if s.stmt_type == CudaStatementType.SYNC_THREADS]
         assert len(sync_stmts) >= 1
 
     def test_parse_atomic_op(self) -> None:
@@ -110,10 +103,7 @@ class TestCudaParser:
         parser = CudaParser()
         kernels = parser.parse_source(SAMPLE_MATMUL_CUDA)
         matmul = kernels[0]
-        atomic_stmts = [
-            s for s in matmul.body
-            if s.stmt_type == CudaStatementType.ATOMIC_OP
-        ]
+        atomic_stmts = [s for s in matmul.body if s.stmt_type == CudaStatementType.ATOMIC_OP]
         assert len(atomic_stmts) >= 1
         assert "atomicAdd" in atomic_stmts[0].raw_text
 

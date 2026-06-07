@@ -36,14 +36,15 @@ logger = get_logger(__name__)
 
 class OpKind(Enum):
     """Categorisation of ops for the 4-pass conversion."""
+
     # Triton-specific
     LOAD = auto()
     STORE = auto()
-    DOT = auto()                # tt.dot / tt.dot_scaled — split out
+    DOT = auto()  # tt.dot / tt.dot_scaled — split out
     REDUCE = auto()
     BROADCAST = auto()
     RESHAPE = auto()
-    TRANSPOSE = auto()          # tt.trans — permute last two dims
+    TRANSPOSE = auto()  # tt.trans — permute last two dims
     MAKE_TENSOR_PTR = auto()
     ADVANCE = auto()
     GET_PROGRAM_ID = auto()
@@ -51,7 +52,7 @@ class OpKind(Enum):
     ADDPTR = auto()
     MAX = auto()
     MIN = auto()
-    RETURN = auto()             # tt.return — kernel terminator
+    RETURN = auto()  # tt.return — kernel terminator
     # Standard arith
     ADDF = auto()
     SUBF = auto()
@@ -91,6 +92,7 @@ class TTGIRType:
       f32                          → scalar float32
       i32                          → scalar int32
     """
+
     raw: str
     is_pointer: bool = False
     is_tensor: bool = False
@@ -120,10 +122,11 @@ class TTGIROperation:
     textual operands as raw strings — the conversion passes interpret
     them using the operation kind.
     """
+
     kind: OpKind
     raw_text: str
-    name: str = ""                 # e.g. "tt.dot" or "arith.addf"
-    result_name: str = ""          # e.g. "%result" — the SSA result
+    name: str = ""  # e.g. "tt.dot" or "arith.addf"
+    result_name: str = ""  # e.g. "%result" — the SSA result
     operands: list[str] = field(default_factory=list)
     types: list[TTGIRType] = field(default_factory=list)
     attributes: dict[str, str] = field(default_factory=dict)
@@ -135,6 +138,7 @@ class TTGIROperation:
 @dataclass
 class TTGIRFunction:
     """A parsed Triton kernel function."""
+
     name: str
     args: list[tuple[str, TTGIRType]] = field(default_factory=list)
     ops: list[TTGIROperation] = field(default_factory=list)
@@ -149,10 +153,12 @@ class TTGIRFunction:
 
     def iter_all_ops(self) -> Iterator[TTGIROperation]:
         """Iterate all ops including those nested in loops/ifs."""
+
         def _walk(ops: list[TTGIROperation]) -> Iterator[TTGIROperation]:
             for op in ops:
                 yield op
                 yield from _walk(op.nested_ops)
+
         yield from _walk(self.ops)
 
     def op_count(self) -> int:
@@ -201,18 +207,16 @@ class TTGIRParser:
 
     # Regex patterns
     FUNC_DEF_RE = re.compile(
-        r'tt\.func\s+(?:public\s+)?@(\w+)\s*\(([^)]*)\)\s*(?:->\s*[^{]*)?\s*\{',
+        r"tt\.func\s+(?:public\s+)?@(\w+)\s*\(([^)]*)\)\s*(?:->\s*[^{]*)?\s*\{",
     )
     OP_RE = re.compile(
-        r'(%\w+)\s*=\s*([\w.]+)\s+(.*?)(?=\n\s+%\w+\s*=|\n\s*\}|\Z)',
+        r"(%\w+)\s*=\s*([\w.]+)\s+(.*?)(?=\n\s+%\w+\s*=|\n\s*\}|\Z)",
         re.DOTALL,
     )
-    MODULE_ATTR_RE = re.compile(r'(\w[\w.]+)\s*=\s*([^}\n]+)')
-    POINTER_TYPE_RE = re.compile(
-        r'!tt\.ptr<((?:tensor<[^>]+>)|(?:\w+))(?:,\s*(\d+))?>'
-    )
-    TENSOR_TYPE_RE = re.compile(r'tensor<([^>]+)>')
-    DTYPE_RE = re.compile(r'(f(?:32|16|64)|bf16|i(?:32|64|8)|u(?:32|64|8))')
+    MODULE_ATTR_RE = re.compile(r"(\w[\w.]+)\s*=\s*([^}\n]+)")
+    POINTER_TYPE_RE = re.compile(r"!tt\.ptr<((?:tensor<[^>]+>)|(?:\w+))(?:,\s*(\d+))?>")
+    TENSOR_TYPE_RE = re.compile(r"tensor<([^>]+)>")
+    DTYPE_RE = re.compile(r"(f(?:32|16|64)|bf16|i(?:32|64|8)|u(?:32|64|8))")
 
     def parse(self, ir_text: str) -> TTGIRFunction:
         """Parse real TTGIR text into a structured AST.
@@ -299,7 +303,7 @@ class TTGIRParser:
                 if m.group(2):
                     address_space = int(m.group(2))
             else:
-                inner = type_str[len("!tt.ptr<"):-1]
+                inner = type_str[len("!tt.ptr<") : -1]
         else:
             inner = type_str
 
@@ -348,16 +352,22 @@ class TTGIRParser:
         if idx == -1:
             return ("", content)
         shape_part = content[:idx]
-        dtype_part = content[idx+1:]
+        dtype_part = content[idx + 1 :]
         return (shape_part, dtype_part)
 
     def _normalize_dtype(self, dtype: str) -> str:
         """Normalize MLIR dtype names to canonical Python forms."""
         mapping = {
-            "f32": "float32", "f16": "float16", "f64": "float64",
+            "f32": "float32",
+            "f16": "float16",
+            "f64": "float64",
             "bf16": "bfloat16",
-            "i32": "int32", "i64": "int64", "i8": "int8",
-            "u32": "uint32", "u64": "uint64", "u8": "uint8",
+            "i32": "int32",
+            "i64": "int64",
+            "i8": "int8",
+            "u32": "uint32",
+            "u64": "uint64",
+            "u8": "uint8",
             "i1": "bool",
         }
         return mapping.get(dtype, dtype)
@@ -438,7 +448,7 @@ class TTGIRParser:
                 )
                 # Parse operands and attributes
                 op.operands, op.attributes = self._parse_operands(
-                    body_text[i + op_match.end() - 1:raw_end],
+                    body_text[i + op_match.end() - 1 : raw_end],
                 )
 
                 # For control flow ops, recursively parse the body
@@ -448,7 +458,7 @@ class TTGIRParser:
                         brace_start -= 1
                     if body_text[brace_start] == "{":
                         body_end = self._find_matching_brace(body_text, brace_start)
-                        inner = body_text[brace_start + 1:body_end - 1]
+                        inner = body_text[brace_start + 1 : body_end - 1]
                         op.nested_ops = self._parse_ops(inner)
 
                 # Reduce bodies use `^bb0(...)` block syntax the
@@ -456,13 +466,13 @@ class TTGIRParser:
                 # the combine op as an attribute instead.
                 if op_kind == OpKind.REDUCE:
                     combine_op = self._extract_combine_op(
-                        body_text[i + op_match.end() - 1:raw_end],
+                        body_text[i + op_match.end() - 1 : raw_end],
                     )
                     if combine_op is not None:
                         op.attributes["combine_op"] = combine_op
 
                 op.types = self._extract_op_types(
-                    body_text[i + op_match.end() - 1:raw_end],
+                    body_text[i + op_match.end() - 1 : raw_end],
                 )
 
                 ops.append(op)
@@ -471,7 +481,7 @@ class TTGIRParser:
 
             # Try to match a control-flow-only statement: scf.for ... { ... }
             scf_match = re.match(
-                r'(scf\.\w+)\s+(.*?)\{',
+                r"(scf\.\w+)\s+(.*?)\{",
                 body_text[i:],
                 re.DOTALL,
             )
@@ -486,7 +496,7 @@ class TTGIRParser:
                     name=op_name,
                 )
                 if op_kind in (OpKind.FOR_LOOP, OpKind.IF_STATEMENT):
-                    inner = body_text[brace_pos + 1:body_end - 1]
+                    inner = body_text[brace_pos + 1 : body_end - 1]
                     op.nested_ops = self._parse_ops(inner)
                 ops.append(op)
                 i = body_end
@@ -495,7 +505,7 @@ class TTGIRParser:
             # Statement-style op: no ``%result =`` prefix. Used for
             # ``tt.return`` / ``tt.store``, which occupy a single line.
             stmt_match = re.match(
-                r'(tt\.\w+)\s+([^\n]*)',
+                r"(tt\.\w+)\s+([^\n]*)",
                 body_text[i:],
             )
             if stmt_match:
@@ -507,7 +517,7 @@ class TTGIRParser:
                     raw_text=line_text.strip(),
                     name=op_name,
                 )
-                rest = line_text[len(op_name):]
+                rest = line_text[len(op_name) :]
                 op.operands, op.attributes = self._parse_operands(rest)
                 ops.append(op)
                 i += len(line_text)
@@ -547,12 +557,12 @@ class TTGIRParser:
                     rest = text[j:]
                     if (
                         re.match(r'%\w+\s*=\s*"(?:[^"]+)"\s*', rest)
-                        or re.match(r'%\w+\s*=\s*[\w.]+\s*', rest)
-                        or re.match(r'%\w+\s*=\s*scf\.', rest)
+                        or re.match(r"%\w+\s*=\s*[\w.]+\s*", rest)
+                        or re.match(r"%\w+\s*=\s*scf\.", rest)
                     ):
                         return i
                 elif re.match(
-                    r'(tt|arith|math|scf|memref|llvm|affine)\.\w+',
+                    r"(tt|arith|math|scf|memref|llvm|affine)\.\w+",
                     text[j:],
                 ):
                     return i
@@ -560,7 +570,8 @@ class TTGIRParser:
         return n
 
     def _parse_operands(
-        self, op_text: str,
+        self,
+        op_text: str,
     ) -> tuple[list[str], dict[str, str]]:
         """Parse operands and attributes from op text.
 
@@ -571,7 +582,7 @@ class TTGIRParser:
         attrs: dict[str, str] = {}
 
         # Extract SSA value references
-        for m in re.finditer(r'(%[\w.]+)', op_text):
+        for m in re.finditer(r"(%[\w.]+)", op_text):
             operands.append(m.group(1))
 
         # Extract attribute key = value pairs (e.g. eviction_policy = "evict_last")
@@ -584,10 +595,10 @@ class TTGIRParser:
 
     def _extract_combine_op(self, op_text: str) -> str | None:
         """Extract the combine op name from a tt.reduce's body region."""
-        m = re.search(r'\^bb\d*\([^)]*\)\s*:\s*([\w.]+)', op_text)
+        m = re.search(r"\^bb\d*\([^)]*\)\s*:\s*([\w.]+)", op_text)
         if m:
             return m.group(1)
-        m = re.search(r'\b(arith|math|tt)\.\w+', op_text)
+        m = re.search(r"\b(arith|math|tt)\.\w+", op_text)
         if m:
             return m.group(0)
         return None
@@ -595,7 +606,7 @@ class TTGIRParser:
     def _extract_op_types(self, op_text: str) -> list[TTGIRType]:
         """Extract tensor types from a single op's text."""
         types: list[TTGIRType] = []
-        for m in re.finditer(r'tensor<([^>]+)>', op_text):
+        for m in re.finditer(r"tensor<([^>]+)>", op_text):
             try:
                 types.append(self._parse_type(f"tensor<{m.group(1)}>"))
             except Exception:

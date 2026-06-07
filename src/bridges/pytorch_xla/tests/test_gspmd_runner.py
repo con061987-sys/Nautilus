@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
-
 from src.bridges.pytorch_xla.device_mesh import (
     DeviceMesh,
     DeviceVendor,
@@ -14,7 +12,6 @@ from src.bridges.pytorch_xla.device_mesh import (
 )
 from src.bridges.pytorch_xla.device_mesh_utils import infer_target_from_mesh
 from src.bridges.pytorch_xla.gspmd_runner import (
-    GSPMDResult,
     GSPMDRunner,
     ShardingSpec,
     ShardingStrategy,
@@ -203,7 +200,10 @@ class TestGSPMDRunner:
             ),
         }
         result = runner.run(
-            module, mesh, ShardingStrategy.DATA_PARALLEL, custom_shardings=custom,
+            module,
+            mesh,
+            ShardingStrategy.DATA_PARALLEL,
+            custom_shardings=custom,
         )
         spec = result.sharding_spec
         assert spec is not None
@@ -252,7 +252,9 @@ class TestShardingAnnotationRealMLIRAttrs:
             mesh_shape=[4],
             tensor_shardings={
                 "A": TensorSharding(
-                    "A", mesh_axes=[], partition_shape=[],
+                    "A",
+                    mesh_axes=[],
+                    partition_shape=[],
                     replicate_on_other_axes=True,
                 ),
             },
@@ -278,7 +280,9 @@ class TestShardingAnnotationRealMLIRAttrs:
             mesh_shape=[2, 2],
             tensor_shardings={
                 "A": TensorSharding(
-                    "A", mesh_axes=[0, 1], partition_shape=[2, 2],
+                    "A",
+                    mesh_axes=[0, 1],
+                    partition_shape=[2, 2],
                 ),
             },
         )
@@ -298,9 +302,7 @@ class TestShardingAnnotationRealMLIRAttrs:
         a_attrs = re.findall(r"%A:[^{]+\{([^}]+)\}", twice)
         assert a_attrs, "no attribute group on %A"
         for attrs in a_attrs:
-            assert attrs.count("mhlo.sharding") == 1, (
-                f"duplicate mhlo.sharding on %A: {attrs}"
-            )
+            assert attrs.count("mhlo.sharding") == 1, f"duplicate mhlo.sharding on %A: {attrs}"
 
     def test_annotate_noop_on_empty_inputs(self) -> None:
         """Empty MLIR or empty spec must return the input unchanged."""
@@ -311,7 +313,10 @@ class TestShardingAnnotationRealMLIRAttrs:
             },
         )
         assert _annotate_stablehlo_with_sharding("", spec) == ""
-        assert _annotate_stablehlo_with_sharding(SAMPLE_MLIR, ShardingSpec(mesh_shape=[4])) == SAMPLE_MLIR
+        assert (
+            _annotate_stablehlo_with_sharding(SAMPLE_MLIR, ShardingSpec(mesh_shape=[4]))
+            == SAMPLE_MLIR
+        )
 
     def test_annotate_no_match_for_unknown_arg(self) -> None:
         """If the tensor name doesn't match any function arg, the MLIR is
@@ -377,11 +382,16 @@ class TestTVMInferTarget:
     def test_nvidia_sm90_maps_to_h100(self) -> None:
         """Nvidia Hopper (sm_90) maps to ``nvidia/nvidia-h100``."""
         mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.NVIDIA, arch="sm_90",
-                memory_gb=80, compute_tflops=989,
-                interconnect=InterconnectType.NVLINK,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80,
+                    compute_tflops=989,
+                    interconnect=InterconnectType.NVLINK,
+                )
+            ],
             mesh_shape=[1],
         )
         assert infer_target_from_mesh(mesh) == "nvidia/nvidia-h100"
@@ -389,11 +399,16 @@ class TestTVMInferTarget:
     def test_nvidia_sm80_maps_to_a100(self) -> None:
         """Nvidia Ampere (sm_80) maps to ``nvidia/nvidia-a100``."""
         mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.NVIDIA, arch="sm_80",
-                memory_gb=80, compute_tflops=312,
-                interconnect=InterconnectType.NVLINK,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_80",
+                    memory_gb=80,
+                    compute_tflops=312,
+                    interconnect=InterconnectType.NVLINK,
+                )
+            ],
             mesh_shape=[1],
         )
         assert infer_target_from_mesh(mesh) == "nvidia/nvidia-a100"
@@ -401,11 +416,16 @@ class TestTVMInferTarget:
     def test_amd_gfx942_maps_to_rocm(self) -> None:
         """AMD MI300X (gfx942) maps to ``rocm/gfx942``."""
         mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.AMD, arch="gfx942",
-                memory_gb=192, compute_tflops=1300,
-                interconnect=InterconnectType.INFINITY_FABRIC,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.AMD,
+                    arch="gfx942",
+                    memory_gb=192,
+                    compute_tflops=1300,
+                    interconnect=InterconnectType.INFINITY_FABRIC,
+                )
+            ],
             mesh_shape=[1],
         )
         assert infer_target_from_mesh(mesh) == "rocm/gfx942"
@@ -413,11 +433,16 @@ class TestTVMInferTarget:
     def test_intel_gaudi2_maps_to_intel(self) -> None:
         """Intel Gaudi 2 maps to ``intel/gaudi-2``."""
         mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.INTEL, arch="intel_gaudi2",
-                memory_gb=96, compute_tflops=900,
-                interconnect=InterconnectType.ETHERNET,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.INTEL,
+                    arch="intel_gaudi2",
+                    memory_gb=96,
+                    compute_tflops=900,
+                    interconnect=InterconnectType.ETHERNET,
+                )
+            ],
             mesh_shape=[1],
         )
         assert infer_target_from_mesh(mesh) == "intel/gaudi-2"
@@ -425,11 +450,16 @@ class TestTVMInferTarget:
     def test_cpu_fallback(self) -> None:
         """CPU-only mesh falls back to ``llvm``."""
         mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.CPU, arch="x86_64",
-                memory_gb=64, compute_tflops=0.5,
-                interconnect=InterconnectType.PCIE,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.CPU,
+                    arch="x86_64",
+                    memory_gb=64,
+                    compute_tflops=0.5,
+                    interconnect=InterconnectType.PCIE,
+                )
+            ],
             mesh_shape=[1],
         )
         assert infer_target_from_mesh(mesh) == "llvm"
@@ -438,11 +468,16 @@ class TestTVMInferTarget:
         """A vendor we recognise but with an unknown arch falls back to the
         vendor's default target, not llvm."""
         mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.NVIDIA, arch="sm_999",
-                memory_gb=80, compute_tflops=312,
-                interconnect=InterconnectType.NVLINK,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_999",
+                    memory_gb=80,
+                    compute_tflops=312,
+                    interconnect=InterconnectType.NVLINK,
+                )
+            ],
             mesh_shape=[1],
         )
         assert infer_target_from_mesh(mesh) == "nvidia/nvidia-h100"
@@ -451,11 +486,16 @@ class TestTVMInferTarget:
         """_TVMMetaScheduleSharding._mesh_target must use the same mapping
         as infer_target_from_mesh."""
         nvidia_mesh = DeviceMesh(
-            devices=[MeshDevice(
-                device_id=0, vendor=DeviceVendor.NVIDIA, arch="sm_90",
-                memory_gb=80, compute_tflops=989,
-                interconnect=InterconnectType.NVLINK,
-            )],
+            devices=[
+                MeshDevice(
+                    device_id=0,
+                    vendor=DeviceVendor.NVIDIA,
+                    arch="sm_90",
+                    memory_gb=80,
+                    compute_tflops=989,
+                    interconnect=InterconnectType.NVLINK,
+                )
+            ],
             mesh_shape=[1],
         )
         assert _TVMMetaScheduleSharding._mesh_target(nvidia_mesh) == "nvidia/nvidia-h100"

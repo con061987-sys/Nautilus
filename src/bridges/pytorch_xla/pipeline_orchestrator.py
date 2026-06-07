@@ -32,7 +32,7 @@ from .comm_backend import CommBackend
 from .device_mesh import DeviceMesh
 from .dtensor_apply import DTensorApplier, DTensorPlan
 from .graph_capture import CapturedGraph, GraphCapture
-from .gspmd_runner import GSPMDResult, GSPMDRunner, ShardingSpec, ShardingStrategy
+from .gspmd_runner import GSPMDResult, GSPMDRunner, ShardingStrategy
 from .hardware_orchestrator import ShardExecutionResult, ShardExecutor
 from .stablehlo_export import StableHLOExporter, StableHLOModule
 
@@ -53,6 +53,7 @@ try:
         StageBudgets,
         TimeoutManager,
     )
+
     BRIDGE_INFRA = True
 except ImportError:
     BRIDGE_INFRA = False
@@ -63,6 +64,7 @@ logger = get_logger(__name__)
 @dataclass
 class ShardingConfig:
     """Configuration for the auto-sharding pipeline."""
+
     model: Any
     example_inputs: tuple[Any, ...]
     device_mesh: DeviceMesh
@@ -103,6 +105,7 @@ class ShardingConfig:
 @dataclass
 class ShardingResult:
     """Result of the full auto-sharding pipeline."""
+
     success: bool
     captured_graph: CapturedGraph | None = None
     stablehlo_module: StableHLOModule | None = None
@@ -202,7 +205,8 @@ class AutoShardingBridge:
         # are a no-op so the existing single-host code path is
         # preserved byte-for-byte.
         orchestration_plan = self._build_orchestration_plan(
-            config, device_mesh,
+            config,
+            device_mesh,
         )
         if orchestration_plan is not None:
             stage_durations["cluster_schedule"] = 0.0
@@ -277,7 +281,8 @@ class AutoShardingBridge:
         shard_executions: list[ShardExecutionResult] = []
         if not config.skip_fat_binary and self.executor is not None:
             shard_executions = self.executor.execute_all_shards(
-                gspmd_result, stablehlo,
+                gspmd_result,
+                stablehlo,
             )
         stage_durations["fat_binary"] = (time.perf_counter() - t0) * 1000
 
@@ -303,7 +308,7 @@ class AutoShardingBridge:
 
     def _build_orchestration_plan(
         self,
-        config: "ShardingConfig",
+        config: ShardingConfig,
         device_mesh: DeviceMesh,
     ) -> Any:
         """Run cluster-aware scheduling when the cluster is multi-node.
@@ -336,10 +341,9 @@ class AutoShardingBridge:
                 ),
                 policy=getattr(config, "scheduling_policy", None),
             )
-        except Exception as exc:  # noqa: BLE001 — surface as warning
+        except Exception as exc:
             logger.warning(
-                "cluster-aware scheduling failed: %s; "
-                "falling back to single-host path",
+                "cluster-aware scheduling failed: %s; falling back to single-host path",
                 exc,
             )
             return None

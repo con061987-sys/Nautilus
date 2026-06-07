@@ -66,47 +66,53 @@ def _device(
 @pytest.fixture
 def single_node_nvidia() -> ClusterTopology:
     """2x H100 on a single host, NVLink-only."""
-    return ClusterTopology(nodes=[
-        Node(
-            hostname="node-a",
-            devices=(
-                _device(0, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
-                _device(1, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
+    return ClusterTopology(
+        nodes=[
+            Node(
+                hostname="node-a",
+                devices=(
+                    _device(0, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
+                    _device(1, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
+                ),
             ),
-        ),
-    ])
+        ]
+    )
 
 
 @pytest.fixture
 def single_node_amd() -> ClusterTopology:
     """2x MI300X on a single host, Infinity Fabric only."""
-    return ClusterTopology(nodes=[
-        Node(
-            hostname="amd-box",
-            devices=(
-                _device(0, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
-                _device(1, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
+    return ClusterTopology(
+        nodes=[
+            Node(
+                hostname="amd-box",
+                devices=(
+                    _device(0, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
+                    _device(1, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
+                ),
             ),
-        ),
-    ])
+        ]
+    )
 
 
 @pytest.fixture
 def mixed_single_node() -> ClusterTopology:
     """2x AMD + 2x Intel + 2x Nvidia on a single dev box."""
-    return ClusterTopology(nodes=[
-        Node(
-            hostname="dev-box",
-            devices=(
-                _device(0, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
-                _device(1, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
-                _device(2, DeviceVendor.INTEL, InterconnectType.PCIE, "gaudi2"),
-                _device(3, DeviceVendor.INTEL, InterconnectType.PCIE, "gaudi2"),
-                _device(4, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
-                _device(5, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
+    return ClusterTopology(
+        nodes=[
+            Node(
+                hostname="dev-box",
+                devices=(
+                    _device(0, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
+                    _device(1, DeviceVendor.AMD, InterconnectType.INFINITY_FABRIC, "gfx942"),
+                    _device(2, DeviceVendor.INTEL, InterconnectType.PCIE, "gaudi2"),
+                    _device(3, DeviceVendor.INTEL, InterconnectType.PCIE, "gaudi2"),
+                    _device(4, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
+                    _device(5, DeviceVendor.NVIDIA, InterconnectType.NVLINK, "sm_90"),
+                ),
             ),
-        ),
-    ])
+        ]
+    )
 
 
 @pytest.fixture
@@ -137,9 +143,7 @@ def multi_node_cluster() -> ClusterTopology:
             ),
             Node(
                 hostname="node-d",
-                devices=(
-                    _device(0, DeviceVendor.NVIDIA, InterconnectType.NVLINK),
-                ),
+                devices=(_device(0, DeviceVendor.NVIDIA, InterconnectType.NVLINK),),
             ),
         ],
         inter_node_links=[
@@ -217,35 +221,37 @@ class TestClusterTopology:
         assert not topo.is_multi_node
 
     def test_num_devices_aggregates_across_nodes(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         assert multi_node_cluster.num_nodes == 4
         assert multi_node_cluster.num_devices == 7
 
     def test_vendors_aggregated(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         assert multi_node_cluster.vendors == {
-            DeviceVendor.NVIDIA, DeviceVendor.AMD, DeviceVendor.INTEL,
+            DeviceVendor.NVIDIA,
+            DeviceVendor.AMD,
+            DeviceVendor.INTEL,
         }
         assert multi_node_cluster.is_heterogeneous is True
         assert multi_node_cluster.is_multi_node is True
 
     def test_single_node_is_not_multi_node(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         assert mixed_single_node.is_heterogeneous is True
         assert mixed_single_node.is_multi_node is False
 
     def test_all_devices_order_preserved(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         devs = multi_node_cluster.all_devices()
-        expected = [
-            dev
-            for n in multi_node_cluster.nodes
-            for dev in n.devices
-        ]
+        expected = [dev for n in multi_node_cluster.nodes for dev in n.devices]
         assert devs == expected
         assert len(devs) == multi_node_cluster.num_devices
 
@@ -254,7 +260,8 @@ class TestClusterTopology:
         assert multi_node_cluster.find_node("node-z") is None
 
     def test_device_mesh_for_node_caches(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         m1 = multi_node_cluster.device_mesh_for_node("node-a")
         m2 = multi_node_cluster.device_mesh_for_node("node-a")
@@ -263,24 +270,28 @@ class TestClusterTopology:
         assert m1.metadata["hostname"] == "node-a"
 
     def test_device_mesh_for_unknown_node_raises(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         with pytest.raises(ShardingError, match="Unknown node"):
             multi_node_cluster.device_mesh_for_node("node-x")
 
     def test_inter_node_bandwidth_recorded_link(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         assert multi_node_cluster.inter_node_bandwidth("node-a", "node-d") == 200.0
         assert multi_node_cluster.inter_node_bandwidth("node-d", "node-a") == 200.0
 
     def test_inter_node_bandwidth_self_is_zero(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         assert multi_node_cluster.inter_node_bandwidth("node-a", "node-a") == 0.0
 
     def test_inter_node_bandwidth_falls_back_to_ethernet_default(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         # No link recorded between a node and itself in another cluster
         # that does not exist — but for any pair of unknown hosts, we
@@ -289,14 +300,17 @@ class TestClusterTopology:
         # the only safe call.
         assert single_node_nvidia.inter_node_bandwidth("node-a", "node-a") == 0.0
         # Add a synthetic link-less cluster and probe an unknown pair.
-        topo = ClusterTopology(nodes=[
-            Node(hostname="x", devices=(_device(0, DeviceVendor.NVIDIA),)),
-            Node(hostname="y", devices=(_device(0, DeviceVendor.AMD, arch="gfx942"),)),
-        ])
+        topo = ClusterTopology(
+            nodes=[
+                Node(hostname="x", devices=(_device(0, DeviceVendor.NVIDIA),)),
+                Node(hostname="y", devices=(_device(0, DeviceVendor.AMD, arch="gfx942"),)),
+            ]
+        )
         assert topo.inter_node_bandwidth("x", "y") == 12.5
 
     def test_to_dict_is_json_serializable(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         d = multi_node_cluster.to_dict()
         # Must round-trip through json.dumps without a TypeError.
@@ -320,7 +334,8 @@ class TestVendorAwareScheduler:
     """Shard assignment with vendor + interconnect awareness."""
 
     def test_assigns_to_distinct_devices(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         s = VendorAwareScheduler()
         assignments = s.assign_shards(mixed_single_node, num_shards=4)
@@ -332,13 +347,15 @@ class TestVendorAwareScheduler:
         assert len(keys) == 4
 
     def test_zero_shards_raises(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         with pytest.raises(ShardingError, match="must be positive"):
             VendorAwareScheduler().assign_shards(single_node_nvidia, num_shards=0)
 
     def test_too_many_shards_raises_with_context(
-        self, single_node_amd: ClusterTopology,
+        self,
+        single_node_amd: ClusterTopology,
     ) -> None:
         with pytest.raises(ShardingError) as exc_info:
             VendorAwareScheduler().assign_shards(single_node_amd, num_shards=99)
@@ -352,7 +369,8 @@ class TestVendorAwareScheduler:
             VendorAwareScheduler().assign_shards(ClusterTopology(), num_shards=1)
 
     def test_vendor_affinity_groups_majority_first(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         # With 2 AMD + 2 INTEL + 2 NVIDIA and vendor affinity on, the
         # first two shards land on AMD (alphabetically first vendor)
@@ -365,7 +383,8 @@ class TestVendorAwareScheduler:
         assert vendors[2] == DeviceVendor.INTEL
 
     def test_no_vendor_affinity_keeps_node_order(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         s = VendorAwareScheduler(SchedulingPolicy(prefer_vendor_affinity=False))
         assignments = s.assign_shards(mixed_single_node, num_shards=3)
@@ -373,38 +392,44 @@ class TestVendorAwareScheduler:
             assert a.node == "dev-box"
 
     def test_cross_node_vendor_split_disabled_keeps_vendor_on_one_node(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
-        s = VendorAwareScheduler(SchedulingPolicy(
-            prefer_vendor_affinity=True,
-            allow_cross_node_vendor_split=False,
-            load_balance_within_vendor=True,
-        ))
+        s = VendorAwareScheduler(
+            SchedulingPolicy(
+                prefer_vendor_affinity=True,
+                allow_cross_node_vendor_split=False,
+                load_balance_within_vendor=True,
+            )
+        )
         # 3 nvidia devices live on node-a and node-d; with the policy
         # disabled they should all sit on node-a (the first node that
         # advertises nvidia).
         nvidia_assignments = [
-            a for a in s.assign_shards(multi_node_cluster, num_shards=3)
+            a
+            for a in s.assign_shards(multi_node_cluster, num_shards=3)
             if a.vendor == DeviceVendor.NVIDIA
         ]
         assert all(a.node == "node-a" for a in nvidia_assignments)
 
     def test_cross_node_vendor_split_enabled_distributes(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
-        s = VendorAwareScheduler(SchedulingPolicy(
-            prefer_vendor_affinity=True,
-            allow_cross_node_vendor_split=True,
-        ))
+        s = VendorAwareScheduler(
+            SchedulingPolicy(
+                prefer_vendor_affinity=True,
+                allow_cross_node_vendor_split=True,
+            )
+        )
         assignments = s.assign_shards(multi_node_cluster, num_shards=7)
-        nvidia_assignments = [
-            a for a in assignments if a.vendor == DeviceVendor.NVIDIA
-        ]
+        nvidia_assignments = [a for a in assignments if a.vendor == DeviceVendor.NVIDIA]
         nodes = {a.node for a in nvidia_assignments}
         assert {"node-a", "node-d"}.issubset(nodes)
 
     def test_rationale_is_set_and_nonempty(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         s = VendorAwareScheduler()
         assignments = s.assign_shards(mixed_single_node, num_shards=2)
@@ -414,16 +439,20 @@ class TestVendorAwareScheduler:
             assert "interconnect=" in a.rationale
 
     def test_comm_volume_hint_propagated(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         s = VendorAwareScheduler()
         assignments = s.assign_shards(
-            single_node_nvidia, num_shards=2, comm_volume_per_shard_bytes=4096,
+            single_node_nvidia,
+            num_shards=2,
+            comm_volume_per_shard_bytes=4096,
         )
         assert all(a.estimated_comm_volume_bytes == 4096 for a in assignments)
 
     def test_assignment_is_deterministic(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         s = VendorAwareScheduler()
         a1 = s.assign_shards(multi_node_cluster, num_shards=5)
@@ -442,7 +471,8 @@ class TestCommunicationPlanner:
     """Per-pair transport selection."""
 
     def test_same_node_same_vendor_high_bandwidth_is_p2p(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         p = CommunicationPlanner()
         # Both devices are NVLink (900 Gbps), so same-vendor, same-node.
@@ -457,7 +487,8 @@ class TestCommunicationPlanner:
         assert plan.library_hint == "nccl"
 
     def test_same_node_cross_vendor_is_staged(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         p = CommunicationPlanner()
         amd = mixed_single_node.nodes[0].devices[0]
@@ -468,7 +499,8 @@ class TestCommunicationPlanner:
         assert plan.library_hint == "mixed"
 
     def test_cross_node_uses_network(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         p = CommunicationPlanner()
         src = multi_node_cluster.nodes[0].devices[0]  # node-a
@@ -479,7 +511,8 @@ class TestCommunicationPlanner:
         assert plan.library_hint == "mixed"
 
     def test_cross_node_ualink_reflects_recorded_bandwidth(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         p = CommunicationPlanner()
         src = multi_node_cluster.nodes[0].devices[0]  # node-a
@@ -490,7 +523,8 @@ class TestCommunicationPlanner:
         assert plan.estimated_latency_us == 5.0
 
     def test_p2p_threshold_falls_through_to_staged(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         # Force an absurdly high threshold so NVLink no longer counts as
         # P2P-class.
@@ -519,7 +553,8 @@ class TestCommunicationPlanner:
             assert plan.source_device_id != plan.target_device_id
 
     def test_to_dict_includes_all_fields(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         p = CommunicationPlanner()
         plan = p.plan_pair(
@@ -543,7 +578,8 @@ class TestBuildOrchestrationPlan:
     """The one-call helper used by the CLI and pipeline."""
 
     def test_combines_scheduler_and_planner(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         plan = build_orchestration_plan(
             cluster=multi_node_cluster,
@@ -558,7 +594,8 @@ class TestBuildOrchestrationPlan:
         assert len(plan.comm_plans) == 7 * 6  # all ordered pairs
 
     def test_to_dict_is_json_serializable(
-        self, mixed_single_node: ClusterTopology,
+        self,
+        mixed_single_node: ClusterTopology,
     ) -> None:
         plan = build_orchestration_plan(
             cluster=mixed_single_node,
@@ -574,10 +611,12 @@ class TestBuildOrchestrationPlan:
         assert len(decoded["comm_plans"]) == 6 * 5
 
     def test_assignment_for_node(
-        self, multi_node_cluster: ClusterTopology,
+        self,
+        multi_node_cluster: ClusterTopology,
     ) -> None:
         plan = build_orchestration_plan(
-            cluster=multi_node_cluster, num_shards=7,
+            cluster=multi_node_cluster,
+            num_shards=7,
         )
         for node in multi_node_cluster.nodes:
             shards = plan.assignment_for_node(node.hostname)
@@ -585,14 +624,17 @@ class TestBuildOrchestrationPlan:
                 assert a.node == node.hostname
 
     def test_policy_is_propagated(
-        self, single_node_nvidia: ClusterTopology,
+        self,
+        single_node_nvidia: ClusterTopology,
     ) -> None:
         policy = SchedulingPolicy(
             prefer_vendor_affinity=False,
             allow_cross_node_vendor_split=True,
         )
         plan = build_orchestration_plan(
-            cluster=single_node_nvidia, num_shards=1, policy=policy,
+            cluster=single_node_nvidia,
+            num_shards=1,
+            policy=policy,
         )
         assert plan.policy.prefer_vendor_affinity is False
         assert plan.policy.allow_cross_node_vendor_split is True
@@ -650,4 +692,5 @@ class TestClusterCLI:
         # the click command map without invoking the full main module
         # (which may have unrelated broken imports in this branch).
         from src.cli.main import cli as nautilus_cli
+
         assert "cluster" in nautilus_cli.commands

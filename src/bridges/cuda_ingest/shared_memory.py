@@ -41,6 +41,7 @@ logger = get_logger(__name__)
 @dataclass
 class SharedMemAllocation:
     """A single __shared__ memory allocation."""
+
     name: str
     element_type: str
     array_size: int  # 0 = dynamic, >0 = static size
@@ -51,8 +52,13 @@ class SharedMemAllocation:
     def total_bytes(self) -> int:
         """Estimate total bytes (assuming 4-byte elements)."""
         elem_size = {
-            "float": 4, "int": 4, "double": 8, "char": 1,
-            "short": 2, "long": 8, "long long": 8,
+            "float": 4,
+            "int": 4,
+            "double": 8,
+            "char": 1,
+            "short": 2,
+            "long": 8,
+            "long long": 8,
         }.get(self.element_type.lower(), 4)
         if self.is_static:
             return self.array_size * elem_size
@@ -62,6 +68,7 @@ class SharedMemAllocation:
 @dataclass
 class SharedMemPlan:
     """Plan for all shared memory allocations in a kernel."""
+
     allocations: list[SharedMemAllocation] = field(default_factory=list)
     total_static_bytes: int = 0
     estimated_dynamic_bytes: int = 0
@@ -83,7 +90,7 @@ class SharedMemoryAnalyzer:
 
     # Pattern for __shared__ declarations (supports multi-dimensional arrays)
     SHARED_DECL_RE = re.compile(
-        r'__shared__\s+(\w+(?:\s*\*)?)\s+(\w+)((?:\s*\[[^\]]*\])+)\s*;',
+        r"__shared__\s+(\w+(?:\s*\*)?)\s+(\w+)((?:\s*\[[^\]]*\])+)\s*;",
     )
 
     def analyze(self, kernel: Any) -> SharedMemPlan:
@@ -126,7 +133,8 @@ class SharedMemoryAnalyzer:
         # Pattern: __shared__ TYPE NAME[D1][D2]...[DN];
         # Total size is the product of all dimensions.
         head_match = re.search(
-            rf'{re.escape(name)}((?:\s*\[[^\]]*\])+)', raw,
+            rf"{re.escape(name)}((?:\s*\[[^\]]*\])+)",
+            raw,
         )
         if not head_match:
             return SharedMemAllocation(
@@ -137,9 +145,7 @@ class SharedMemoryAnalyzer:
                 raw_declaration=raw,
             )
 
-        size_strs = [
-            s.strip() for s in re.findall(r'\[([^\]]*)\]', head_match.group(1))
-        ]
+        size_strs = [s.strip() for s in re.findall(r"\[([^\]]*)\]", head_match.group(1))]
         if all(s.isdigit() for s in size_strs):
             total_size = 1
             for s in size_strs:
@@ -162,7 +168,8 @@ class SharedMemoryAnalyzer:
         )
 
     def _analyze_bank_conflicts(
-        self, allocations: list[SharedMemAllocation],
+        self,
+        allocations: list[SharedMemAllocation],
     ) -> list[str]:
         """Detect potential shared memory bank conflicts.
 
@@ -193,7 +200,8 @@ class SharedMemoryAnalyzer:
         return warnings
 
     def generate_triton_allocation(
-        self, allocation: SharedMemAllocation,
+        self,
+        allocation: SharedMemAllocation,
     ) -> str:
         """Generate the Triton code for a shared memory allocation.
 
@@ -223,7 +231,4 @@ class SharedMemoryAnalyzer:
 
     def generate_all_allocations(self, plan: SharedMemPlan) -> str:
         """Generate Triton code for all shared memory allocations."""
-        return "\n    ".join(
-            self.generate_triton_allocation(alloc)
-            for alloc in plan.allocations
-        )
+        return "\n    ".join(self.generate_triton_allocation(alloc) for alloc in plan.allocations)

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from src.bridges.cuda_ingest.intrinsic_mapper import IntrinsicMapper
 from src.bridges.cuda_ingest.parser import CudaParser
 from src.bridges.cuda_ingest.translator import (
@@ -14,17 +12,17 @@ from src.bridges.cuda_ingest.translator import (
     _is_scalar_lhs,
 )
 
-SAMPLE_KERNEL = '''
+SAMPLE_KERNEL = """
 __global__ void vector_add(float* a, float* b, float* c, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         c[i] = a[i] + b[i];
     }
 }
-'''
+"""
 
 
-SAMPLE_MATMUL_KERNEL = '''
+SAMPLE_MATMUL_KERNEL = """
 __global__ void matmul(const float* A, const float* B, float* C, int M, int N, int K) {
     __shared__ float tile[16][16];
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -38,17 +36,17 @@ __global__ void matmul(const float* A, const float* B, float* C, int M, int N, i
     }
     __syncthreads();
 }
-'''
+"""
 
 
-SAMPLE_DEVICE_FUNCTION = '''
+SAMPLE_DEVICE_FUNCTION = """
 __device__ float helper(float x) {
     return x * 2.0f;
 }
-'''
+"""
 
 
-SAMPLE_COMPOUND_KERNEL = '''
+SAMPLE_COMPOUND_KERNEL = """
 __global__ void accumulate(float* x, float* y, int n) {
     float sum = 0.0f;
     sum += x[0];
@@ -56,10 +54,10 @@ __global__ void accumulate(float* x, float* y, int n) {
     sum *= 2.0f;
     x[1] = sum;
 }
-'''
+"""
 
 
-SAMPLE_AUTO_KERNEL = '''
+SAMPLE_AUTO_KERNEL = """
 __global__ void use_auto(float* x, int n) {
     auto len = n;
     auto& ref = x[0];
@@ -69,10 +67,10 @@ __global__ void use_auto(float* x, int n) {
         x[i] = ref + len;
     }
 }
-'''
+"""
 
 
-SAMPLE_DECLTYPE_KERNEL = '''
+SAMPLE_DECLTYPE_KERNEL = """
 __global__ void use_decltype(float* x, int n) {
     decltype(x[0]) first = x[0];
     static const decltype(n) limit = 100;
@@ -81,10 +79,10 @@ __global__ void use_decltype(float* x, int n) {
         x[i] = first;
     }
 }
-'''
+"""
 
 
-SAMPLE_STD_MOVE_KERNEL = '''
+SAMPLE_STD_MOVE_KERNEL = """
 __global__ void use_move(float* x, int n) {
     float* p = std::move(x);
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -92,17 +90,17 @@ __global__ void use_move(float* x, int n) {
         x[i] = p[i] + 1.0f;
     }
 }
-'''
+"""
 
 
-SAMPLE_ATOMIC_UNSAFE_KERNEL = '''
+SAMPLE_ATOMIC_UNSAFE_KERNEL = """
 __global__ void compound_deref(float* x, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) {
         x[i] += 1.0f;
     }
 }
-'''
+"""
 
 
 def make_kernel(source: str) -> Any:
@@ -197,44 +195,38 @@ class TestBlockLinearizationPattern:
         """AST-level (GPU) path rewrites the canonical pattern."""
         kernel = make_kernel(SAMPLE_KERNEL)
         result = CudaToTritonTranslator().translate(kernel)
-        assert (
-            "tl.program_id(0) * tl.num_programs(0) + tl.program_id(0)"
-            in result.triton_source
-        )
+        assert "tl.program_id(0) * tl.num_programs(0) + tl.program_id(0)" in result.triton_source
 
     def test_cpu_path_rewrites_block_linearization(self) -> None:
         """Text-level (CPU/fallback) path also rewrites the canonical pattern."""
         mapper = IntrinsicMapper()
         text = "int i = blockIdx.x * blockDim.x + threadIdx.x;"
         out = mapper.transform_text(text)
-        assert (
-            "tl.program_id(0) * tl.num_programs(0) + tl.program_id(0)"
-            in out
-        )
+        assert "tl.program_id(0) * tl.num_programs(0) + tl.program_id(0)" in out
 
     def test_block_linearization_handles_y_dimension(self) -> None:
         """The pattern match works for .y/.z dims, not just .x."""
-        source = '''
+        source = """
 __global__ void k(float* a, int N) {
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (j < N) {
         a[j] = 1.0f;
     }
 }
-'''
+"""
         result = CudaToTritonTranslator().translate(make_kernel(source))
         assert "tl.program_id(1) * tl.num_programs(1) + tl.program_id(1)" in result.triton_source
 
     def test_mixed_dim_pattern_falls_through(self) -> None:
         """Mixed-dim expressions are NOT caught by the canonical pattern."""
-        source = '''
+        source = """
 __global__ void k(float* a, int N) {
     int i = blockIdx.x * blockDim.y + threadIdx.x;
     if (i < N) {
         a[i] = 1.0f;
     }
 }
-'''
+"""
         result = CudaToTritonTranslator().translate(make_kernel(source))
         assert "* tl.num_programs(0) +" not in result.triton_source
 
@@ -262,9 +254,16 @@ class TestCompoundAssignmentDecomposition:
     def test_decompose_all_compound_operators(self) -> None:
         """All 10 compound operators decompose to their plain binary form."""
         cases = {
-            "+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%",
-            "&=": "&", "|=": "|", "^=": "^",
-            "<<=": "<<", ">>=": ">>",
+            "+=": "+",
+            "-=": "-",
+            "*=": "*",
+            "/=": "/",
+            "%=": "%",
+            "&=": "&",
+            "|=": "|",
+            "^=": "^",
+            "<<=": "<<",
+            ">>=": ">>",
         }
         for cuda_op, py_op in cases.items():
             lines = _decompose_compound_assignment(f"a {cuda_op} b")
@@ -313,6 +312,7 @@ class TestCompoundAssignmentDecomposition:
     def test_full_translation_emits_three_lines(self) -> None:
         """The full translator emits 3 lines for a scalar `+=`."""
         import re
+
         kernel = make_kernel(SAMPLE_COMPOUND_KERNEL)
         result = CudaToTritonTranslator().translate(kernel)
         body = result.triton_source
@@ -334,11 +334,11 @@ class TestCompoundAssignmentDecomposition:
         top-level case.  The unit-level coverage for nested cases is
         in `test_decompose_memory_deref_emits_review_comment`.
         """
-        source = '''
+        source = """
 __global__ void compound_deref(float* x) {
     x[0] += 1.0f;
 }
-'''
+"""
         result = CudaToTritonTranslator().translate(make_kernel(source))
         assert "# (atomic-unsafe)" in result.triton_source
 
@@ -353,10 +353,12 @@ class TestCpp11Features:
         # Look at body lines (after the function signature) only, so
         # the kernel name "use_auto" doesn't false-match.
         body_section = result.triton_source.split(
-            "    # Translated kernel body", 1,
+            "    # Translated kernel body",
+            1,
         )[-1]
         body_lines = [
-            ln for ln in body_section.splitlines()
+            ln
+            for ln in body_section.splitlines()
             if "auto" in ln and not ln.lstrip().startswith("#")
         ]
         assert body_lines == [], f"auto leaked into body: {body_lines}"
@@ -378,10 +380,12 @@ class TestCpp11Features:
         kernel = make_kernel(SAMPLE_DECLTYPE_KERNEL)
         result = CudaToTritonTranslator().translate(kernel)
         body_section = result.triton_source.split(
-            "    # Translated kernel body", 1,
+            "    # Translated kernel body",
+            1,
         )[-1]
         body_lines = [
-            ln for ln in body_section.splitlines()
+            ln
+            for ln in body_section.splitlines()
             if "decltype" in ln and not ln.lstrip().startswith("#")
         ]
         assert body_lines == [], f"decltype leaked into body: {body_lines}"
@@ -402,13 +406,13 @@ class TestCpp11Features:
 
     def test_std_move_does_not_match_substring(self) -> None:
         """`mystd::move` (user-defined namespace) must NOT be unwrapped."""
-        source = '''
+        source = """
 __global__ void k(float* x, int n) {
     float* p = mystd::move(x);
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) { x[i] = p[i]; }
 }
-'''
+"""
         result = CudaToTritonTranslator().translate(make_kernel(source))
         assert "mystd::move" in result.triton_source
 
@@ -436,4 +440,3 @@ class TestSharedMemoryMultiDim:
         kernel = make_kernel(SAMPLE_MATMUL_KERNEL)
         result = CudaToTritonTranslator().translate(kernel)
         assert "tl.zeros((256,)" in result.triton_source
-

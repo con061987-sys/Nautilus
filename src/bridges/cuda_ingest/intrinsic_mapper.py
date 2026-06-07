@@ -47,9 +47,10 @@ Production features:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Callable
+from typing import Any
 
 from src.common.logging import get_logger
 
@@ -58,6 +59,7 @@ logger = get_logger(__name__)
 
 class IntrinsicCategory(Enum):
     """Categories of CUDA intrinsics."""
+
     THREAD_INDEX = auto()
     SYNCHRONIZATION = auto()
     ATOMIC = auto()
@@ -70,6 +72,7 @@ class IntrinsicCategory(Enum):
 @dataclass(frozen=True)
 class IntrinsicMapping:
     """A single CUDA intrinsic → Triton mapping."""
+
     cuda_name: str
     triton_name: str
     category: IntrinsicCategory
@@ -93,72 +96,92 @@ class IntrinsicMapper:
     def _register_default_mappings(self) -> None:
         """Register all built-in CUDA → Triton mappings."""
         # Thread indexing
-        self._register(IntrinsicMapping(
-            cuda_name="threadIdx.x",
-            triton_name="tl.program_id(0)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=False,  # Triton's mapping isn't 1:1
-            notes="Triton doesn't have a 1:1 threadIdx.x; we use program_id(0) in a 1D launch",
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="threadIdx.y",
-            triton_name="tl.program_id(1)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=False,
-            notes="Requires 2D or 3D launch grid",
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="threadIdx.z",
-            triton_name="tl.program_id(2)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=False,
-            notes="Requires 3D launch grid",
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="blockIdx.x",
-            triton_name="tl.program_id(0)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=True,
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="blockIdx.y",
-            triton_name="tl.program_id(1)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=True,
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="blockIdx.z",
-            triton_name="tl.program_id(2)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=True,
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="blockDim.x",
-            triton_name="tl.num_programs(0)",
-            category=IntrinsicCategory.THREAD_INDEX,
-            is_exact=False,
-        ))
+        self._register(
+            IntrinsicMapping(
+                cuda_name="threadIdx.x",
+                triton_name="tl.program_id(0)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=False,  # Triton's mapping isn't 1:1
+                notes="Triton doesn't have a 1:1 threadIdx.x; we use program_id(0) in a 1D launch",
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="threadIdx.y",
+                triton_name="tl.program_id(1)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=False,
+                notes="Requires 2D or 3D launch grid",
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="threadIdx.z",
+                triton_name="tl.program_id(2)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=False,
+                notes="Requires 3D launch grid",
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="blockIdx.x",
+                triton_name="tl.program_id(0)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=True,
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="blockIdx.y",
+                triton_name="tl.program_id(1)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=True,
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="blockIdx.z",
+                triton_name="tl.program_id(2)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=True,
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="blockDim.x",
+                triton_name="tl.num_programs(0)",
+                category=IntrinsicCategory.THREAD_INDEX,
+                is_exact=False,
+            )
+        )
 
         # Synchronization
-        self._register(IntrinsicMapping(
-            cuda_name="__syncthreads()",
-            triton_name="tl.barrier()",
-            category=IntrinsicCategory.SYNCHRONIZATION,
-            is_exact=True,
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="__syncwarp()",
-            triton_name="# tl.syncwarp not directly supported; using tl.barrier()",
-            category=IntrinsicCategory.SYNCHRONIZATION,
-            is_exact=False,
-            notes="Triton manages warp scheduling internally; no explicit sync needed",
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="__threadfence()",
-            triton_name="tl.barrier()",
-            category=IntrinsicCategory.SYNCHRONIZATION,
-            is_exact=False,
-        ))
+        self._register(
+            IntrinsicMapping(
+                cuda_name="__syncthreads()",
+                triton_name="tl.barrier()",
+                category=IntrinsicCategory.SYNCHRONIZATION,
+                is_exact=True,
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="__syncwarp()",
+                triton_name="# tl.syncwarp not directly supported; using tl.barrier()",
+                category=IntrinsicCategory.SYNCHRONIZATION,
+                is_exact=False,
+                notes="Triton manages warp scheduling internally; no explicit sync needed",
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="__threadfence()",
+                triton_name="tl.barrier()",
+                category=IntrinsicCategory.SYNCHRONIZATION,
+                is_exact=False,
+            )
+        )
 
         # Atomics
         for cuda_name, triton_name in [
@@ -170,24 +193,30 @@ class IntrinsicMapper:
             ("atomicOr", "tl.atomic_or"),
             ("atomicXor", "tl.atomic_xor"),
         ]:
-            self._register(IntrinsicMapping(
-                cuda_name=cuda_name,
-                triton_name=triton_name,
+            self._register(
+                IntrinsicMapping(
+                    cuda_name=cuda_name,
+                    triton_name=triton_name,
+                    category=IntrinsicCategory.ATOMIC,
+                    is_exact=True,
+                )
+            )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="atomicCAS",
+                triton_name="tl.atomic_cas",
                 category=IntrinsicCategory.ATOMIC,
                 is_exact=True,
-            ))
-        self._register(IntrinsicMapping(
-            cuda_name="atomicCAS",
-            triton_name="tl.atomic_cas",
-            category=IntrinsicCategory.ATOMIC,
-            is_exact=True,
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="atomicExch",
-            triton_name="tl.atomic_xchg",
-            category=IntrinsicCategory.ATOMIC,
-            is_exact=True,
-        ))
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="atomicExch",
+                triton_name="tl.atomic_xchg",
+                category=IntrinsicCategory.ATOMIC,
+                is_exact=True,
+            )
+        )
 
         # Math
         for cuda_name, triton_name in [
@@ -208,27 +237,33 @@ class IntrinsicMapper:
             ("roundf", "tl.extra.cuda.libdevice.round"),
             ("erff", "tl.extra.cuda.libdevice.erf"),
         ]:
-            self._register(IntrinsicMapping(
-                cuda_name=cuda_name,
-                triton_name=triton_name,
-                category=IntrinsicCategory.MATH,
-                is_exact=True,
-            ))
+            self._register(
+                IntrinsicMapping(
+                    cuda_name=cuda_name,
+                    triton_name=triton_name,
+                    category=IntrinsicCategory.MATH,
+                    is_exact=True,
+                )
+            )
 
         # Memory qualifiers (no direct translation; used in parser)
-        self._register(IntrinsicMapping(
-            cuda_name="__shared__",
-            triton_name="# (handled by shared_memory.py)",
-            category=IntrinsicCategory.MEMORY,
-            is_exact=True,
-            notes="__shared__ arrays are translated to tl.shared allocations",
-        ))
-        self._register(IntrinsicMapping(
-            cuda_name="__constant__",
-            triton_name="# (module-level constant)",
-            category=IntrinsicCategory.MEMORY,
-            is_exact=True,
-        ))
+        self._register(
+            IntrinsicMapping(
+                cuda_name="__shared__",
+                triton_name="# (handled by shared_memory.py)",
+                category=IntrinsicCategory.MEMORY,
+                is_exact=True,
+                notes="__shared__ arrays are translated to tl.shared allocations",
+            )
+        )
+        self._register(
+            IntrinsicMapping(
+                cuda_name="__constant__",
+                triton_name="# (module-level constant)",
+                category=IntrinsicCategory.MEMORY,
+                is_exact=True,
+            )
+        )
 
     def _register(self, mapping: IntrinsicMapping) -> None:
         """Register a mapping in the internal registry."""
@@ -265,16 +300,17 @@ class IntrinsicMapper:
         # Block linearization. The backreference \1 forces all three dim
         # letters to match; mixed-dim expressions fall through to the
         # per-field pass below. This mirrors translator._apply_block_linearization.
-        def _block_repl(match: "re.Match[str]") -> str:
+        def _block_repl(match: re.Match[str]) -> str:
             dim = match.group(1)
             dim_idx = {"x": 0, "y": 1, "z": 2}[dim]
             return (
-                f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx})"
-                f" + tl.program_id({dim_idx})"
+                f"tl.program_id({dim_idx}) * tl.num_programs({dim_idx}) + tl.program_id({dim_idx})"
             )
+
         result = re.sub(
-            r'blockIdx\.([xyz])\s*\*\s*blockDim\.\1\s*\+\s*threadIdx\.\1',
-            _block_repl, result,
+            r"blockIdx\.([xyz])\s*\*\s*blockDim\.\1\s*\+\s*threadIdx\.\1",
+            _block_repl,
+            result,
         )
 
         # Replace __syncthreads()
@@ -284,26 +320,42 @@ class IntrinsicMapper:
 
         # C++11 rvalue cast: `std::move(x)` → `x`. The \b anchor prevents
         # matching names like `mystd::move`.
-        result = re.sub(r'\bstd::move\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)', lambda m: m.group(1).strip(), result)
+        result = re.sub(
+            r"\bstd::move\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", lambda m: m.group(1).strip(), result
+        )
 
         # Replace math functions (order matters: longer names first)
-        for cuda_fn in ["exp2f", "log2f", "sqrtf", "rsqrtf", "sinf", "cosf",
-                       "tanf", "logf", "expf", "fabsf", "fmaxf", "fminf",
-                       "floorf", "ceilf", "erff"]:
+        for cuda_fn in [
+            "exp2f",
+            "log2f",
+            "sqrtf",
+            "rsqrtf",
+            "sinf",
+            "cosf",
+            "tanf",
+            "logf",
+            "expf",
+            "fabsf",
+            "fmaxf",
+            "fminf",
+            "floorf",
+            "ceilf",
+            "erff",
+        ]:
             triton_fn = "tl." + cuda_fn[:-1]  # strip 'f' suffix
-            result = re.sub(rf'\b{cuda_fn}\b', triton_fn, result)
+            result = re.sub(rf"\b{cuda_fn}\b", triton_fn, result)
 
         # Replace threadIdx with program_id
-        result = re.sub(r'\bthreadIdx\.x\b', 'tl.program_id(0)', result)
-        result = re.sub(r'\bthreadIdx\.y\b', 'tl.program_id(1)', result)
-        result = re.sub(r'\bthreadIdx\.z\b', 'tl.program_id(2)', result)
-        result = re.sub(r'\bblockIdx\.x\b', 'tl.program_id(0)', result)
-        result = re.sub(r'\bblockIdx\.y\b', 'tl.program_id(1)', result)
-        result = re.sub(r'\bblockIdx\.z\b', 'tl.program_id(2)', result)
-        result = re.sub(r'\bblockDim\.x\b', 'tl.num_programs(0)', result)
-        result = re.sub(r'\bblockDim\.y\b', 'tl.num_programs(1)', result)
-        result = re.sub(r'\bblockDim\.z\b', 'tl.num_programs(2)', result)
-        result = re.sub(r'\bgridDim\.x\b', 'tl.num_programs(0)', result)
+        result = re.sub(r"\bthreadIdx\.x\b", "tl.program_id(0)", result)
+        result = re.sub(r"\bthreadIdx\.y\b", "tl.program_id(1)", result)
+        result = re.sub(r"\bthreadIdx\.z\b", "tl.program_id(2)", result)
+        result = re.sub(r"\bblockIdx\.x\b", "tl.program_id(0)", result)
+        result = re.sub(r"\bblockIdx\.y\b", "tl.program_id(1)", result)
+        result = re.sub(r"\bblockIdx\.z\b", "tl.program_id(2)", result)
+        result = re.sub(r"\bblockDim\.x\b", "tl.num_programs(0)", result)
+        result = re.sub(r"\bblockDim\.y\b", "tl.num_programs(1)", result)
+        result = re.sub(r"\bblockDim\.z\b", "tl.num_programs(2)", result)
+        result = re.sub(r"\bgridDim\.x\b", "tl.num_programs(0)", result)
 
         # Replace atomic functions
         for cuda_atomic, triton_atomic in [
@@ -317,7 +369,7 @@ class IntrinsicMapper:
             ("atomicCAS", "tl.atomic_cas"),
             ("atomicExch", "tl.atomic_xchg"),
         ]:
-            result = re.sub(rf'\b{cuda_atomic}\b', triton_atomic, result)
+            result = re.sub(rf"\b{cuda_atomic}\b", triton_atomic, result)
 
         return result
 

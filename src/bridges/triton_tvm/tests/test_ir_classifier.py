@@ -17,11 +17,11 @@ from hypothesis import strategies as st
 
 from src.bridges.triton_tvm.ir_capture import KernelKind
 from src.bridges.triton_tvm.ir_classifier import (
+    ClassificationError,
     IRClassification,
     IRClassifier,
     ReductionType,
 )
-from src.bridges.triton_tvm.ir_classifier import ClassificationError
 
 # ---------------------------------------------------------------------------
 # Sample IR texts
@@ -175,6 +175,7 @@ module {
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _wrap_module(body: str) -> str:
     """Wrap an inner function body in a minimal module."""
     return f"module {{\n{body}\n}}\n"
@@ -183,6 +184,7 @@ def _wrap_module(body: str) -> str:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestIRClassifier:
     """Tests for the IRClassifier class."""
@@ -330,6 +332,7 @@ class TestIRClassifier:
     def test_collect_op_counts(self) -> None:
         """op_counts gives accurate counts (deduplicated)."""
         from collections import Counter
+
         counts = self.classifier.collect_op_counts(ATTENTION_IR)
         assert isinstance(counts, Counter)
         assert counts["tt.dot"] == 2  # Attention has 2 dots
@@ -354,12 +357,15 @@ class TestIRClassifier:
 
     def test_ir_classification_dataclass_equality(self) -> None:
         """Two IRClassification instances compare by kind+reduction."""
-        a = IRClassification(kind=KernelKind.REDUCTION,
-                             reduction_type=ReductionType.SUM, reduction_axis=0)
-        b = IRClassification(kind=KernelKind.REDUCTION,
-                             reduction_type=ReductionType.SUM, reduction_axis=0)
-        c = IRClassification(kind=KernelKind.REDUCTION,
-                             reduction_type=ReductionType.MAX, reduction_axis=0)
+        a = IRClassification(
+            kind=KernelKind.REDUCTION, reduction_type=ReductionType.SUM, reduction_axis=0
+        )
+        b = IRClassification(
+            kind=KernelKind.REDUCTION, reduction_type=ReductionType.SUM, reduction_axis=0
+        )
+        c = IRClassification(
+            kind=KernelKind.REDUCTION, reduction_type=ReductionType.MAX, reduction_axis=0
+        )
         assert a == b
         assert a != c
 
@@ -373,6 +379,7 @@ class TestIRClassifier:
 # ---------------------------------------------------------------------------
 # Property-based tests
 # ---------------------------------------------------------------------------
+
 
 class TestIRClassifierProperties:
     """Property-based tests for invariants of the AST classifier."""

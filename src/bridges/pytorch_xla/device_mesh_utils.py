@@ -90,9 +90,7 @@ def infer_target_from_mesh(mesh: Any) -> str:
         vendor = getattr(first, "vendor", None)
         arch = getattr(first, "arch", None)
         if vendor is not None:
-            vendor_str = (
-                vendor.value if hasattr(vendor, "value") else str(vendor)
-            )
+            vendor_str = vendor.value if hasattr(vendor, "value") else str(vendor)
             if arch is not None:
                 key = (str(vendor_str), str(arch))
                 if key in _VENDOR_ARCH_TO_TVM:

@@ -38,12 +38,12 @@ Production features:
 
 from __future__ import annotations
 
-import logging
 import platform
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from src.common.errors import (
     CallbackError,
@@ -61,6 +61,7 @@ log = get_logger("nautilus.runtime.memory")
 @dataclass
 class ReclaimConfig:
     """Configuration for the memory reclaimer."""
+
     watermark_fraction: float = 0.85
     min_interval_seconds: float = 1.0
     max_reclaim_mb: float = 0.0
@@ -72,6 +73,7 @@ class ReclaimConfig:
 @dataclass
 class DeviceMemoryState:
     """Per-device memory state tracked by the reclaimer."""
+
     device_id: str
     total_bytes: int = 0
     allocated_bytes: int = 0
@@ -111,6 +113,7 @@ class MemoryReclaimer:
             case Err(exc):
                 log.error("reclaim failed: %s", exc)
     """
+
     def __init__(self, config: ReclaimConfig | None = None) -> None:
         self.config = config or ReclaimConfig()
         self._devices: dict[str, DeviceMemoryState] = {}
@@ -152,13 +155,15 @@ class MemoryReclaimer:
         """
         with self._lock:
             if device_id not in self._devices:
-                return Err(HardwareNotFoundError(
-                    f"Device {device_id!r} not registered with this reclaimer",
-                    context={
-                        "device_id": device_id,
-                        "registered": list(self._devices),
-                    },
-                ))
+                return Err(
+                    HardwareNotFoundError(
+                        f"Device {device_id!r} not registered with this reclaimer",
+                        context={
+                            "device_id": device_id,
+                            "registered": list(self._devices),
+                        },
+                    )
+                )
             state = self._devices[device_id]
 
         now = time.time()
@@ -174,11 +179,13 @@ class MemoryReclaimer:
                     device=device_id,
                     error=str(exc),
                 )
-                return Err(CallbackError(
-                    f"custom reclaim callback raised: {exc}",
-                    cause=exc,
-                    context={"device_id": device_id},
-                ))
+                return Err(
+                    CallbackError(
+                        f"custom reclaim callback raised: {exc}",
+                        cause=exc,
+                        context={"device_id": device_id},
+                    )
+                )
         else:
             try:
                 reclaim_result = self._do_reclaim(device_id)
@@ -196,11 +203,13 @@ class MemoryReclaimer:
                     device=device_id,
                     error=str(exc),
                 )
-                return Err(HardwareProbeError(
-                    f"reclaim raised unexpected exception: {exc}",
-                    cause=exc,
-                    context={"device_id": device_id},
-                ))
+                return Err(
+                    HardwareProbeError(
+                        f"reclaim raised unexpected exception: {exc}",
+                        cause=exc,
+                        context={"device_id": device_id},
+                    )
+                )
 
             if reclaim_result.is_err():
                 log.warning(
@@ -253,10 +262,12 @@ class MemoryReclaimer:
         # Apple Metal
         if "metal" in device_id or "mtl" in device_id:
             return self._reclaim_apple(device_id)
-        return Err(HardwareProbeError(
-            f"Unknown device vendor for {device_id!r}; cannot reclaim safely",
-            context={"device_id": device_id},
-        ))
+        return Err(
+            HardwareProbeError(
+                f"Unknown device vendor for {device_id!r}; cannot reclaim safely",
+                context={"device_id": device_id},
+            )
+        )
 
     def _reclaim_cuda(self, device_id: str) -> Result[int, NautilusError]:
         """Reclaim CUDA memory via torch.cuda.memory_stats().
@@ -268,14 +279,18 @@ class MemoryReclaimer:
         """
         try:
             import torch
-        except ImportError as exc:
-            return Err(DependencyMissingError(
-                "torch is not installed; cannot reclaim CUDA memory",
-            ))
+        except ImportError:
+            return Err(
+                DependencyMissingError(
+                    "torch is not installed; cannot reclaim CUDA memory",
+                )
+            )
         if not torch.cuda.is_available():
-            return Err(HardwareNotFoundError(
-                f"CUDA not available; cannot reclaim {device_id}",
-            ))
+            return Err(
+                HardwareNotFoundError(
+                    f"CUDA not available; cannot reclaim {device_id}",
+                )
+            )
         # Parse device index
         if ":" in device_id:
             idx = int(device_id.split(":")[-1])
@@ -302,6 +317,7 @@ class MemoryReclaimer:
         """Reclaim Intel GPU memory via Level Zero or torch.xpu."""
         try:
             import torch
+
             if hasattr(torch, "xpu") and torch.xpu.is_available():
                 idx = int(device_id.split(":")[-1]) if ":" in device_id else 0
                 stats_before = torch.xpu.memory_stats(idx)
@@ -312,13 +328,17 @@ class MemoryReclaimer:
                 cached_before = stats_before.get("reserved_bytes.all.current", 0) - before
                 cached_after = stats_after.get("reserved_bytes.all.current", 0) - after
                 return Ok(max(0, cached_before - cached_after))
-        except (ImportError, AttributeError) as exc:
-            return Err(DependencyMissingError(
-                "torch.xpu not available; cannot reclaim Intel GPU memory",
-            ))
-        return Err(DependencyMissingError(
-            f"No Intel GPU memory API available for {device_id}",
-        ))
+        except (ImportError, AttributeError):
+            return Err(
+                DependencyMissingError(
+                    "torch.xpu not available; cannot reclaim Intel GPU memory",
+                )
+            )
+        return Err(
+            DependencyMissingError(
+                f"No Intel GPU memory API available for {device_id}",
+            )
+        )
 
     def _reclaim_apple(self, device_id: str) -> Result[int, NautilusError]:
         """Reclaim Apple Metal memory via ``torch.mps.empty_cache()``.
@@ -330,29 +350,37 @@ class MemoryReclaimer:
         loud, typed error rather than silently reporting 0 bytes.
         """
         if platform.system() != "Darwin":
-            return Err(DependencyMissingError(
-                f"Apple Metal not available on {platform.system()!r}",
-                context={"device_id": device_id, "platform": platform.system()},
-            ))
+            return Err(
+                DependencyMissingError(
+                    f"Apple Metal not available on {platform.system()!r}",
+                    context={"device_id": device_id, "platform": platform.system()},
+                )
+            )
         try:
             import torch
-        except ImportError as exc:
-            return Err(DependencyMissingError(
-                "torch is not installed; cannot reclaim Apple Metal memory",
-            ))
+        except ImportError:
+            return Err(
+                DependencyMissingError(
+                    "torch is not installed; cannot reclaim Apple Metal memory",
+                )
+            )
         if not hasattr(torch, "mps"):
-            return Err(DependencyMissingError(
-                "torch.mps is not available in this PyTorch build; cannot reclaim Apple Metal memory",
-                context={
-                    "device_id": device_id,
-                    "torch_version": getattr(torch, "__version__", "unknown"),
-                },
-            ))
+            return Err(
+                DependencyMissingError(
+                    "torch.mps is not available in this PyTorch build; cannot reclaim Apple Metal memory",
+                    context={
+                        "device_id": device_id,
+                        "torch_version": getattr(torch, "__version__", "unknown"),
+                    },
+                )
+            )
         if not torch.mps.is_available():
-            return Err(DependencyMissingError(
-                f"Apple MPS backend not available; cannot reclaim {device_id}",
-                context={"device_id": device_id},
-            ))
+            return Err(
+                DependencyMissingError(
+                    f"Apple MPS backend not available; cannot reclaim {device_id}",
+                    context={"device_id": device_id},
+                )
+            )
         before = torch.mps.current_allocated_memory()
         try:
             torch.mps.empty_cache()
@@ -397,7 +425,9 @@ class MemoryReclaimer:
                 self._stop_auto_reclaim.wait(interval_seconds)
 
         self._auto_reclaim_thread = threading.Thread(
-            target=_loop, daemon=True, name="nautilus-mem-reclaimer",
+            target=_loop,
+            daemon=True,
+            name="nautilus-mem-reclaimer",
         )
         self._auto_reclaim_thread.start()
 

@@ -28,7 +28,6 @@ This rewrite:
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -45,8 +44,6 @@ from src.common.errors import (
     CheckpointError,
     DependencyMissingError,
     ErrorCode,
-    HardwareNotFoundError,
-    NautilusError,
 )
 from src.common.logging import get_logger
 from src.common.logging import span as span_context
@@ -66,6 +63,7 @@ SCHEMA_VERSION = 2
 
 class CheckpointBackend(Enum):
     """Storage backend for checkpoints."""
+
     RAM_DISK = "ramdisk"
     LOCAL_FS = "localfs"
     DISTRIBUTED = "distributed"
@@ -91,6 +89,7 @@ class CheckpointConfig:
 @dataclass
 class CheckpointMetadata:
     """On-disk metadata for a checkpoint. Schema-versioned for forward compat."""
+
     schema_version: int
     checkpoint_id: int
     created_at: float
@@ -119,7 +118,7 @@ class CheckpointMetadata:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "CheckpointMetadata":
+    def from_dict(cls, d: dict[str, Any]) -> CheckpointMetadata:
         sv = d.get("schema_version", 1)
         if sv != SCHEMA_VERSION:
             raise CheckpointError(
@@ -145,6 +144,7 @@ class CheckpointMetadata:
 @dataclass
 class CheckpointInfo:
     """In-memory view of a checkpoint."""
+
     checkpoint_id: int
     created_at: float
     path: Path
@@ -172,6 +172,7 @@ class AsyncCheckpointer:
         ...
         result = checkpointer.recover_latest()
     """
+
     def __init__(self, config: CheckpointConfig | None = None) -> None:
         self.config = config or CheckpointConfig()
         self._storage = Path(self.config.storage_path)
@@ -194,11 +195,13 @@ class AsyncCheckpointer:
         # Per-dependency circuit breaker for storage I/O
         breakers = get_default_breakers()
         if "checkpoint_io" not in breakers:
-            breakers["checkpoint_io"] = CircuitBreaker(CircuitBreakerConfig(
-                name="checkpoint_io",
-                failure_threshold=3,
-                reset_timeout_seconds=10.0,
-            ))
+            breakers["checkpoint_io"] = CircuitBreaker(
+                CircuitBreakerConfig(
+                    name="checkpoint_io",
+                    failure_threshold=3,
+                    reset_timeout_seconds=10.0,
+                )
+            )
         self._io_breaker = breakers["checkpoint_io"]
 
         # Stats
@@ -231,12 +234,14 @@ class AsyncCheckpointer:
             except CheckpointError as exc:
                 log.warning(
                     "Skipping checkpoint with wrong schema version",
-                    path=str(path), error=str(exc),
+                    path=str(path),
+                    error=str(exc),
                 )
             except Exception as exc:
                 log.warning(
                     "Failed to load checkpoint metadata",
-                    path=str(path), error=str(exc),
+                    path=str(path),
+                    error=str(exc),
                 )
 
     def start(self) -> None:
@@ -244,7 +249,9 @@ class AsyncCheckpointer:
             return
         self._stop_event.clear()
         self._thread = threading.Thread(
-            target=self._checkpoint_loop, daemon=True, name="nautilus-checkpoint",
+            target=self._checkpoint_loop,
+            daemon=True,
+            name="nautilus-checkpoint",
         )
         self._thread.start()
         log.info("Async checkpointer started", interval_s=self.config.interval_seconds)
@@ -321,7 +328,9 @@ class AsyncCheckpointer:
         raise result.error
 
     def _save_checkpoint_sync(
-        self, model: Any, optimizer: Any | None,
+        self,
+        model: Any,
+        optimizer: Any | None,
     ) -> Result[CheckpointInfo, CheckpointError]:
         """Save a checkpoint synchronously with atomic write + checksum.
 
@@ -349,7 +358,9 @@ class AsyncCheckpointer:
 
                 # Save under circuit breaker
                 model_save: Result[tuple[int, str], CheckpointError] = self._io_breaker.call(
-                    self._save_state_atomic, model, model_path,
+                    self._save_state_atomic,
+                    model,
+                    model_path,
                 )
                 if model_save.is_err():
                     return Err(model_save.error)
@@ -357,7 +368,9 @@ class AsyncCheckpointer:
                 optim_size, optim_sha = 0, ""
                 if optimizer is not None:
                     optim_save: Result[tuple[int, str], CheckpointError] = self._io_breaker.call(
-                        self._save_state_atomic, optimizer, optim_path,
+                        self._save_state_atomic,
+                        optimizer,
+                        optim_path,
                     )
                     if optim_save.is_err():
                         return Err(optim_save.error)
@@ -429,7 +442,9 @@ class AsyncCheckpointer:
                 return Err(err)
 
     def _save_state_atomic(
-        self, state: Any, path: Path,
+        self,
+        state: Any,
+        path: Path,
     ) -> Result[tuple[int, str], CheckpointError]:
         """Save state to a temp file, fsync, then atomic rename.
 
@@ -440,7 +455,9 @@ class AsyncCheckpointer:
         counts hard exceptions, not logical Err returns.
         """
         with tempfile.NamedTemporaryFile(
-            dir=str(path.parent), prefix=f".{path.name}.", delete=False,
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            delete=False,
         ) as tmp:
             tmp_path = Path(tmp.name)
         try:
@@ -457,10 +474,12 @@ class AsyncCheckpointer:
             return Err(exc)
         except Exception as exc:
             tmp_path.unlink(missing_ok=True)
-            return Err(CheckpointError(
-                f"Atomic write to {path} failed: {exc}",
-                cause=exc,
-            ))
+            return Err(
+                CheckpointError(
+                    f"Atomic write to {path} failed: {exc}",
+                    cause=exc,
+                )
+            )
 
     def _serialize_state(self, state: Any) -> bytes:
         """Serialize a model/optimizer state to bytes.
@@ -472,6 +491,7 @@ class AsyncCheckpointer:
             import io
 
             import torch
+
             buf = io.BytesIO()
             torch.save(state, buf)
             return buf.getvalue()
@@ -479,16 +499,21 @@ class AsyncCheckpointer:
             pass
         try:
             import msgpack
+
             return msgpack.packb(state, use_bin_type=True)
         except ImportError:
             pass
         import pickle
+
         return pickle.dumps(state)
 
     def _write_atomic_text(self, path: Path, text: str) -> None:
         """Write text to a temp file, fsync, then atomic rename."""
         with tempfile.NamedTemporaryFile(
-            dir=str(path.parent), prefix=f".{path.name}.", delete=False, mode="w",
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            delete=False,
+            mode="w",
         ) as tmp:
             tmp_path = Path(tmp.name)
             tmp.write(text)
@@ -507,8 +532,7 @@ class AsyncCheckpointer:
             if info.path.exists():
                 shutil.rmtree(info.path, ignore_errors=True)
         except Exception as exc:
-            log.warning("Failed to delete old checkpoint",
-                        path=str(info.path), error=str(exc))
+            log.warning("Failed to delete old checkpoint", path=str(info.path), error=str(exc))
 
     def recover_latest(self) -> tuple[Any, Any | None] | None:
         """Recover from the most recent verified checkpoint.
@@ -619,16 +643,19 @@ class AsyncCheckpointer:
             import io
 
             import torch
+
             return torch.load(io.BytesIO(data), weights_only=True)
         except ImportError:
             pass
         try:
             import msgpack
+
             return msgpack.unpackb(data, raw=False)
         except ImportError:
             pass
         if self.config.unsafe_pickle_fallback:
             import pickle as _legacy
+
             try:
                 return _legacy.loads(data)
             except Exception as exc:

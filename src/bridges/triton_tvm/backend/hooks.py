@@ -17,7 +17,8 @@ stages_inspection_hook because it sees all stages at once.
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from src.common.logging import get_logger
 
@@ -63,6 +64,7 @@ def uninstall_stages_inspection_hook() -> None:
     """Remove the bridge's hook, restoring Triton's default behaviour."""
     try:
         from triton import knobs
+
         if hasattr(knobs.runtime, "add_stages_inspection_hook"):
             del knobs.runtime.add_stages_inspection_hook
     except (ImportError, AttributeError):
@@ -78,6 +80,7 @@ def _make_stages_inspection_hook() -> Callable[..., Any] | None:
             # 1. With all-None: return (key, hash) for cache invalidation
             # 2. With real args: stages is the dict to modify
     """
+
     def stages_inspection_hook(
         stages: dict[str, Callable[..., Any]] | None = None,
         options: Any = None,

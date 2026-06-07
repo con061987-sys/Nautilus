@@ -18,7 +18,6 @@ tuning.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from src.common.logging import get_logger
 
@@ -38,6 +37,7 @@ class SplitResult:
     Contains the matmul bounds (for ExternMatmulBuilder) and the
     remainder ops (for the 4-pass conversion pipeline).
     """
+
     has_dot: bool
     matmul_m: int = 0
     matmul_n: int = 0
@@ -103,7 +103,9 @@ class TTDotSplitter:
         )
 
     def _extract_dot_bounds(
-        self, dot_op: TTGIROperation, func: TTGIRFunction,
+        self,
+        dot_op: TTGIROperation,
+        func: TTGIRFunction,
     ) -> tuple[int, int, int, str]:
         """Extract M, N, K, dtype from a tt.dot op's operand types.
 
@@ -131,8 +133,7 @@ class TTDotSplitter:
 
         if m == 0 or n == 0 or k == 0:
             logger.warning(
-                "Could not extract M/N/K from tt.dot operands; "
-                "falling back to module attributes"
+                "Could not extract M/N/K from tt.dot operands; falling back to module attributes"
             )
             # Try to get M/N/K from module attrs (e.g. ttg.shared hints)
             m = n = k = 128  # Safe default for testing
@@ -140,7 +141,9 @@ class TTDotSplitter:
         return m, n, k, dtype
 
     def _resolve_operand_types(
-        self, dot_op: TTGIROperation, func: TTGIRFunction,
+        self,
+        dot_op: TTGIROperation,
+        func: TTGIRFunction,
     ) -> list[tuple[tuple[int, ...], str]]:
         """Resolve the types of a dot op's operands.
 
@@ -169,11 +172,13 @@ class TTDotSplitter:
         return types
 
     def _parse_type_from_raw(
-        self, op: TTGIROperation,
+        self,
+        op: TTGIROperation,
     ) -> tuple[tuple[int, ...], str]:
         """Best-effort type extraction from an op's raw text."""
         import re
-        m = re.search(r'tensor<([^>]+)>', op.raw_text)
+
+        m = re.search(r"tensor<([^>]+)>", op.raw_text)
         if m:
             parts = m.group(1).split("x")
             shape: list[int] = []
@@ -181,9 +186,15 @@ class TTDotSplitter:
             for p in parts:
                 p = p.strip()
                 if p in ("f32", "f16", "f64", "bf16", "i32", "i64", "i8"):
-                    dtype_map = {"f32": "float32", "f16": "float16", "f64": "float64",
-                                 "bf16": "bfloat16", "i32": "int32", "i64": "int64",
-                                 "i8": "int8"}
+                    dtype_map = {
+                        "f32": "float32",
+                        "f16": "float16",
+                        "f64": "float64",
+                        "bf16": "bfloat16",
+                        "i32": "int32",
+                        "i64": "int64",
+                        "i8": "int8",
+                    }
                     dtype = dtype_map.get(p, "float32")
                 elif p in ("?", "-1"):
                     shape.append(-1)
@@ -203,7 +214,6 @@ class TTDotSplitter:
         """Recursively filter dot ops out of an op's nested_ops."""
         if op.nested_ops:
             op.nested_ops = [
-                self._filter_dots(child) for child in op.nested_ops
-                if child.kind != OpKind.DOT
+                self._filter_dots(child) for child in op.nested_ops if child.kind != OpKind.DOT
             ]
         return op

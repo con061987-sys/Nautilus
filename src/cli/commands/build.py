@@ -7,24 +7,21 @@ stub that dispatches at runtime based on the detected hardware.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 import click
 
 from src.cli.commands.tune import _parse_target
 from src.common.errors import (
-    CompilationError,
     DependencyMissingError,
     LinkingError,
     NautilusError,
 )
 from src.common.logging import get_logger
 from src.common.logging import span as span_context
-from src.common.types import Arch, Err, HardwareTarget, Ok, Result, Vendor
+from src.common.types import Vendor
 
 log = get_logger("nautilus.cli.build")
 
@@ -54,14 +51,16 @@ Examples:
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
 )
 @click.option(
-    "--target", "-t",
+    "--target",
+    "-t",
     "targets",
     multiple=True,
     required=True,
     help="Target hardware as 'vendor/arch'. Can be passed multiple times.",
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Path(dir_okay=False, writable=True, path_type=Path),
     default=None,
     help="Output fat binary path. Default: <kernel_name>.fat.o in cwd.",
@@ -72,7 +71,8 @@ Examples:
     help="Run MetaSchedule tuning before compilation. Default: --tune.",
 )
 @click.option(
-    "--trials", "-n",
+    "--trials",
+    "-n",
     type=click.IntRange(min=1, max=10000),
     default=64,
     show_default=True,
@@ -84,23 +84,33 @@ Examples:
     help="Validate the fat binary after build. Default: --validate.",
 )
 @click.option(
-    "--block-m", type=click.IntRange(min=16, max=512), default=128,
+    "--block-m",
+    type=click.IntRange(min=16, max=512),
+    default=128,
     help="Manual BLOCK_M (overrides tuned value if --no-tune).",
 )
 @click.option(
-    "--block-n", type=click.IntRange(min=16, max=512), default=128,
+    "--block-n",
+    type=click.IntRange(min=16, max=512),
+    default=128,
     help="Manual BLOCK_N (overrides tuned value if --no-tune).",
 )
 @click.option(
-    "--block-k", type=click.IntRange(min=16, max=128), default=32,
+    "--block-k",
+    type=click.IntRange(min=16, max=128),
+    default=32,
     help="Manual BLOCK_K (overrides tuned value if --no-tune).",
 )
 @click.option(
-    "--num-warps", type=click.IntRange(min=1, max=64), default=8,
+    "--num-warps",
+    type=click.IntRange(min=1, max=64),
+    default=8,
     help="Manual num_warps (overrides tuned value if --no-tune).",
 )
 @click.option(
-    "--num-stages", type=click.IntRange(min=1, max=10), default=3,
+    "--num-stages",
+    type=click.IntRange(min=1, max=10),
+    default=3,
     help="Manual num_stages (overrides tuned value if --no-tune).",
 )
 def cli(
@@ -164,6 +174,7 @@ def _build_impl(
 
     # 1. Load kernel source
     from src.cli.commands.tune import _hash_source, _load_kernel_file
+
     kernel_name, kernel_text = _load_kernel_file(kernel_file)
     source_hash = _hash_source(kernel_text)
     log.info("kernel loaded", name=kernel_name, source_hash=source_hash[:12])
@@ -176,22 +187,34 @@ def _build_impl(
             try:
                 from src.bridges.triton_tvm.bridge_orchestrator import TritonTVMBridge
                 from src.bridges.triton_tvm.metadata_extractor import KernelMetadata
+
                 bridge = TritonTVMBridge(max_trials=trials, enable_cache=True)
                 metadata = KernelMetadata(
                     kernel_name=kernel_name,
                     source_hash=source_hash,
-                    grid_0=1, grid_1=1, grid_2=1,
-                    num_warps=num_warps, num_stages=num_stages, num_ctas=1,
+                    grid_0=1,
+                    grid_1=1,
+                    grid_2=1,
+                    num_warps=num_warps,
+                    num_stages=num_stages,
+                    num_ctas=1,
                 )
                 target_for_tune = hardware_targets[0].to_tvm_target()
                 mapped = bridge._tuning_chain(metadata, target_for_tune)
-                block_m_eff, block_n_eff, block_k_eff = mapped.block_m, mapped.block_n, mapped.block_k
+                block_m_eff, block_n_eff, block_k_eff = (
+                    mapped.block_m,
+                    mapped.block_n,
+                    mapped.block_k,
+                )
                 num_warps_eff, num_stages_eff = mapped.num_warps, mapped.num_stages
                 sp.set(block_m=block_m_eff, block_n=block_n_eff, block_k=block_k_eff)
                 log.info(
                     "tuning complete",
-                    block_m=block_m_eff, block_n=block_n_eff, block_k=block_k_eff,
-                    num_warps=num_warps_eff, num_stages=num_stages_eff,
+                    block_m=block_m_eff,
+                    block_n=block_n_eff,
+                    block_k=block_k_eff,
+                    num_warps=num_warps_eff,
+                    num_stages=num_stages_eff,
                 )
             except DependencyMissingError:
                 log.warning("TVM/Triton missing; using manual --block-* values")
@@ -202,13 +225,16 @@ def _build_impl(
     from src.bridges.aot_packager.builder import (
         FatBinaryBuilder,
         FatBinaryConfig,
-        FatBinaryResult,
     )
+
     config = FatBinaryConfig(
         kernel_name=kernel_name,
         kernel_source=kernel_text,
-        block_m=block_m_eff, block_n=block_n_eff, block_k=block_k_eff,
-        num_warps=num_warps_eff, num_stages=num_stages_eff,
+        block_m=block_m_eff,
+        block_n=block_n_eff,
+        block_k=block_k_eff,
+        num_warps=num_warps_eff,
+        num_stages=num_stages_eff,
         output_dir=str(output.parent) if output else None,
         skip_amd=not any(t.vendor == Vendor.AMD for t in hardware_targets),
         skip_intel=not any(t.vendor == Vendor.INTEL for t in hardware_targets),
@@ -221,6 +247,7 @@ def _build_impl(
     # 4. Move output to requested path if user specified one
     if output is not None and result.output_path is not None:
         import shutil
+
         shutil.move(str(result.output_path), str(output))
         result.output_path = output
 
@@ -242,4 +269,4 @@ def _build_impl(
 
 
 if __name__ == "__main__":
-    cli()  # type: ignore[reportArgumentType]
+    cli()

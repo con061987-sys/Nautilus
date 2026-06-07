@@ -38,14 +38,16 @@ V = TypeVar("V")
 
 class CircuitState(Enum):
     """State of a circuit breaker."""
-    CLOSED = auto()      # Normal operation
-    OPEN = auto()        # Failing fast
-    HALF_OPEN = auto()   # Testing recovery
+
+    CLOSED = auto()  # Normal operation
+    OPEN = auto()  # Failing fast
+    HALF_OPEN = auto()  # Testing recovery
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for a circuit breaker instance."""
+
     # How many consecutive failures before opening
     failure_threshold: int = 3
 
@@ -66,12 +68,11 @@ class CircuitBreakerConfig:
 
 class CircuitOpenError(Exception):
     """Raised when a call is rejected because the circuit is OPEN."""
+
     def __init__(self, name: str, cooldown_remaining: float):
         self.name = name
         self.cooldown_remaining = cooldown_remaining
-        super().__init__(
-            f"Circuit '{name}' is OPEN; retry in {cooldown_remaining:.1f}s"
-        )
+        super().__init__(f"Circuit '{name}' is OPEN; retry in {cooldown_remaining:.1f}s")
 
 
 class LRUCache(Generic[K, V]):
@@ -149,7 +150,7 @@ class LRUCache(Generic[K, V]):
 
     def pop(self, key: K, default: V | None = None) -> V | None:
         """Remove ``key`` and return its value (no recency touch)."""
-        return self._data.pop(key, default)  # type: ignore[arg-type]
+        return self._data.pop(key, default)
 
     def clear(self) -> None:
         """Remove all entries."""
@@ -247,13 +248,16 @@ class CircuitBreaker:
             self.state = CircuitState.OPEN
             logger.warning(
                 "Circuit '%s' HALF_OPEN trial failed; back to OPEN for %.1fs",
-                self.name, self.config.cooldown_seconds,
+                self.name,
+                self.config.cooldown_seconds,
             )
         elif self.failure_count >= self.config.failure_threshold:
             self.state = CircuitState.OPEN
             logger.warning(
                 "Circuit '%s' TRIPPED OPEN after %d failures; cooldown %.1fs",
-                self.name, self.failure_count, self.config.cooldown_seconds,
+                self.name,
+                self.failure_count,
+                self.config.cooldown_seconds,
             )
 
     def _on_success(self) -> None:
@@ -267,7 +271,8 @@ class CircuitBreaker:
                 self.success_count = 0
                 logger.info(
                     "Circuit '%s' CLOSED after %d successful trials",
-                    self.name, self.config.success_count_threshold
+                    self.name,
+                    self.config.success_count_threshold
                     if hasattr(self.config, "success_count_threshold")
                     else self.config.success_threshold,
                 )

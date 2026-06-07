@@ -21,6 +21,7 @@ class MappedTuningConfig:
     This is the bridge's output format — a set of parameters that
     Triton's compiler will use for the optimized kernel.
     """
+
     block_m: int = 128
     block_n: int = 128
     block_k: int = 32

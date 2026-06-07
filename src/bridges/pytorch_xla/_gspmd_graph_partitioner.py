@@ -365,9 +365,7 @@ def _emit_sharded_arg_collectives(
         type_str = arg_match.group(2)
         name = _bare_name(ssa_name)
         if name in shardings and shardings[name].mesh_axes:
-            arg_infos.append(
-                (ssa_name, type_str, True, list(shardings[name].mesh_axes))
-            )
+            arg_infos.append((ssa_name, type_str, True, list(shardings[name].mesh_axes)))
 
     if not arg_infos:
         return new_body
@@ -379,15 +377,11 @@ def _emit_sharded_arg_collectives(
     for ssa_name, type_str, _, axes in arg_infos:
         ssa_counter[0] += 1
         reduced_ssa = f"%_shard_reduce_{ssa_counter[0]}"
-        insertions.append(
-            _emit_all_reduce(reduced_ssa, ssa_name, type_str, replica_groups)
-        )
+        insertions.append(_emit_all_reduce(reduced_ssa, ssa_name, type_str, replica_groups))
         # Also emit an all-gather to reconstruct the full tensor
         ssa_counter[0] += 1
         gathered_ssa = f"%_shard_gather_{ssa_counter[0]}"
-        insertions.append(
-            _emit_all_gather(gathered_ssa, ssa_name, type_str, replica_groups)
-        )
+        insertions.append(_emit_all_gather(gathered_ssa, ssa_name, type_str, replica_groups))
 
     return new_body[:insert_at] + "\n" + "".join(insertions) + new_body[insert_at:]
 
@@ -428,23 +422,17 @@ def _emit_output_collectives(
     # All-reduce on the result
     ssa_counter[0] += 1
     ar_ssa = f"%_out_allreduce_{ssa_counter[0]}"
-    insertions.append(
-        _emit_all_reduce(ar_ssa, ret_ssa, return_type, replica_groups)
-    )
+    insertions.append(_emit_all_reduce(ar_ssa, ret_ssa, return_type, replica_groups))
 
     # All-gather to reconstruct full tensor across shards
     ssa_counter[0] += 1
     ag_ssa = f"%_out_allgather_{ssa_counter[0]}"
-    insertions.append(
-        _emit_all_gather(ag_ssa, ar_ssa, return_type, replica_groups)
-    )
+    insertions.append(_emit_all_gather(ag_ssa, ar_ssa, return_type, replica_groups))
 
     # Reduce-scatter to slice the result back
     ssa_counter[0] += 1
     rs_ssa = f"%_out_reducescatter_{ssa_counter[0]}"
-    insertions.append(
-        _emit_reduce_scatter(rs_ssa, ag_ssa, return_type, replica_groups)
-    )
+    insertions.append(_emit_reduce_scatter(rs_ssa, ag_ssa, return_type, replica_groups))
 
     new_body = body[:insert_pos] + "".join(insertions) + body[insert_pos:]
     # Update the return to use the reduce-scatter result
@@ -518,12 +506,19 @@ def partition_mlir_with_collectives(
 
     # Insert collectives on sharded function args
     body = _emit_sharded_arg_collectives(
-        body, shardings, mesh_shape, ssa_counter,
+        body,
+        shardings,
+        mesh_shape,
+        ssa_counter,
     )
 
     # Insert collectives before the return
     body = _emit_output_collectives(
-        body, shardings, mesh_shape, ssa_counter, return_type,
+        body,
+        shardings,
+        mesh_shape,
+        ssa_counter,
+        return_type,
     )
 
     # Add the reduce-helper function at the module level

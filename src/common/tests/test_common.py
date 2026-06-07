@@ -1,10 +1,9 @@
 """Tests for src.common — Result, types, errors, hardware, logging, observability."""
+
 # mypy: ignore general type errors in this test file (generic type inference)
 # mypy: disable-code-blocks
 import json
-import os
 import sys
-import threading
 import time
 from pathlib import Path
 
@@ -17,6 +16,7 @@ sys.path.insert(0, str(_HERE.parents[3]))
 
 def test_result_ok_unwrap():
     from src.common.result import Ok
+
     o = Ok(42)
     assert o.is_ok()
     assert not o.is_err()
@@ -26,6 +26,7 @@ def test_result_ok_unwrap():
 
 def test_result_err_unwrap_raises():
     from src.common.result import Err
+
     e = Err(ValueError("boom"))
     assert e.is_err()
     assert not e.is_ok()
@@ -36,6 +37,7 @@ def test_result_err_unwrap_raises():
 
 def test_result_map():
     from src.common.result import Err, Ok
+
     result_ok = Ok(2).map(lambda x: x * 3)  # type: ignore[misc]
     result_err = Err(ValueError("x")).map(lambda x: x * 3)  # type: ignore[misc]
     assert isinstance(result_ok, Ok)
@@ -45,7 +47,10 @@ def test_result_map():
 
 def test_result_and_then():
     from src.common.result import Err, Ok
-    def add_one(x: int) -> Ok: return Ok(x + 1)  # type: ignore[misc]
+
+    def add_one(x: int) -> Ok:
+        return Ok(x + 1)  # type: ignore[misc]
+
     result_ok = Ok(2).and_then(add_one)
     result_err = Err(ValueError("x")).and_then(add_one)
     assert isinstance(result_ok, Ok)
@@ -55,12 +60,14 @@ def test_result_and_then():
 
 def test_error_codes_unique():
     from src.common.errors import ErrorCode
+
     codes = [c.value for c in ErrorCode]
     assert len(codes) == len(set(codes)), "Error codes must be unique"
 
 
 def test_error_context_is_chainable():
-    from src.common.errors import CompilationError, ErrorCode
+    from src.common.errors import CompilationError
+
     e = CompilationError("failed", context={"kernel": "matmul"})
     e2 = e.with_context(arch="sm_90")
     assert e2.context == {"kernel": "matmul", "arch": "sm_90"}
@@ -70,6 +77,7 @@ def test_error_context_is_chainable():
 
 def test_error_to_dict():
     from src.common.errors import TuningError
+
     e = TuningError("bad config", context={"trials": 0})
     d = e.to_dict()
     assert d["type"] == "TuningError"
@@ -79,6 +87,7 @@ def test_error_to_dict():
 
 def test_vendor_from_arch():
     from src.common.types import Arch, Vendor
+
     assert Arch.SM_90.vendor == Vendor.NVIDIA
     assert Arch.GFX942.vendor == Vendor.AMD
     assert Arch.XE_HPG.vendor == Vendor.INTEL
@@ -87,6 +96,7 @@ def test_vendor_from_arch():
 
 def test_hardware_target_to_tvm():
     from src.common.types import Arch, HardwareTarget, Vendor
+
     t = HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)
     assert t.to_tvm_target() == "nvidia/nvidia-h100"
     t2 = HardwareTarget(vendor=Vendor.AMD, arch=Arch.GFX942)
@@ -96,6 +106,7 @@ def test_hardware_target_to_tvm():
 def test_mesh_shape_rejects_zero():
     from src.common.errors import ConfigError
     from src.common.types import MeshShape
+
     with pytest.raises(ConfigError):
         MeshShape(axes=(2, 0, 2))
 
@@ -103,6 +114,7 @@ def test_mesh_shape_rejects_zero():
 def test_tensor_sharding_validates_length_match():
     from src.common.errors import ConfigError
     from src.common.types import TensorShardingLite
+
     with pytest.raises(ConfigError):
         TensorShardingLite(
             tensor_name="x",
@@ -114,6 +126,7 @@ def test_tensor_sharding_validates_length_match():
 def test_sharding_spec_validates_axis_range():
     from src.common.errors import ConfigError
     from src.common.types import MeshShape, ShardingSpecLite, TensorShardingLite
+
     mesh = MeshShape(axes=(2, 2))
     bad = TensorShardingLite(
         tensor_name="x",
@@ -126,10 +139,17 @@ def test_sharding_spec_validates_axis_range():
 
 def test_fat_binary_dedup_vendors():
     from src.common.types import Arch, FatBinary, KernelSection, SectionFormat, Vendor
+
     fb = FatBinary(kernel_name="k")
-    fb.add_section(KernelSection(vendor=Vendor.NVIDIA, arch=Arch.SM_90, format=SectionFormat.PTX, data=b"x"))
-    fb.add_section(KernelSection(vendor=Vendor.AMD, arch=Arch.GFX942, format=SectionFormat.HSACO, data=b"y"))
-    fb.add_section(KernelSection(vendor=Vendor.NVIDIA, arch=Arch.SM_80, format=SectionFormat.PTX, data=b"z"))
+    fb.add_section(
+        KernelSection(vendor=Vendor.NVIDIA, arch=Arch.SM_90, format=SectionFormat.PTX, data=b"x")
+    )
+    fb.add_section(
+        KernelSection(vendor=Vendor.AMD, arch=Arch.GFX942, format=SectionFormat.HSACO, data=b"y")
+    )
+    fb.add_section(
+        KernelSection(vendor=Vendor.NVIDIA, arch=Arch.SM_80, format=SectionFormat.PTX, data=b"z")
+    )
     assert len(fb.sections) == 3
     assert set(fb.vendors) == {Vendor.NVIDIA, Vendor.AMD}
 
@@ -137,9 +157,14 @@ def test_fat_binary_dedup_vendors():
 def test_circuit_breaker_opens_after_threshold():
     from src.common.errors import CircuitOpenError
     from src.common.observability import CircuitBreaker, CircuitBreakerConfig, CircuitState
-    cb = CircuitBreaker(CircuitBreakerConfig(name="test", failure_threshold=2, reset_timeout_seconds=0.1))
+
+    cb = CircuitBreaker(
+        CircuitBreakerConfig(name="test", failure_threshold=2, reset_timeout_seconds=0.1)
+    )
+
     def boom():
         raise RuntimeError("nope")
+
     with pytest.raises(RuntimeError):
         cb.call(boom)
     with pytest.raises(RuntimeError):
@@ -157,12 +182,19 @@ def test_circuit_breaker_opens_after_threshold():
 
 def test_circuit_breaker_excluded_exception_does_not_count():
     from src.common.observability import CircuitBreaker, CircuitBreakerConfig, CircuitState
-    cb = CircuitBreaker(CircuitBreakerConfig(
-        name="test", failure_threshold=2, reset_timeout_seconds=0.1,
-        excluded_exceptions=(KeyboardInterrupt,),
-    ))
+
+    cb = CircuitBreaker(
+        CircuitBreakerConfig(
+            name="test",
+            failure_threshold=2,
+            reset_timeout_seconds=0.1,
+            excluded_exceptions=(KeyboardInterrupt,),
+        )
+    )
+
     def interrupt():
         raise KeyboardInterrupt()
+
     for _ in range(10):
         with pytest.raises(KeyboardInterrupt):
             cb.call(interrupt)
@@ -171,6 +203,7 @@ def test_circuit_breaker_excluded_exception_does_not_count():
 
 def test_stage_budget_unknown_stage_raises():
     from src.common.observability import StageBudgets
+
     budgets = StageBudgets()
     with pytest.raises(KeyError):
         budgets.get("nonexistent_stage")
@@ -179,17 +212,20 @@ def test_stage_budget_unknown_stage_raises():
 def test_timeout_manager_stage_budget():
     from src.common.errors import StageTimeoutError
     from src.common.observability import StageBudgets, TimeoutManager
-    tm = TimeoutManager(StageBudgets(
-        ir_capture_seconds=0.05,
-    ))
+
+    tm = TimeoutManager(
+        StageBudgets(
+            ir_capture_seconds=0.05,
+        )
+    )
     tm.start()
-    with pytest.raises(StageTimeoutError):
-        with tm.stage("ir_capture"):
-            time.sleep(0.1)
+    with pytest.raises(StageTimeoutError), tm.stage("ir_capture"):
+        time.sleep(0.1)
 
 
 def test_logging_structured_json(tmp_path):
     from src.common.logging import JsonLogSink, configure_logging, get_logger
+
     log_path = str(tmp_path / "test.log")
     sink = JsonLogSink(log_path)
     configure_logging(level="debug", sinks=[sink])
@@ -212,7 +248,6 @@ def test_logging_span_records_stages():
     from src.common.logging import (
         LogSink,
         configure_logging,
-        get_logger,
     )
     from src.common.logging import (
         span as span_context,
@@ -220,13 +255,16 @@ def test_logging_span_records_stages():
     from src.common.logging import (
         stage as stage_context,
     )
+
     buf = io.StringIO()
 
     class _BufSink(LogSink):
         def __init__(self, b):
             self._b = b
+
         def emit(self, record):
             self._b.write(json.dumps(record, default=str) + "\n")
+
         def flush(self):
             pass
 
@@ -253,12 +291,14 @@ def test_logging_span_records_stages():
 def test_hardware_detect_returns_something():
     """detect_gpu_vendors() must return a set (possibly empty) and not raise."""
     from src.common.hardware import detect_gpu_vendors
+
     vendors = detect_gpu_vendors()
     assert isinstance(vendors, set)
 
 
 def test_hardware_format_summary_runs():
     from src.common.hardware import format_device_summary
+
     summary = format_device_summary()
     assert "Host:" in summary
     assert "GPUs:" in summary

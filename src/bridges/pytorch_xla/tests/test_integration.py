@@ -64,11 +64,10 @@ from src.bridges.pytorch_xla.pipeline_orchestrator import (
 )
 from src.bridges.pytorch_xla.stablehlo_export import (
     StableHLOExporter,
-    _TorchXLAExporter,
     _ONNXBridgeExporter,
+    _TorchXLAExporter,
     _TVMScriptExporter,
 )
-from src.common.errors import GSPMDError as GSPMDErrorType
 from src.common.types import StableHLOModule
 
 # ---- Shared test data -------------------------------------------------------
@@ -101,8 +100,9 @@ def make_stablehlo_module(
     return StableHLOModule(
         mlir_text=mlir_text,
         function_name=function_name,
-        input_specs=[{"name": n, "dtype": "f32", "shape": [128, 128]}
-                     for n in ("A", "B")[:num_inputs]],
+        input_specs=[
+            {"name": n, "dtype": "f32", "shape": [128, 128]} for n in ("A", "B")[:num_inputs]
+        ],
         output_specs=[{"name": "output"}],
         op_count=3,
         is_usable=True,
@@ -122,8 +122,10 @@ def make_device_mesh(
             arch=arch,
             memory_gb=80.0,
             compute_tflops=989.0,
-            interconnect=InterconnectType.NVLINK if vendor == DeviceVendor.NVIDIA
-            else InterconnectType.INFINITY_FABRIC if vendor == DeviceVendor.AMD
+            interconnect=InterconnectType.NVLINK
+            if vendor == DeviceVendor.NVIDIA
+            else InterconnectType.INFINITY_FABRIC
+            if vendor == DeviceVendor.AMD
             else InterconnectType.ETHERNET,
         )
         for i in range(num_devices)
@@ -228,7 +230,13 @@ class TestShardingBridgeFixture:
             MagicMock(return_value=[]),
         ):
             result = sharding_bridge.shard(model=None, example_inputs=(), device_mesh=mesh)
-        expected_stages = {"graph_capture", "stablehlo_export", "gspmd", "dtensor_apply", "fat_binary"}
+        expected_stages = {
+            "graph_capture",
+            "stablehlo_export",
+            "gspmd",
+            "dtensor_apply",
+            "fat_binary",
+        }
         assert expected_stages.issubset(result.stage_durations.keys())
 
     def test_mock_gspmd_called_with_correct_args(self, sharding_bridge: Any) -> None:
@@ -298,7 +306,9 @@ class TestShardingBridgeFixture:
                 MagicMock(return_value=[]),
             ):
                 result = sharding_bridge.shard(
-                    model=None, example_inputs=(), device_mesh=mesh,
+                    model=None,
+                    example_inputs=(),
+                    device_mesh=mesh,
                 )
             assert isinstance(result, ShardingResult)
 
@@ -343,6 +353,7 @@ class TestFullPipelineEndToEnd:
 
     def _make_model(self):
         import torch.nn as nn
+
         return nn.Linear(8, 4)
 
     def test_sharding_config_holds_all_fields(self) -> None:
@@ -369,7 +380,8 @@ class TestFullPipelineEndToEnd:
         assert config.timeout_seconds == 300.0
 
     def test_shard_with_real_model_and_skip_flags(
-        self, sharding_bridge: Any,
+        self,
+        sharding_bridge: Any,
     ) -> None:
         """Skipping sharding + DTensor + fat binary must succeed."""
         model = self._make_model()
@@ -389,7 +401,8 @@ class TestFullPipelineEndToEnd:
         assert "graph_capture" in result.stage_durations
 
     def test_shard_result_dict_contains_all_keys(
-        self, sharding_bridge: Any,
+        self,
+        sharding_bridge: Any,
     ) -> None:
         """to_dict() must contain all expected keys."""
         mesh = make_device_mesh()
@@ -399,12 +412,20 @@ class TestFullPipelineEndToEnd:
         ):
             result = sharding_bridge.shard(model=None, example_inputs=(), device_mesh=mesh)
         d = result.to_dict()
-        for key in ("success", "total_duration_ms", "stage_durations",
-                    "captured", "stablehlo", "gspmd", "dtensor"):
+        for key in (
+            "success",
+            "total_duration_ms",
+            "stage_durations",
+            "captured",
+            "stablehlo",
+            "gspmd",
+            "dtensor",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_shard_result_is_usable_when_successful(
-        self, sharding_bridge: Any,
+        self,
+        sharding_bridge: Any,
     ) -> None:
         """is_usable must be True when the full pipeline succeeds."""
         mesh = make_device_mesh()
@@ -430,11 +451,16 @@ class TestFullPipelineEndToEnd:
         """Skip only sharding, keep dtensor and fat binary."""
         mesh = make_device_mesh()
         config = ShardingConfig(
-            model=None, example_inputs=(), device_mesh=mesh,
+            model=None,
+            example_inputs=(),
+            device_mesh=mesh,
             skip_sharding=True,
         )
         result = sharding_bridge.shard(
-            model=None, example_inputs=(), device_mesh=mesh, config=config,
+            model=None,
+            example_inputs=(),
+            device_mesh=mesh,
+            config=config,
         )
         assert isinstance(result, ShardingResult)
 
@@ -450,6 +476,7 @@ class TestGSPMDFallbackTiers:
     def test_three_tiers_defined(self) -> None:
         """The sharding tier list must contain exactly 3 tiers."""
         from src.bridges.pytorch_xla.gspmd_runner import _SHARDING_TIERS
+
         assert len(_SHARDING_TIERS) == 3
         tier_names = [t[0] for t in _SHARDING_TIERS]
         assert tier_names == ["torch_xla_spmd", "openxla_pjrt", "graph_partition"]
@@ -577,7 +604,10 @@ class TestGSPMDFallbackTiers:
             ),
         }
         result = runner.run(
-            module, mesh, ShardingStrategy.DATA_PARALLEL, custom_shardings=custom,
+            module,
+            mesh,
+            ShardingStrategy.DATA_PARALLEL,
+            custom_shardings=custom,
         )
         spec = result.sharding_spec
         assert spec is not None
@@ -600,7 +630,10 @@ class TestGSPMDFallbackTiers:
         module = make_stablehlo_module()
         mesh_shape = [4]
         sharded_text, spec = _GraphPartitionSharding.shard(
-            module, mesh_shape, ShardingStrategy.DATA_PARALLEL, None,
+            module,
+            mesh_shape,
+            ShardingStrategy.DATA_PARALLEL,
+            None,
         )
         assert isinstance(sharded_text, str)
         assert sharded_text != module.mlir_text
@@ -612,7 +645,10 @@ class TestGSPMDFallbackTiers:
         module = make_stablehlo_module()
         mesh_shape = [4]
         sharded_text, spec = _GraphPartitionSharding.shard(
-            module, mesh_shape, ShardingStrategy.DATA_PARALLEL, None,
+            module,
+            mesh_shape,
+            ShardingStrategy.DATA_PARALLEL,
+            None,
         )
         assert "all_reduce" in sharded_text or len(spec.inserted_collectives) > 0
 
@@ -636,6 +672,7 @@ class TestStableHLOExportFallbackTiers:
     def test_three_export_tiers_defined(self) -> None:
         """The export tier list must contain exactly 3 tiers."""
         from src.bridges.pytorch_xla.stablehlo_export import _EXPORT_TIERS
+
         assert len(_EXPORT_TIERS) == 3
         tier_names = [t[0] for t in _EXPORT_TIERS]
         assert tier_names == ["torch_xla", "onnx_bridge", "tvmscript"]
@@ -655,6 +692,7 @@ class TestStableHLOExportFallbackTiers:
     def test_exporter_raises_when_all_tiers_unavailable(self) -> None:
         """When all export tiers are unavailable, exporter must raise."""
         from src.common.errors import StableHLOExportError
+
         exporter = StableHLOExporter()
         fake_captured = MagicMock()
         fake_captured.is_usable = True
@@ -666,6 +704,7 @@ class TestStableHLOExportFallbackTiers:
     def test_exporter_disabled_tvm_path(self) -> None:
         """Disabling the TVM path must skip the tertiary tier."""
         from src.common.errors import StableHLOExportError
+
         exporter = StableHLOExporter(enable_tvm_path=False)
         fake_captured = MagicMock()
         fake_captured.is_usable = True
@@ -678,6 +717,7 @@ class TestStableHLOExportFallbackTiers:
     def test_exporter_raises_on_none_captured(self) -> None:
         """Passing None must raise StableHLOExportError."""
         from src.common.errors import StableHLOExportError
+
         exporter = StableHLOExporter()
         with pytest.raises(StableHLOExportError, match="None or not usable"):
             exporter.export_from_captured(None)
@@ -1032,29 +1072,35 @@ class TestMeshTopologyUniformity:
 
     def test_uniform_bandwidth(self) -> None:
         """A uniform bandwidth matrix must be detected as uniform."""
-        topo = MeshTopology(bandwidth_matrix=[
-            [0.0, 900.0, 900.0],
-            [900.0, 0.0, 900.0],
-            [900.0, 900.0, 0.0],
-        ])
+        topo = MeshTopology(
+            bandwidth_matrix=[
+                [0.0, 900.0, 900.0],
+                [900.0, 0.0, 900.0],
+                [900.0, 900.0, 0.0],
+            ]
+        )
         assert topo.is_uniform is True
 
     def test_non_uniform_bandwidth(self) -> None:
         """A non-uniform bandwidth matrix must be detected as non-uniform."""
-        topo = MeshTopology(bandwidth_matrix=[
-            [0.0, 900.0, 64.0],
-            [900.0, 0.0, 64.0],
-            [64.0, 64.0, 0.0],
-        ])
+        topo = MeshTopology(
+            bandwidth_matrix=[
+                [0.0, 900.0, 64.0],
+                [900.0, 0.0, 64.0],
+                [64.0, 64.0, 0.0],
+            ]
+        )
         assert topo.is_uniform is False
 
     def test_uniform_within_threshold(self) -> None:
         """Small differences within 1.0 GB/s must still be considered uniform."""
-        topo = MeshTopology(bandwidth_matrix=[
-            [0.0, 900.0, 900.5],
-            [900.0, 0.0, 900.0],
-            [900.5, 900.0, 0.0],
-        ])
+        topo = MeshTopology(
+            bandwidth_matrix=[
+                [0.0, 900.0, 900.5],
+                [900.0, 0.0, 900.0],
+                [900.5, 900.0, 0.0],
+            ]
+        )
         assert topo.is_uniform is True
 
     def test_empty_matrices_uniform(self) -> None:
@@ -1069,11 +1115,13 @@ class TestMeshTopologyUniformity:
 
     def test_nvlink_island_non_uniform_with_pcie(self) -> None:
         """NVLink + PCIe in the same topology must be non-uniform."""
-        topo = MeshTopology(bandwidth_matrix=[
-            [0.0, 900.0, 64.0],
-            [900.0, 0.0, 64.0],
-            [64.0, 64.0, 0.0],
-        ])
+        topo = MeshTopology(
+            bandwidth_matrix=[
+                [0.0, 900.0, 64.0],
+                [900.0, 0.0, 64.0],
+                [64.0, 64.0, 0.0],
+            ]
+        )
         assert topo.is_uniform is False
 
     def test_topology_detects_nvlink_bandwidth(self) -> None:
@@ -1195,9 +1243,13 @@ class TestShardingAnnotationMLIR:
             tensor_shardings={"A": TensorSharding("A", mesh_axes=[0], partition_shape=[4])},
         )
         assert _annotate_stablehlo_with_sharding("", spec) == ""
-        assert _annotate_stablehlo_with_sharding(
-            SAMPLE_MLIR, ShardingSpec(mesh_shape=[4]),
-        ) == SAMPLE_MLIR
+        assert (
+            _annotate_stablehlo_with_sharding(
+                SAMPLE_MLIR,
+                ShardingSpec(mesh_shape=[4]),
+            )
+            == SAMPLE_MLIR
+        )
 
     def test_annotate_unknown_arg(self) -> None:
         """Unknown tensor name must leave MLIR unchanged."""
@@ -1233,8 +1285,8 @@ class TestShardingAnnotationMLIR:
             },
         )
         result = _annotate_stablehlo_with_sharding(SAMPLE_MLIR, spec)
-        assert 'mhlo.sharding' in result
-        assert result.count('mhlo.sharding') == 2
+        assert "mhlo.sharding" in result
+        assert result.count("mhlo.sharding") == 2
 
     def test_insert_sharding_attr_preserves_return_type(self) -> None:
         """Function signature return type must be preserved."""
@@ -1346,7 +1398,9 @@ class TestDTensorApplication:
         """When DTensor is available, placements must be populated."""
         mesh = make_device_mesh()
         applier = DTensorApplier(mesh)
-        ts = TensorSharding("weight", mesh_axes=[0], partition_shape=[4], replicate_on_other_axes=False)
+        ts = TensorSharding(
+            "weight", mesh_axes=[0], partition_shape=[4], replicate_on_other_axes=False
+        )
         sharding_spec = ShardingSpec(
             mesh_shape=[4],
             tensor_shardings={"weight": ts},
@@ -1417,7 +1471,9 @@ class TestDTensorApplication:
 
     def test_tensor_sharding_to_lite(self) -> None:
         """TensorSharding.to_lite() must produce a valid TensorShardingLite."""
-        ts = TensorSharding("input", mesh_axes=[0], partition_shape=[4], replicate_on_other_axes=True)
+        ts = TensorSharding(
+            "input", mesh_axes=[0], partition_shape=[4], replicate_on_other_axes=True
+        )
         lite = ts.to_lite()
         assert lite.tensor_name == "input"
         assert lite.mesh_axes == (0,)
@@ -1426,6 +1482,7 @@ class TestDTensorApplication:
     def test_tensor_sharding_from_lite(self) -> None:
         """TensorSharding.from_lite() must restore the original."""
         from src.common.types import TensorShardingLite
+
         lite = TensorShardingLite(tensor_name="x", mesh_axes=(0, 1), partition_shape=(2, 2))
         ts = TensorSharding.from_lite(lite)
         assert ts.tensor_name == "x"
@@ -1444,8 +1501,11 @@ class TestShardExecution:
     def test_shard_execution_result_defaults(self) -> None:
         """ShardExecutionResult must have sensible defaults."""
         result = ShardExecutionResult(
-            shard_id=0, vendor="nvidia", arch="sm_90",
-            device_id=0, success=True,
+            shard_id=0,
+            vendor="nvidia",
+            arch="sm_90",
+            device_id=0,
+            success=True,
         )
         assert result.shard_id == 0
         assert result.is_usable is False
@@ -1453,8 +1513,11 @@ class TestShardExecution:
     def test_shard_execution_result_is_usable_with_binary(self) -> None:
         """is_usable must be True when success and fat_binary_result set."""
         result = ShardExecutionResult(
-            shard_id=0, vendor="nvidia", arch="sm_90",
-            device_id=0, success=True,
+            shard_id=0,
+            vendor="nvidia",
+            arch="sm_90",
+            device_id=0,
+            success=True,
             fat_binary_result=MagicMock(is_usable=True),
         )
         assert result.is_usable is True
@@ -1462,8 +1525,11 @@ class TestShardExecution:
     def test_shard_execution_result_success_requires_binary(self) -> None:
         """is_usable must be False if fat_binary_result is None."""
         result = ShardExecutionResult(
-            shard_id=0, vendor="nvidia", arch="sm_90",
-            device_id=0, success=True,
+            shard_id=0,
+            vendor="nvidia",
+            arch="sm_90",
+            device_id=0,
+            success=True,
             fat_binary_result=None,
         )
         assert result.is_usable is False
@@ -1769,8 +1835,9 @@ class TestEdgeCases:
         """reduce_scatter must produce the same result as all_reduce."""
         for tensor_bytes in [1, 64, 1024, 1048576]:
             for num_devices in [2, 4, 8, 16]:
-                assert _CommCostModel.reduce_scatter_bytes(tensor_bytes, num_devices) == \
-                    _CommCostModel.all_reduce_bytes(tensor_bytes, num_devices)
+                assert _CommCostModel.reduce_scatter_bytes(
+                    tensor_bytes, num_devices
+                ) == _CommCostModel.all_reduce_bytes(tensor_bytes, num_devices)
 
     def test_gspmd_cache_key_uses_tier_info(self) -> None:
         """The cache key must differ when strategy differs."""
@@ -1808,6 +1875,7 @@ class TestEdgeCases:
     def test_num_devices_on_axes_computation(self) -> None:
         """_num_devices_on_axes must compute the correct product."""
         from src.bridges.pytorch_xla.gspmd_runner import _num_devices_on_axes
+
         assert _num_devices_on_axes([0], [4]) == 4
         assert _num_devices_on_axes([0, 1], [2, 2]) == 4
         assert _num_devices_on_axes([0], [2, 2]) == 2
@@ -1817,6 +1885,7 @@ class TestEdgeCases:
     def test_total_devices_helper(self) -> None:
         """_total_devices must compute the product of all dimensions."""
         from src.bridges.pytorch_xla.gspmd_runner import _total_devices
+
         assert _total_devices([4]) == 4
         assert _total_devices([2, 2]) == 4
         assert _total_devices([2, 4, 8]) == 64

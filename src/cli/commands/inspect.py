@@ -25,21 +25,23 @@ def fat_binary_cmd(fat_binary: Path) -> None:
     from src.bridges.aot_packager.fat_binary import FatBinary
 
     fb = FatBinary.from_bytes(fat_binary.read_bytes())
-    click.echo(json.dumps(
-        {
-            "kernel_name": fb.kernel_name,
-            "sections": [
-                {
-                    "vendor": s.vendor,
-                    "format": s.format.value,
-                    "size": len(s.data),
-                }
-                for s in fb.sections
-            ],
-            "total_size": fb.total_size,
-        },
-        indent=2,
-    ))
+    click.echo(
+        json.dumps(
+            {
+                "kernel_name": fb.kernel_name,
+                "sections": [
+                    {
+                        "vendor": s.vendor,
+                        "format": s.format.value,
+                        "size": len(s.data),
+                    }
+                    for s in fb.sections
+                ],
+                "total_size": fb.total_size,
+            },
+            indent=2,
+        )
+    )
 
 
 @cli.command("topology")

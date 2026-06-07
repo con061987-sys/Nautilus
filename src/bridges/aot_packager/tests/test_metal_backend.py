@@ -15,11 +15,10 @@ from src.bridges.aot_packager.metal_backend import (
     MetalTarget,
 )
 from src.common.errors import (
-    CompilationError,
     HardwareNotFoundError,
 )
 
-SAMPLE_KERNEL = '''
+SAMPLE_KERNEL = """
 import triton
 import triton.language as tl
 
@@ -42,7 +41,7 @@ def sample_matmul(
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
     acc += tl.dot(a, b)
     tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+"""
 
 
 class TestMetalBackendInit:
@@ -63,7 +62,9 @@ class TestMetalBackendInit:
 
     @pytest.mark.parametrize("target", list(MetalTarget))
     def test_metal_backend_each_target(
-        self, tmp_path: Path, target: MetalTarget,
+        self,
+        tmp_path: Path,
+        target: MetalTarget,
     ) -> None:
         backend = MetalBackend(target=target, cache_dir=str(tmp_path / "metal"))
         assert backend.target == target
@@ -152,7 +153,8 @@ class TestMetalCompileKernel:
             )
 
     def test_compile_kernel_strict_returns_result_on_success(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         backend = MetalBackend(cache_dir=str(tmp_path / "metal"))
         try:

@@ -80,6 +80,7 @@ class Node:
         numa_nodes: Mapping ``{device_id: numa_node}`` propagated
             from the underlying :class:`DeviceTopology`.
     """
+
     hostname: str
     devices: tuple[MeshDevice, ...]
     numa_nodes: dict[int, int] = field(default_factory=dict)
@@ -114,6 +115,7 @@ class InterNodeLink:
             for inter-node traffic; ``UALINK`` is the emerging
             cross-vendor standard that bypasses host memory.
     """
+
     source: str
     target: str
     bandwidth_gbps: float
@@ -123,13 +125,11 @@ class InterNodeLink:
     def __post_init__(self) -> None:
         if self.bandwidth_gbps < 0:
             raise ValueError(
-                f"InterNodeLink bandwidth must be non-negative, "
-                f"got {self.bandwidth_gbps}",
+                f"InterNodeLink bandwidth must be non-negative, got {self.bandwidth_gbps}",
             )
         if self.latency_us < 0:
             raise ValueError(
-                f"InterNodeLink latency must be non-negative, "
-                f"got {self.latency_us}",
+                f"InterNodeLink latency must be non-negative, got {self.latency_us}",
             )
 
 
@@ -143,6 +143,7 @@ class TransportStrategy(str, Enum):
     RoCE). The :class:`CommunicationPlanner` picks the cheapest of
     these for each (device_a, device_b) pair.
     """
+
     P2P = "p2p"
     STAGED = "staged"
     NETWORK = "network"
@@ -157,6 +158,7 @@ class CommunicationPlan:
     uses this value to bias shard placement: high-bandwidth P2P
     pairs get the most chatty collectives.
     """
+
     source_device_id: int
     target_device_id: int
     strategy: TransportStrategy
@@ -222,6 +224,7 @@ class ClusterTopology:
     during scheduling maps to the same physical device during
     execution.
     """
+
     nodes: list[Node] = field(default_factory=list)
     inter_node_links: list[InterNodeLink] = field(default_factory=list)
 
@@ -229,7 +232,9 @@ class ClusterTopology:
     # ``device_mesh_for_node`` so the existing single-node code keeps
     # working without modification.
     _mesh_cache: dict[str, DeviceMesh] = field(
-        default_factory=dict, repr=False, compare=False,
+        default_factory=dict,
+        repr=False,
+        compare=False,
     )
 
     @property
@@ -281,8 +286,7 @@ class ClusterTopology:
         if node is None:
             raise ShardingError(
                 f"Unknown node {hostname!r} in cluster",
-                context={"hostname": hostname,
-                         "known": [n.hostname for n in self.nodes]},
+                context={"hostname": hostname, "known": [n.hostname for n in self.nodes]},
             )
         mesh = DeviceMesh(
             devices=list(node.devices),
@@ -294,7 +298,9 @@ class ClusterTopology:
         return mesh
 
     def inter_node_bandwidth(
-        self, host_a: str, host_b: str,
+        self,
+        host_a: str,
+        host_b: str,
     ) -> float:
         """Bandwidth between two nodes, or 0.0 if no link is recorded.
 
@@ -317,17 +323,19 @@ class ClusterTopology:
         global_offset = 0
         for node in self.nodes:
             for d in node.devices:
-                devices.append({
-                    "global_device_id": global_offset,
-                    "node": node.hostname,
-                    "local_device_id": d.device_id,
-                    "vendor": d.vendor.value,
-                    "arch": d.arch,
-                    "memory_gb": d.memory_gb,
-                    "compute_tflops": d.compute_tflops,
-                    "interconnect": d.interconnect.value,
-                    "numa_node": node.numa_nodes.get(d.device_id, -1),
-                })
+                devices.append(
+                    {
+                        "global_device_id": global_offset,
+                        "node": node.hostname,
+                        "local_device_id": d.device_id,
+                        "vendor": d.vendor.value,
+                        "arch": d.arch,
+                        "memory_gb": d.memory_gb,
+                        "compute_tflops": d.compute_tflops,
+                        "interconnect": d.interconnect.value,
+                        "numa_node": node.numa_nodes.get(d.device_id, -1),
+                    }
+                )
                 global_offset += 1
 
         return {
@@ -361,7 +369,7 @@ class ClusterTopology:
     def from_local_device_meshes(
         meshes: Sequence[DeviceMesh] | None = None,
         hostnames: Sequence[str] | None = None,
-    ) -> "ClusterTopology":
+    ) -> ClusterTopology:
         """Build a :class:`ClusterTopology` from one or more local meshes.
 
         Used by the CLI for the common case where a user inspects the
@@ -386,11 +394,13 @@ class ClusterTopology:
             # NUMA info is per-device; the DeviceMesh does not currently
             # carry it forward, so we re-derive it via the topology.
             numa = _numa_map_for_mesh(mesh)
-            nodes.append(Node(
-                hostname=hostname,
-                devices=tuple(mesh.devices),
-                numa_nodes=numa,
-            ))
+            nodes.append(
+                Node(
+                    hostname=hostname,
+                    devices=tuple(mesh.devices),
+                    numa_nodes=numa,
+                )
+            )
         return ClusterTopology(nodes=nodes)
 
 
@@ -422,6 +432,7 @@ class ShardAssignment:
     binary, and uses ``estimated_comm_volume_bytes`` to decide
     whether the sharding strategy is worth the cost vs. replication.
     """
+
     shard_id: int
     node: str
     device: MeshDevice
@@ -451,6 +462,7 @@ class SchedulingPolicy:
     never split a vendor group across nodes unless explicitly
     requested via ``allow_cross_node_vendor_split=True``.
     """
+
     prefer_vendor_affinity: bool = True
     allow_cross_node_vendor_split: bool = False
     # When multiple same-vendor devices exist on different nodes,
@@ -526,8 +538,7 @@ class VendorAwareScheduler:
             )
         if num_shards > cluster.num_devices:
             raise ShardingError(
-                f"Cluster has {cluster.num_devices} devices but "
-                f"{num_shards} shards were requested",
+                f"Cluster has {cluster.num_devices} devices but {num_shards} shards were requested",
                 context={
                     "num_shards": num_shards,
                     "num_devices": cluster.num_devices,
@@ -547,22 +558,28 @@ class VendorAwareScheduler:
             picked = candidates[shard_id % len(candidates)]
             node, device = picked
             rationale = self._format_rationale(
-                shard_id, node, device, candidates,
+                shard_id,
+                node,
+                device,
+                candidates,
             )
-            assignments.append(ShardAssignment(
-                shard_id=shard_id,
-                node=node,
-                device=device,
-                vendor=device.vendor,
-                estimated_comm_volume_bytes=comm_volume_per_shard_bytes,
-                rationale=rationale,
-            ))
+            assignments.append(
+                ShardAssignment(
+                    shard_id=shard_id,
+                    node=node,
+                    device=device,
+                    vendor=device.vendor,
+                    estimated_comm_volume_bytes=comm_volume_per_shard_bytes,
+                    rationale=rationale,
+                )
+            )
         return assignments
 
     # -- internals ---------------------------------------------------------
 
     def _rank_devices(
-        self, cluster: ClusterTopology,
+        self,
+        cluster: ClusterTopology,
     ) -> list[tuple[str, MeshDevice]]:
         """Rank devices, vendor-first then by intra-node interconnect.
 
@@ -624,8 +641,11 @@ class VendorAwareScheduler:
         if not all_candidates:
             return f"shard {shard_id} -> {node}/{device.display_name} (empty)"
         idx = next(
-            (i for i, (n, d) in enumerate(all_candidates)
-             if n == node and d.device_id == device.device_id),
+            (
+                i
+                for i, (n, d) in enumerate(all_candidates)
+                if n == node and d.device_id == device.device_id
+            ),
             0,
         )
         return (
@@ -689,9 +709,15 @@ class CommunicationPlanner:
                     continue
                 src_node, _ = device_meta[i]
                 tgt_node, _ = device_meta[j]
-                out.append(self._plan_pair(
-                    cluster, src, tgt, src_node, tgt_node,
-                ))
+                out.append(
+                    self._plan_pair(
+                        cluster,
+                        src,
+                        tgt,
+                        src_node,
+                        tgt_node,
+                    )
+                )
         return out
 
     def plan_pair(
@@ -712,7 +738,9 @@ class CommunicationPlanner:
     # -- internals ---------------------------------------------------------
 
     def _owner_node(
-        self, cluster: ClusterTopology, device: MeshDevice,
+        self,
+        cluster: ClusterTopology,
+        device: MeshDevice,
     ) -> str:
         # ``MeshDevice.device_id`` is per-host, not cluster-global, so
         # matching on it would mis-attribute devices that share a local
@@ -738,10 +766,16 @@ class CommunicationPlanner:
     ) -> CommunicationPlan:
         if source_node == target_node:
             return self._plan_intra_node(
-                source, target, source_node,
+                source,
+                target,
+                source_node,
             )
         return self._plan_inter_node(
-            cluster, source, target, source_node, target_node,
+            cluster,
+            source,
+            target,
+            source_node,
+            target_node,
         )
 
     def _plan_intra_node(
@@ -765,7 +799,8 @@ class CommunicationPlanner:
                         source.interconnect,
                     ),
                     library_hint=_library_hint_for_pair(
-                        source.vendor, target.vendor,
+                        source.vendor,
+                        target.vendor,
                     ),
                 )
         # Cross-vendor or low-bandwidth intra-node: stage via host.
@@ -845,6 +880,7 @@ class OrchestrationPlan:
     be re-run independently, but packaging the three together keeps
     the per-stage observability spans simple to write.
     """
+
     topology: ClusterTopology
     assignments: tuple[ShardAssignment, ...]
     comm_plans: tuple[CommunicationPlan, ...]
@@ -874,12 +910,8 @@ class OrchestrationPlan:
             "is_heterogeneous": self.topology.is_heterogeneous,
             "policy": {
                 "prefer_vendor_affinity": self.policy.prefer_vendor_affinity,
-                "allow_cross_node_vendor_split": (
-                    self.policy.allow_cross_node_vendor_split
-                ),
-                "load_balance_within_vendor": (
-                    self.policy.load_balance_within_vendor
-                ),
+                "allow_cross_node_vendor_split": (self.policy.allow_cross_node_vendor_split),
+                "load_balance_within_vendor": (self.policy.load_balance_within_vendor),
             },
             "assignments": [a.to_dict() for a in self.assignments],
             "comm_plans": [p.to_dict() for p in self.comm_plans],
@@ -901,11 +933,13 @@ def build_orchestration_plan(
     """
     scheduler = VendorAwareScheduler(policy=policy)
     planner = CommunicationPlanner()
-    assignments = tuple(scheduler.assign_shards(
-        cluster=cluster,
-        num_shards=num_shards,
-        comm_volume_per_shard_bytes=comm_volume_per_shard_bytes,
-    ))
+    assignments = tuple(
+        scheduler.assign_shards(
+            cluster=cluster,
+            num_shards=num_shards,
+            comm_volume_per_shard_bytes=comm_volume_per_shard_bytes,
+        )
+    )
     comm_plans = tuple(planner.plan_cluster(cluster))
     return OrchestrationPlan(
         topology=cluster,

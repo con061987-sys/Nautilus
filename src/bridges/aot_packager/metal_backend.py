@@ -64,7 +64,6 @@ import importlib.util
 import json
 import os
 import platform as _platform
-import re
 import shutil
 import subprocess
 import tempfile
@@ -73,10 +72,10 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Any, cast
 
 from src.common.errors import (
     CompilationError,
-    CompilationOutputMissingError,
     DependencyMissingError,
     HardwareNotFoundError,
 )
@@ -89,6 +88,7 @@ log = get_logger("nautilus.aot.metal")
 
 class MetalTarget(str, Enum):
     """Apple Metal GPU families."""
+
     APPLE_M1 = "apple_m1"
     APPLE_M2 = "apple_m2"
     APPLE_M3 = "apple_m3"
@@ -109,7 +109,7 @@ _TARGET_TO_MSL_VERSION: dict[MetalTarget, str] = {
     MetalTarget.APPLE_M2: "air64-apple-macos14",
     MetalTarget.APPLE_M3: "air64-apple-macos15",
     MetalTarget.APPLE_M4: "air64-apple-macos15",
-    MetalTarget.GENERIC:  "air64-apple-macos14",
+    MetalTarget.GENERIC: "air64-apple-macos14",
 }
 
 
@@ -259,13 +259,10 @@ class MetalBackend:
         if not available:
             reasons: list[str] = []
             if not is_macos:
-                reasons.append(
-                    f"not running on macOS (host is {os_name!r})"
-                )
+                reasons.append(f"not running on macOS (host is {os_name!r})")
             if not is_arm:
                 reasons.append(
-                    f"host CPU is {machine!r}; Apple Metal backend "
-                    f"requires Apple Silicon (arm64)"
+                    f"host CPU is {machine!r}; Apple Metal backend requires Apple Silicon (arm64)"
                 )
             if not has_xcrun:
                 reasons.append(
@@ -274,10 +271,7 @@ class MetalBackend:
                 )
             reason = "; ".join(reasons)
         else:
-            reason = (
-                f"Apple Silicon detected (macOS {os_name}, arm64), "
-                f"xcrun at {xcrun}"
-            )
+            reason = f"Apple Silicon detected (macOS {os_name}, arm64), xcrun at {xcrun}"
 
         return {
             "available": available,
@@ -315,8 +309,13 @@ class MetalBackend:
         self._detection_cache = detection
 
         cache_key = self._compute_cache_key(
-            kernel_source, kernel_name, block_m, block_n, block_k,
-            num_warps, num_stages,
+            kernel_source,
+            kernel_name,
+            block_m,
+            block_n,
+            block_k,
+            num_warps,
+            num_stages,
         )
         cached = self._check_cache(cache_key)
         if cached is not None:
@@ -357,8 +356,13 @@ class MetalBackend:
 
         try:
             msl_text, air_bytes, metallib_bytes, used_triton = self._run_compile(
-                kernel_source, kernel_name, block_m, block_n, block_k,
-                num_warps, num_stages,
+                kernel_source,
+                kernel_name,
+                block_m,
+                block_n,
+                block_k,
+                num_warps,
+                num_stages,
             )
         except DependencyMissingError as exc:
             elapsed = time.perf_counter() - start
@@ -398,9 +402,7 @@ class MetalBackend:
                 compilation_time_s=time.perf_counter() - start,
                 detection=detection,
             )
-        if (metallib_bytes is None
-                and air_bytes is not None
-                and not self._validate_air(air_bytes)):
+        if metallib_bytes is None and air_bytes is not None and not self._validate_air(air_bytes):
             return MetalCompilationResult(
                 success=False,
                 target=self.target.value,
@@ -468,8 +470,13 @@ class MetalBackend:
         Use this when callers want exception-based control flow.
         """
         result = self.compile_kernel(
-            kernel_source, kernel_name, block_m, block_n, block_k,
-            num_warps, num_stages,
+            kernel_source,
+            kernel_name,
+            block_m,
+            block_n,
+            block_k,
+            num_warps,
+            num_stages,
         )
         if not result.success:
             if result.error_code == "E_HARDWARE_NOT_FOUND":
@@ -521,22 +528,32 @@ class MetalBackend:
             )
 
         with self._lock:
-            tmp_dir = Path(
-                tempfile.mkdtemp(prefix="nautilus_metal_", dir=str(self.cache_dir))
-            )
+            tmp_dir = Path(tempfile.mkdtemp(prefix="nautilus_metal_", dir=str(self.cache_dir)))
             try:
                 # Try the primary path first: triton-metal plugin.
                 msl_text, air_bytes, metallib_bytes = self._try_triton_metal_primary(
-                    kernel_source, kernel_name, num_warps, num_stages,
-                    block_m, block_n, block_k, tmp_dir,
+                    kernel_source,
+                    kernel_name,
+                    num_warps,
+                    num_stages,
+                    block_m,
+                    block_n,
+                    block_k,
+                    tmp_dir,
                 )
                 if msl_text is not None and (air_bytes is not None or metallib_bytes is not None):
                     return msl_text, air_bytes, metallib_bytes, True
 
                 # Fallback path: LLVM IR -> MSL -> xcrun metal/air/metallib.
                 ll_text = self._compile_triton_to_llvm(
-                    kernel_source, kernel_name, num_warps, num_stages,
-                    block_m, block_n, block_k, tmp_dir,
+                    kernel_source,
+                    kernel_name,
+                    num_warps,
+                    num_stages,
+                    block_m,
+                    block_n,
+                    block_k,
+                    tmp_dir,
                 )
                 if ll_text is None:
                     raise CompilationError(
@@ -551,7 +568,8 @@ class MetalBackend:
                     # Last resort: at least keep the MSL text.
                     return msl_text, None, None, False
                 metallib_bytes = self._run_xcrun_metallib(
-                    [tmp_dir / f"{kernel_name}.air"], tmp_dir / f"{kernel_name}.metallib",
+                    [tmp_dir / f"{kernel_name}.air"],
+                    tmp_dir / f"{kernel_name}.metallib",
                 )
                 return msl_text, air_bytes, metallib_bytes, False
             finally:
@@ -581,8 +599,14 @@ class MetalBackend:
 
         try:
             compiled = self._triton_compile(
-                triton, kernel_source, kernel_name,
-                num_warps, num_stages, block_m, block_n, block_k,
+                triton,
+                kernel_source,
+                kernel_name,
+                num_warps,
+                num_stages,
+                block_m,
+                block_n,
+                block_k,
                 target="metal",
             )
         except (AttributeError, KeyError, ValueError) as exc:
@@ -616,13 +640,13 @@ class MetalBackend:
             registry = getattr(triton.backends, "backends", None)
             if isinstance(registry, dict) and "metal" in registry:
                 return True
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         try:
             for ep in importlib.metadata.entry_points(group="triton.backends"):
                 if "metal" in ep.name.lower():
                     return True
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return False
 
@@ -649,10 +673,17 @@ class MetalBackend:
         target = "cuda" if "nvidia" in self._registered_targets(triton) else "amd"
         try:
             compiled = self._triton_compile(
-                triton, kernel_source, kernel_name,
-                num_warps, num_stages, block_m, block_n, block_k, target=target,
+                triton,
+                kernel_source,
+                kernel_name,
+                num_warps,
+                num_stages,
+                block_m,
+                block_n,
+                block_k,
+                target=target,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning(
                 "Triton fallback IR generation failed",
                 error=str(exc),
@@ -673,7 +704,7 @@ class MetalBackend:
             registry = getattr(triton_module.backends, "backends", None)
             if isinstance(registry, dict):
                 return list(registry.keys())
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return []
 
@@ -693,7 +724,7 @@ class MetalBackend:
         the compiled artifact. Centralised so the primary and
         fallback paths share the same Triton setup.
         """
-        from triton.compiler import ASTSource  # type: ignore[attr-defined]
+        from triton.compiler import ASTSource
 
         # Stage the source so the JITFunction can inspect it via
         # inspect.getsourcelines. We keep one staging file per
@@ -703,7 +734,8 @@ class MetalBackend:
         src_path = staging / f"{kernel_name}__{target}.py"
         src_path.write_text(kernel_source)
         spec = importlib.util.spec_from_file_location(
-            f"_metal_{kernel_name}__{target}", src_path,
+            f"_metal_{kernel_name}__{target}",
+            src_path,
         )
         if spec is None or spec.loader is None:
             raise CompilationError(f"Could not import {kernel_name}")
@@ -726,14 +758,15 @@ class MetalBackend:
         # Triton 3.0+ ASTSource uses parameter names as keys.
         arg_names: list[str] = list(getattr(fn, "arg_names", []) or [])
         if arg_names and all(isinstance(k, int) for k in signature):
-            signature = {
-                arg_names[i]: dtype
-                for i, dtype in signature.items()
-                if i < len(arg_names)
-            }
+            signature = cast(
+                dict[int, str],
+                {arg_names[i]: dtype for i, dtype in signature.items() if i < len(arg_names)},
+            )
         if arg_names and all(isinstance(k, int) for k in constexprs):
-            constexprs = {(idx,): value for idx, value in constexprs.items()
-                          if idx < len(arg_names)}
+            constexprs = cast(
+                dict[int, Any],
+                {(idx,): value for idx, value in constexprs.items() if idx < len(arg_names)},
+            )
         source = ASTSource(
             fn=fn,
             signature=signature,
@@ -742,7 +775,9 @@ class MetalBackend:
         )
         options = {"num_warps": num_warps, "num_stages": num_stages}
         return triton_module.compiler.compile(
-            src=source, target=target, options=options,
+            src=source,
+            target=target,
+            options=options,
         )
 
     def _ll_text_to_msl(
@@ -768,8 +803,11 @@ class MetalBackend:
         # varies with the kernel. This is the "real compilation
         # logic" the contract requires: it ties the MSL output
         # to the input Triton kernel and never returns a stub.
-        ir_lines = [ln.strip() for ln in ll_text.splitlines()
-                    if ln.strip() and not ln.strip().startswith((";", "!"))][:32]
+        ir_lines = [
+            ln.strip()
+            for ln in ll_text.splitlines()
+            if ln.strip() and not ln.strip().startswith((";", "!"))
+        ][:32]
         ir_digest = hashlib.sha256("\n".join(ir_lines).encode()).hexdigest()[:16]
         return (
             f"// Auto-generated by nautilus.metal_backend from LLVM IR\n"
@@ -782,7 +820,8 @@ class MetalBackend:
             f"using namespace metal;\n"
             f"\n"
             f"// ----- Wrapped IR (truncated) -----\n"
-            + "\n".join(f"// {ln}" for ln in ir_lines[:16]) + "\n"
+            + "\n".join(f"// {ln}" for ln in ir_lines[:16])
+            + "\n"
             f"// ---------------------------------\n"
             f"\n"
             f"kernel void {kernel_name}(\n"
@@ -815,15 +854,20 @@ class MetalBackend:
         if not self._xcrun_path or not self._metal_path:
             return None
         cmd = [
-            self._xcrun_path, "metal",
-            "-c", str(msl_path),
-            "-o", str(air_path),
+            self._xcrun_path,
+            "metal",
+            "-c",
+            str(msl_path),
+            "-o",
+            str(air_path),
             f"-mtarget={_TARGET_TO_MSL_VERSION.get(self.target, 'air64-apple-macos14')}",
             "-std=metal3.0",
         ]
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True,
+                cmd,
+                capture_output=True,
+                text=True,
                 timeout=self.timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
@@ -839,7 +883,9 @@ class MetalBackend:
         return air_path.read_bytes()
 
     def _run_xcrun_metallib(
-        self, air_paths: list[Path], metallib_path: Path,
+        self,
+        air_paths: list[Path],
+        metallib_path: Path,
     ) -> bytes | None:
         """Bundle AIR objects into a metallib using ``xcrun metallib``.
 
@@ -851,13 +897,17 @@ class MetalBackend:
         if not self._xcrun_path or not self._metallib_path:
             return None
         cmd = [
-            self._xcrun_path, "metallib",
+            self._xcrun_path,
+            "metallib",
             *[str(p) for p in air_paths],
-            "-o", str(metallib_path),
+            "-o",
+            str(metallib_path),
         ]
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True,
+                cmd,
+                capture_output=True,
+                text=True,
                 timeout=self.timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
@@ -898,18 +948,29 @@ class MetalBackend:
 
     def _compute_cache_key(
         self,
-        source: str, name: str, block_m: int, block_n: int, block_k: int,
-        num_warps: int, num_stages: int,
+        source: str,
+        name: str,
+        block_m: int,
+        block_n: int,
+        block_k: int,
+        num_warps: int,
+        num_stages: int,
     ) -> str:
-        payload = json.dumps({
-            "source": source,
-            "name": name,
-            "target": self.target.value,
-            "block_m": block_m, "block_n": block_n, "block_k": block_k,
-            "num_warps": num_warps, "num_stages": num_stages,
-            "xcrun_version": self._xcrun_version,
-            "triton_metal_available": self._metal_target_available(),
-        }, sort_keys=True)
+        payload = json.dumps(
+            {
+                "source": source,
+                "name": name,
+                "target": self.target.value,
+                "block_m": block_m,
+                "block_n": block_n,
+                "block_k": block_k,
+                "num_warps": num_warps,
+                "num_stages": num_stages,
+                "xcrun_version": self._xcrun_version,
+                "triton_metal_available": self._metal_target_available(),
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def _check_cache(self, cache_key: str) -> dict | None:
@@ -978,7 +1039,9 @@ class MetalBackend:
         try:
             result = subprocess.run(
                 [self._xcrun_path, "metal", "--version"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 return (result.stdout or "unknown").strip().splitlines()[0] or "unknown"

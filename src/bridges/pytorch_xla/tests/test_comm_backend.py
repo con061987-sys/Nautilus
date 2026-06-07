@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.bridges.pytorch_xla.comm_backend import (
     CollectiveOp,
     CommBackend,
-    CommGroup,
     CommLibrary,
 )
 from src.bridges.pytorch_xla.device_mesh import (
@@ -37,7 +34,9 @@ class TestCommBackend:
         """A heterogeneous mesh should create cross-vendor bridges."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         comm = CommBackend(mesh)
@@ -72,7 +71,9 @@ class TestCommBackend:
         """select_library_for_op should use MIXED for cross-vendor ops."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         comm = CommBackend(mesh)
@@ -91,7 +92,9 @@ class TestCommBackend:
         """get_stats should return a useful summary."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         comm = CommBackend(mesh)
@@ -104,7 +107,9 @@ class TestCommBackend:
         """Cross-vendor bridges should have is_cross_vendor_bridge=True."""
         devices = [
             MeshDevice(0, DeviceVendor.NVIDIA, "sm_90", 80.0, 989.0, InterconnectType.NVLINK),
-            MeshDevice(1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC),
+            MeshDevice(
+                1, DeviceVendor.AMD, "gfx942", 192.0, 1307.0, InterconnectType.INFINITY_FABRIC
+            ),
         ]
         mesh = DeviceMesh(devices=devices, mesh_shape=[2])
         comm = CommBackend(mesh)

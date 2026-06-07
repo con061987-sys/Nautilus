@@ -33,6 +33,7 @@ logger = get_logger(__name__)
 @dataclass
 class CompilationResult:
     """Result of compiling a CUDA kernel through the full pipeline."""
+
     success: bool
     kernel_name: str = ""
     triton_source: str = ""
@@ -75,46 +76,58 @@ class CudaKernelCompiler:
         self.timeout_seconds = timeout_seconds
 
     def compile_file(
-        self, file_path: str,
+        self,
+        file_path: str,
     ) -> list[CompilationResult]:
         """Compile all __global__ kernels in a .cu file."""
         import time
+
         start = time.perf_counter()
 
         try:
             kernels = self.parser.parse_file(file_path)
         except Exception as exc:
             logger.error("Failed to parse %s: %s", file_path, exc)
-            return [CompilationResult(
-                success=False,
-                error=f"Parse failed: {exc}",
-            )]
+            return [
+                CompilationResult(
+                    success=False,
+                    error=f"Parse failed: {exc}",
+                )
+            ]
 
         return self._compile_kernels(kernels, start)
 
     def compile_source(
-        self, source: str, source_name: str = "<inline>",
+        self,
+        source: str,
+        source_name: str = "<inline>",
     ) -> list[CompilationResult]:
         """Compile all __global__ kernels in CUDA source text."""
         import time
+
         start = time.perf_counter()
 
         try:
             kernels = self.parser.parse_source(source)
         except Exception as exc:
             logger.error("Failed to parse %s: %s", source_name, exc)
-            return [CompilationResult(
-                success=False,
-                error=f"Parse failed: {exc}",
-            )]
+            return [
+                CompilationResult(
+                    success=False,
+                    error=f"Parse failed: {exc}",
+                )
+            ]
 
         return self._compile_kernels(kernels, start)
 
     def _compile_kernels(
-        self, kernels: list[CudaKernel], start_time: float,
+        self,
+        kernels: list[CudaKernel],
+        start_time: float,
     ) -> list[CompilationResult]:
         """Compile a list of parsed kernels."""
         import time
+
         results: list[CompilationResult] = []
 
         for kernel in kernels:
@@ -123,12 +136,14 @@ class CudaKernelCompiler:
             # Step 1: Translate CUDA to Triton
             translation = self.translator.translate(kernel)
             if not translation.is_usable:
-                results.append(CompilationResult(
-                    success=False,
-                    kernel_name=kernel.name,
-                    translation=translation,
-                    error=translation.error,
-                ))
+                results.append(
+                    CompilationResult(
+                        success=False,
+                        kernel_name=kernel.name,
+                        translation=translation,
+                        error=translation.error,
+                    )
+                )
                 continue
 
             # Step 2: Phase 1/2 integration (in production)
@@ -139,25 +154,30 @@ class CudaKernelCompiler:
 
             if self.enable_phase1_tuning:
                 tuning_config = self._attempt_phase1_tuning(
-                    translation.triton_source, kernel.name,
+                    translation.triton_source,
+                    kernel.name,
                 )
 
             if self.enable_phase2_aot and tuning_config:
                 fat_binary_path = self._attempt_phase2_aot(
-                    translation.triton_source, kernel.name, tuning_config,
+                    translation.triton_source,
+                    kernel.name,
+                    tuning_config,
                 )
 
             kernel_elapsed = time.perf_counter() - kernel_start
-            results.append(CompilationResult(
-                success=True,
-                kernel_name=kernel.name,
-                triton_source=translation.triton_source,
-                translation=translation,
-                tuning_config=tuning_config,
-                fat_binary_path=fat_binary_path,
-                warnings=translation.warnings,
-                compilation_time_s=kernel_elapsed,
-            ))
+            results.append(
+                CompilationResult(
+                    success=True,
+                    kernel_name=kernel.name,
+                    triton_source=translation.triton_source,
+                    translation=translation,
+                    tuning_config=tuning_config,
+                    fat_binary_path=fat_binary_path,
+                    warnings=translation.warnings,
+                    compilation_time_s=kernel_elapsed,
+                )
+            )
 
         total_elapsed = time.perf_counter() - start_time
         for r in results:
@@ -166,7 +186,9 @@ class CudaKernelCompiler:
         return results
 
     def _attempt_phase1_tuning(
-        self, triton_source: str, kernel_name: str,
+        self,
+        triton_source: str,
+        kernel_name: str,
     ) -> dict[str, Any]:
         """Attempt to run Phase 1 (TVM MetaSchedule) tuning.
 

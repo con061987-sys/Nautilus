@@ -18,11 +18,14 @@ from src.common.logging import get_logger
 
 try:
     from triton.runtime.driver import DriverBase
+
     TRITON_AVAILABLE = True
 except ImportError:
     TRITON_AVAILABLE = False
+
     class DriverBase:  # type: ignore
         def __init__(self, *a: Any, **kw: Any) -> None: ...
+
 
 logger = get_logger(__name__)
 
@@ -38,17 +41,17 @@ class TVMDriver(DriverBase):
     """
 
     # Class-level singleton — Triton expects one active driver at a time
-    _instance: "TVMDriver | None" = None
+    _instance: TVMDriver | None = None
 
     def __init__(self) -> None:
         if not TRITON_AVAILABLE:
             raise RuntimeError(
-                "Triton is required to use TVMDriver. "
-                "Install with: pip install triton"
+                "Triton is required to use TVMDriver. Install with: pip install triton"
             )
         super().__init__()
         # Lazy import to avoid circular dependency
         from ..bridge_orchestrator import TritonTVMBridge
+
         self._bridge = TritonTVMBridge(
             cache_dir="/tmp/nvindia_cud_driver_cache",
             enable_tvm=True,
@@ -56,7 +59,7 @@ class TVMDriver(DriverBase):
         logger.info("TVMDriver initialised; bridge is active")
 
     @classmethod
-    def instance(cls) -> "TVMDriver":
+    def instance(cls) -> TVMDriver:
         """Return the singleton instance, creating if needed."""
         if cls._instance is None:
             cls._instance = cls()
@@ -66,6 +69,7 @@ class TVMDriver(DriverBase):
         """Return the active torch device, falling back to default."""
         try:
             import torch
+
             if torch.cuda.is_available():
                 return torch.device("cuda", torch.cuda.current_device())
         except ImportError:
@@ -82,20 +86,24 @@ class TVMDriver(DriverBase):
         # Fall back to Triton's CUDA benchmarker
         try:
             from triton.testing import do_bench
+
             return do_bench
         except ImportError:
             logger.warning("triton.testing.do_bench not available; using time.perf_counter")
             import time
+
             def fallback_bench(fn: Any, **kwargs: Any) -> float:
                 start = time.perf_counter()
                 fn()
                 return (time.perf_counter() - start) * 1000
+
             return fallback_bench
 
     def get_current_device(self) -> int:
         """Return the current device index."""
         try:
             import torch
+
             if torch.cuda.is_available():
                 return torch.cuda.current_device()
         except ImportError:
@@ -106,6 +114,7 @@ class TVMDriver(DriverBase):
         """Return the current stream for a device."""
         try:
             import torch
+
             if torch.cuda.is_available():
                 return torch.cuda.current_stream(device)
         except ImportError:
@@ -116,6 +125,7 @@ class TVMDriver(DriverBase):
         """Set the current stream for a device."""
         try:
             import torch
+
             if torch.cuda.is_available():
                 torch.cuda.set_stream(stream)
         except ImportError:
@@ -129,6 +139,7 @@ class TVMDriver(DriverBase):
         try:
             import torch
             from triton.backends.compiler import GPUTarget
+
             if torch.cuda.is_available():
                 cap = torch.cuda.get_device_capability()
                 arch = cap[0] * 10 + cap[1]
@@ -138,6 +149,7 @@ class TVMDriver(DriverBase):
         # Fallback
         try:
             from triton.backends.compiler import GPUTarget
+
             return GPUTarget(backend="cuda", arch=80, warp_size=32)
         except Exception:
             return None

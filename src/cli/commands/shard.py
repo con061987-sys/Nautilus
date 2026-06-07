@@ -60,31 +60,37 @@ Examples:
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
 )
 @click.option(
-    "--mesh", "-m",
+    "--mesh",
+    "-m",
     required=True,
     help="Device mesh as comma-separated axes (e.g. '2,2' for 2x2, '4' for 1x4).",
 )
 @click.option(
-    "--strategy", "-s",
-    type=click.Choice(["auto", "replicated", "data_parallel", "model_parallel", "tensor_parallel"],
-                     case_sensitive=False),
+    "--strategy",
+    "-s",
+    type=click.Choice(
+        ["auto", "replicated", "data_parallel", "model_parallel", "tensor_parallel"],
+        case_sensitive=False,
+    ),
     default="auto",
     show_default=True,
     help="Sharding strategy hint to GSPMD.",
 )
 @click.option(
-    "--output-dir", "-o",
+    "--output-dir",
+    "-o",
     type=click.Path(file_okay=False, dir_okay=True, writable=True, path_type=Path),
     default=Path("./shards"),
     show_default=True,
     help="Where to write per-shard artifacts.",
 )
 @click.option(
-    "--example-inputs", "-e",
+    "--example-inputs",
+    "-e",
     type=str,
     default=None,
     help="Comma-separated example input shapes (e.g. '1,3,224,224'). "
-         "Required if the model file does not define EXAMPLE_INPUTS.",
+    "Required if the model file does not define EXAMPLE_INPUTS.",
 )
 def cli(
     model_file: Path,
@@ -204,21 +210,26 @@ def _shard_impl(
             )
         if result.gspmd_result is not None and result.gspmd_result.sharding_spec is not None:
             spec = result.gspmd_result.sharding_spec
-            (shard_dir / "shard_spec.json").write_text(json.dumps({
-                "shard_id": shard_idx,
-                "mesh": list(mesh_shape.axes),
-                "vendor": shard_exec.vendor,
-                "arch": shard_exec.arch,
-                "device_id": shard_exec.device_id,
-                "tensor_shardings": {
-                    n: {
-                        "axes": list(s.mesh_axes),
-                        "shape": list(s.partition_shape),
-                    }
-                    for n, s in spec.tensor_shardings.items()
-                },
-                "estimated_comm_volume_bytes": spec.estimated_comm_volume_bytes,
-            }, indent=2))
+            (shard_dir / "shard_spec.json").write_text(
+                json.dumps(
+                    {
+                        "shard_id": shard_idx,
+                        "mesh": list(mesh_shape.axes),
+                        "vendor": shard_exec.vendor,
+                        "arch": shard_exec.arch,
+                        "device_id": shard_exec.device_id,
+                        "tensor_shardings": {
+                            n: {
+                                "axes": list(s.mesh_axes),
+                                "shape": list(s.partition_shape),
+                            }
+                            for n, s in spec.tensor_shardings.items()
+                        },
+                        "estimated_comm_volume_bytes": spec.estimated_comm_volume_bytes,
+                    },
+                    indent=2,
+                )
+            )
 
         # The fat binary: per-shard product of StableHLO→Triton
         # translation (Wave 1.1) + per-vendor AOT compilation (Phase 2).
@@ -235,9 +246,10 @@ def _shard_impl(
             )
         else:
             log.warning(
-                "no fat binary for shard %d (vendor=%s arch=%s); "
-                "skipped kernel.fat.o",
-                shard_idx, shard_exec.vendor, shard_exec.arch,
+                "no fat binary for shard %d (vendor=%s arch=%s); skipped kernel.fat.o",
+                shard_idx,
+                shard_exec.vendor,
+                shard_exec.arch,
             )
 
         shards_emitted += 1
@@ -247,26 +259,31 @@ def _shard_impl(
         shards=shards_emitted,
         output_dir=str(output_dir),
     )
-    click.echo(json.dumps({
-        "model": str(model_file),
-        "mesh": list(mesh_shape.axes),
-        "strategy": strategy,
-        "shards_emitted": shards_emitted,
-        "tensor_shardings": (
-            len(result.gspmd_result.sharding_spec.tensor_shardings)
-            if result.gspmd_result is not None
-            and result.gspmd_result.sharding_spec is not None
-            else 0
-        ),
-        "comm_volume_bytes": (
-            result.gspmd_result.sharding_spec.estimated_comm_volume_bytes
-            if result.gspmd_result is not None
-            and result.gspmd_result.sharding_spec is not None
-            else 0
-        ),
-        "output_dir": str(output_dir),
-        "stage_durations_ms": result.stage_durations,
-    }, indent=2))
+    click.echo(
+        json.dumps(
+            {
+                "model": str(model_file),
+                "mesh": list(mesh_shape.axes),
+                "strategy": strategy,
+                "shards_emitted": shards_emitted,
+                "tensor_shardings": (
+                    len(result.gspmd_result.sharding_spec.tensor_shardings)
+                    if result.gspmd_result is not None
+                    and result.gspmd_result.sharding_spec is not None
+                    else 0
+                ),
+                "comm_volume_bytes": (
+                    result.gspmd_result.sharding_spec.estimated_comm_volume_bytes
+                    if result.gspmd_result is not None
+                    and result.gspmd_result.sharding_spec is not None
+                    else 0
+                ),
+                "output_dir": str(output_dir),
+                "stage_durations_ms": result.stage_durations,
+            },
+            indent=2,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +350,8 @@ def _load_model_and_inputs(
         log.warning(
             "could not import model file %s: %s; "
             "proceeding with model=None (bridge will report a clean error)",
-            model_file, exc,
+            model_file,
+            exc,
         )
         return None, ()
 
@@ -409,9 +427,7 @@ def _resolve_example_inputs(
             ) from exc
     if isinstance(module, (tuple, list)) and module:
         for s in module:
-            if isinstance(s, (tuple, list)) and all(
-                isinstance(d, int) for d in s
-            ):
+            if isinstance(s, (tuple, list)) and all(isinstance(d, int) for d in s):
                 shapes.append(tuple(s))
 
     if not shapes:
@@ -421,4 +437,4 @@ def _resolve_example_inputs(
 
 
 if __name__ == "__main__":
-    cli()  # type: ignore[reportArgumentType]
+    cli()

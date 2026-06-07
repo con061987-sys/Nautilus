@@ -17,7 +17,6 @@ clear message — never silently passed.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -30,7 +29,8 @@ class TestCApiModuleImport:
 
     def test_imports_without_crash(self) -> None:
         """Importing src.c_api must not raise — the loader is lazy."""
-        from src import c_api  # noqa: F401
+        from src import c_api
+
         assert c_api is not None
 
     def test_exposes_public_api(self) -> None:
@@ -49,8 +49,11 @@ class TestCApiModuleImport:
 
         # Vendor IDs are pure-Python; must always be present
         for name in (
-            "VENDOR_NVIDIA", "VENDOR_AMD", "VENDOR_INTEL",
-            "VENDOR_APPLE", "VENDOR_HOST",
+            "VENDOR_NVIDIA",
+            "VENDOR_AMD",
+            "VENDOR_INTEL",
+            "VENDOR_APPLE",
+            "VENDOR_HOST",
         ):
             assert hasattr(c_api, name), f"missing constant: {name}"
 
@@ -58,7 +61,10 @@ class TestCApiModuleImport:
         from src import c_api
 
         for name in (
-            "ARCH_SM_90", "ARCH_SM_80", "ARCH_GFX942", "ARCH_GAUDI2",
+            "ARCH_SM_90",
+            "ARCH_SM_80",
+            "ARCH_GFX942",
+            "ARCH_GAUDI2",
         ):
             assert hasattr(c_api, name), f"missing arch: {name}"
 
@@ -106,7 +112,7 @@ class TestCApiCompile:
                 source="def k(): pass",
                 kernel_name="k",
                 vendor=0,  # VENDOR_NVIDIA
-                arch=90,   # ARCH_SM_90
+                arch=90,  # ARCH_SM_90
                 num_warps=4,
                 num_stages=2,
             )
@@ -136,10 +142,15 @@ class TestCApiCompile:
         # raise. The signature itself must accept every keyword.
         try:
             compile(
-                source="x", kernel_name="k",
-                vendor=0, arch=90,
-                num_warps=4, num_stages=2,
-                block_m=64, block_n=64, block_k=32,
+                source="x",
+                kernel_name="k",
+                vendor=0,
+                arch=90,
+                num_warps=4,
+                num_stages=2,
+                block_m=64,
+                block_n=64,
+                block_k=32,
             )
         except DependencyMissingError:
             pass  # Expected when no .so
@@ -155,6 +166,7 @@ class TestTritonKernelHandle:
 
     def test_handle_class_exists(self) -> None:
         from src.c_api import TritonKernelHandle
+
         assert TritonKernelHandle is not None
 
     def test_handle_destructor_swallows_lib_missing(self) -> None:
@@ -202,7 +214,7 @@ class TestCApiLibrarySearch:
 
         # The module exposes the search list via _C_LIB_PATHS.
         # Check it includes at least the conventional locations.
-        paths = c_api._C_LIB_PATHS  # type: ignore[attr-defined]
+        paths = c_api._C_LIB_PATHS
         assert isinstance(paths, list)
         # At least one path must mention the library name
         assert any("nautilus_c_api" in p for p in paths)
@@ -212,10 +224,11 @@ class TestCApiLibrarySearch:
         monkeypatch.delenv("NAUTILUS_C_LIB", raising=False)
         # Force a fresh load by clearing the cached lib
         import src.c_api as c_api_mod
-        from src.c_api import _load_c_lib  # type: ignore[attr-defined]
+        from src.c_api import _load_c_lib
         from src.common.errors import DependencyMissingError
+
         c_api_mod._C_LIB = None
-        c_api_mod._C_LIB_LOAD_ERROR = None  # type: ignore[attr-defined]
+        c_api_mod._C_LIB_LOAD_ERROR = None
 
         with pytest.raises(DependencyMissingError):
             _load_c_lib()
@@ -230,10 +243,11 @@ class TestCApiLibrarySearch:
         monkeypatch.setenv("NAUTILUS_C_LIB", str(fake_path))
 
         import src.c_api as c_api_mod
-        from src.c_api import _load_c_lib  # type: ignore[attr-defined]
+        from src.c_api import _load_c_lib
         from src.common.errors import DependencyMissingError
+
         c_api_mod._C_LIB = None
-        c_api_mod._C_LIB_LOAD_ERROR = None  # type: ignore[attr-defined]
+        c_api_mod._C_LIB_LOAD_ERROR = None
 
         with pytest.raises(DependencyMissingError):
             _load_c_lib()
@@ -245,4 +259,5 @@ class TestCApiLibrarySearch:
 def _c_lib_loaded() -> bool:
     """Check whether the C library is currently loaded (i.e. buildable)."""
     import src.c_api as c_api_mod
-    return c_api_mod._C_LIB is not None  # type: ignore[attr-defined]
+
+    return c_api_mod._C_LIB is not None

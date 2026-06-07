@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 import click
 
@@ -28,12 +29,13 @@ def cli() -> None:
 
 @cli.command("inspect")
 @click.option(
-    "--node-file", "-f",
+    "--node-file",
+    "-f",
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
     default=None,
     help=(
         "Optional JSON file describing additional cluster nodes. "
-        "Shape: [{\"hostname\": \"node1\", \"devices\": [...]}, ...]. "
+        'Shape: [{"hostname": "node1", "devices": [...]}, ...]. '
         "Used for multi-node dev/test setups that lack a real cluster manager."
     ),
 )
@@ -70,7 +72,8 @@ def inspect_cmd(node_file: Path | None) -> None:
 
 @cli.command("plan")
 @click.option(
-    "--shards", "-n",
+    "--shards",
+    "-n",
     type=click.IntRange(min=1),
     required=True,
     help="Number of shards the model is split into.",
@@ -141,18 +144,17 @@ def _build_topology(node_file: Path | None):
     ``topology.devices`` array (see ``DeviceTopology.to_dict``) and
     builds one synthetic node per entry.
     """
-    from src.runtime.cluster_orchestrator import (
-        ClusterTopology,
-        InterNodeLink,
-        Node,
-    )
     from src.bridges.pytorch_xla.device_mesh import (
-        DeviceMesh,
         DeviceVendor,
         InterconnectType,
         MeshDevice,
     )
     from src.common.hardware import GpuVendor
+    from src.runtime.cluster_orchestrator import (
+        ClusterTopology,
+        InterNodeLink,
+        Node,
+    )
 
     if node_file is None:
         return ClusterTopology.from_local_device_meshes()
@@ -197,7 +199,8 @@ def _build_topology(node_file: Path | None):
             except ValueError:
                 vendor_key = GpuVendor.UNKNOWN
             mesh_vendor = gpu_to_mesh_vendor.get(
-                vendor_key, DeviceVendor.CPU,
+                vendor_key,
+                DeviceVendor.CPU,
             )
             try:
                 interconnect = InterconnectType(
@@ -205,51 +208,60 @@ def _build_topology(node_file: Path | None):
                 )
             except ValueError:
                 interconnect = InterconnectType.PCIE
-            mesh_devices.append(MeshDevice(
-                device_id=d_idx,
-                vendor=mesh_vendor,
-                arch=d.get("arch", ""),
-                memory_gb=float(d.get("memory_gb", 0.0) or 0.0),
-                compute_tflops=float(d.get("compute_tflops", 0.0) or 0.0),
-                interconnect=interconnect,
+            mesh_devices.append(
+                MeshDevice(
+                    device_id=d_idx,
+                    vendor=mesh_vendor,
+                    arch=d.get("arch", ""),
+                    memory_gb=float(d.get("memory_gb", 0.0) or 0.0),
+                    compute_tflops=float(d.get("compute_tflops", 0.0) or 0.0),
+                    interconnect=interconnect,
+                    hostname=hostname,
+                )
+            )
+        nodes.append(
+            Node(
                 hostname=hostname,
-            ))
-        nodes.append(Node(
-            hostname=hostname,
-            devices=tuple(mesh_devices),
-            numa_nodes={d.device_id: 0 for d in mesh_devices},
-        ))
+                devices=tuple(mesh_devices),
+                numa_nodes={d.device_id: 0 for d in mesh_devices},
+            )
+        )
 
     # Build inter-node links from any explicit "links" list. Default
     # to a single Ethernet-class link between every pair of nodes so
     # the produced plan reflects a realistic cross-node cost.
     inter_node_links: list[InterNodeLink] = []
     hostnames = [n.hostname for n in nodes]
-    if "links" in raw and isinstance(raw["links"], list):
-        for l in raw["links"]:
+    raw_as_dict = cast(dict[str, object], raw)
+    if "links" in raw_as_dict and isinstance(raw_as_dict["links"], list):
+        for l in raw_as_dict["links"]:
             if not isinstance(l, dict):
                 continue
             try:
-                inter_node_links.append(InterNodeLink(
-                    source=l["source"],
-                    target=l["target"],
-                    bandwidth_gbps=float(l.get("bandwidth_gbps", 12.5)),
-                    latency_us=float(l.get("latency_us", 25.0)),
-                    link_type=InterconnectType(
-                        l.get("link_type", "ethernet").lower(),
-                    ),
-                ))
+                inter_node_links.append(
+                    InterNodeLink(
+                        source=l["source"],
+                        target=l["target"],
+                        bandwidth_gbps=float(l.get("bandwidth_gbps", 12.5)),
+                        latency_us=float(l.get("latency_us", 25.0)),
+                        link_type=InterconnectType(
+                            l.get("link_type", "ethernet").lower(),
+                        ),
+                    )
+                )
             except (KeyError, ValueError):
                 continue
     else:
         for i, a in enumerate(hostnames):
-            for b in hostnames[i + 1:]:
-                inter_node_links.append(InterNodeLink(
-                    source=a,
-                    target=b,
-                    bandwidth_gbps=12.5,
-                    latency_us=25.0,
-                ))
+            for b in hostnames[i + 1 :]:
+                inter_node_links.append(
+                    InterNodeLink(
+                        source=a,
+                        target=b,
+                        bandwidth_gbps=12.5,
+                        latency_us=25.0,
+                    )
+                )
 
     return ClusterTopology(
         nodes=nodes,

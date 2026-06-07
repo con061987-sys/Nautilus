@@ -27,4 +27,4 @@ from .compiler import TVMBackend
 from .driver import TVMDriver
 from .options import TVMOptions
 
-__all__ = ["TVMBackend", "TVMDriver", "TVMOptions", "CAPTURE_KEY_FMT"]
+__all__ = ["CAPTURE_KEY_FMT", "TVMBackend", "TVMDriver", "TVMOptions"]

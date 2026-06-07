@@ -39,8 +39,7 @@ from src.bridges.triton_tvm.timeout_manager import (
     TotalBudgetExceededError,
 )
 from src.common.errors import TuningError
-from src.common.result import Err, Ok
-
+from src.common.result import Err
 
 # =========================================================================
 # Full pipeline end-to-end
@@ -65,7 +64,8 @@ class TestFullPipeline:
           the values returned by the mocked MetaSchedule adapter.
         """
         result = auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert result.is_ok()
         config = result.unwrap()
@@ -92,7 +92,8 @@ class TestFullPipeline:
           duration values.
         """
         auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert "build_template" in auto_tuning_bridge._stages
         assert "tvm_tune" in auto_tuning_bridge._stages
@@ -138,10 +139,14 @@ class TestFullPipeline:
         Passing means:
           All three metadata types return Ok with a valid config.
         """
-        for meta in [sample_matmul_metadata, sample_reduction_metadata,
-                     sample_elementwise_metadata]:
+        for meta in [
+            sample_matmul_metadata,
+            sample_reduction_metadata,
+            sample_elementwise_metadata,
+        ]:
             result = auto_tuning_bridge._tuning_chain(
-                meta, "nvidia/nvidia-a100",
+                meta,
+                "nvidia/nvidia-a100",
             )
             assert result.is_ok(), f"Failed for {meta.kernel_name}"
             conf = result.unwrap()
@@ -169,8 +174,7 @@ class TestFullPipeline:
         )
         assert isinstance(result, TuningResult)
         assert isinstance(result.config, MappedTuningConfig)
-        assert result.fallback_used, \
-            "Expected fallback_used=True when no real IR is captured"
+        assert result.fallback_used, "Expected fallback_used=True when no real IR is captured"
         assert result.fallback_reason is not None
         assert "real_ir_capture_failed" in result.fallback_reason
 
@@ -189,11 +193,10 @@ class TestFullPipeline:
         Passing means:
           Returns a TuningResult with cache_hit=True and L3_DISK_CACHE tier.
         """
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         import src.bridges.triton_tvm.metaschedule_adapter as ms_mod
         import src.bridges.triton_tvm.tir_template as tt_mod
-
         from src.bridges.triton_tvm.ir_capture import CapturedKernelIR, IRBounds, KernelKind
 
         with (
@@ -212,7 +215,9 @@ class TestFullPipeline:
             bridge.ir_capture.capture_for_source = MagicMock(return_value=mock_ir)
 
             cached_config = MappedTuningConfig(
-                block_m=32, block_n=32, block_k=16,
+                block_m=32,
+                block_n=32,
+                block_k=16,
             )
             bridge._set_cache(mock_ir.cache_key, "nvidia/nvidia-a100", cached_config)
 
@@ -322,14 +327,18 @@ class TestFallbackTiers:
         """
         bridge = TritonTVMBridge(cache_dir=cache_dir, enable_tvm=False)
         expected = MappedTuningConfig(
-            block_m=256, block_n=256, block_k=64,
-            num_warps=8, num_stages=5,
+            block_m=256,
+            block_n=256,
+            block_k=64,
+            num_warps=8,
+            num_stages=5,
         )
         bridge._set_cache(sample_matmul_metadata.cache_key, "nvidia/nvidia-a100", expected)
 
         bridge2 = TritonTVMBridge(cache_dir=cache_dir, enable_tvm=False)
         cached = bridge2._get_cached(
-            sample_matmul_metadata.cache_key, "nvidia/nvidia-a100",
+            sample_matmul_metadata.cache_key,
+            "nvidia/nvidia-a100",
         )
         assert cached is not None
         assert cached.block_m == 256
@@ -358,7 +367,8 @@ class TestFallbackTiers:
         bridge._set_cache(sample_matmul_metadata.cache_key, "nvidia/nvidia-a100", expected)
 
         cached = bridge._get_cached(
-            sample_matmul_metadata.cache_key, "nvidia/nvidia-a100",
+            sample_matmul_metadata.cache_key,
+            "nvidia/nvidia-a100",
         )
         assert cached is not None
         assert cached.block_m == 64
@@ -383,13 +393,16 @@ class TestFallbackTiers:
           The Err result has context.tier == L4_TRITON_DEFAULT.
         """
         auto_tuning_bridge.tvm_adapter.tune = MagicMock(
-            return_value=Err(TuningError(
-                "TVM unavailable for testing",
-                context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
-            )),
+            return_value=Err(
+                TuningError(
+                    "TVM unavailable for testing",
+                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                )
+            ),
         )
         result = auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert result.is_err()
         error = result.error
@@ -440,7 +453,8 @@ class TestFallbackTiers:
             side_effect=ValueError("invalid bounds for template"),
         )
         result = auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert result.is_err()
         assert result.error.context.get("tier") == FallbackTier.L5_SAFE_FALLBACK.name
@@ -462,7 +476,8 @@ class TestFallbackTiers:
             side_effect=ImportError("TVM not installed"),
         )
         result = auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert result.is_err()
         assert result.error.context.get("tier") == FallbackTier.L5_SAFE_FALLBACK.name
@@ -484,7 +499,8 @@ class TestFallbackTiers:
             side_effect=OSError(13, "Permission denied: /tmp/tvm"),
         )
         result = auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert result.is_err()
         assert result.error.context.get("tier") == FallbackTier.L5_SAFE_FALLBACK.name
@@ -504,7 +520,8 @@ class TestFallbackTiers:
         """
         bridge = TritonTVMBridge(enable_tvm=False)
         config = bridge._fallback_config(
-            sample_matmul_metadata, FallbackTier.L5_SAFE_FALLBACK,
+            sample_matmul_metadata,
+            FallbackTier.L5_SAFE_FALLBACK,
         )
         assert config.block_m == 128
         assert config.block_n == 128
@@ -524,7 +541,8 @@ class TestFallbackTiers:
         """
         bridge = TritonTVMBridge(enable_tvm=False)
         config = bridge._fallback_config(
-            sample_elementwise_metadata, FallbackTier.L5_SAFE_FALLBACK,
+            sample_elementwise_metadata,
+            FallbackTier.L5_SAFE_FALLBACK,
         )
         assert config == MappedTuningConfig.defaults()
 
@@ -549,7 +567,8 @@ class TestCircuitBreakerIntegration:
           raise CircuitOpenError.
         """
         cb = CircuitBreaker(
-            "test_breaker", CircuitBreakerConfig(failure_threshold=3),
+            "test_breaker",
+            CircuitBreakerConfig(failure_threshold=3),
         )
         assert cb.state == CircuitState.CLOSED
 
@@ -578,7 +597,8 @@ class TestCircuitBreakerIntegration:
         cb = CircuitBreaker(
             "test_half_close",
             CircuitBreakerConfig(
-                failure_threshold=1, cooldown_seconds=0.05,
+                failure_threshold=1,
+                cooldown_seconds=0.05,
                 success_threshold=1,
             ),
         )
@@ -603,7 +623,8 @@ class TestCircuitBreakerIntegration:
         cb = CircuitBreaker(
             "test_reopen",
             CircuitBreakerConfig(
-                failure_threshold=1, cooldown_seconds=0.05,
+                failure_threshold=1,
+                cooldown_seconds=0.05,
             ),
         )
         with pytest.raises(RuntimeError):
@@ -683,7 +704,8 @@ class TestCircuitBreakerIntegration:
           Call succeeds after reset, returning correct value.
         """
         cb = CircuitBreaker(
-            "test_reset", CircuitBreakerConfig(failure_threshold=1),
+            "test_reset",
+            CircuitBreakerConfig(failure_threshold=1),
         )
         with pytest.raises(RuntimeError):
             cb.call(lambda: (_ for _ in ()).throw(RuntimeError("boom")))
@@ -713,9 +735,8 @@ class TestTimeoutIntegration:
           StageTimeoutError with the correct stage name and budget.
         """
         mgr = TimeoutManager(StageBudgets(extract_s=0.1))
-        with pytest.raises(StageTimeoutError) as exc:
-            with mgr.stage("extract"):
-                time.sleep(0.3)
+        with pytest.raises(StageTimeoutError) as exc, mgr.stage("extract"):
+            time.sleep(0.3)
         assert exc.value.stage_name == "extract"
         assert exc.value.budget_s == pytest.approx(0.1, abs=0.01)
 
@@ -744,9 +765,14 @@ class TestTimeoutIntegration:
           After enough stage timeouts, check_total_budget raises.
         """
         budgets = StageBudgets(
-            extract_s=0.05, build_tir_s=0.05, tune_s=0.05,
-            map_config_s=0.05, recompile_s=0.05, aot_compile_s=0.05,
-            link_s=0.05, validate_s=0.05,
+            extract_s=0.05,
+            build_tir_s=0.05,
+            tune_s=0.05,
+            map_config_s=0.05,
+            recompile_s=0.05,
+            aot_compile_s=0.05,
+            link_s=0.05,
+            validate_s=0.05,
         )
         mgr = TimeoutManager(budgets)
         for _ in range(6):
@@ -781,7 +807,8 @@ class TestTimeoutIntegration:
 
         auto_tuning_bridge.tvm_adapter.tune = MagicMock(side_effect=_timeout_raiser)
         result = auto_tuning_bridge._tuning_chain(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert result.is_err()
         assert "timed out" in result.error.message.lower()
@@ -847,7 +874,9 @@ class TestConfigValidity:
             for bn in [16, 32, 64, 128, 256]:
                 for bk in [16, 32, 64]:
                     config = MappedTuningConfig(
-                        block_m=bm, block_n=bn, block_k=bk,
+                        block_m=bm,
+                        block_n=bn,
+                        block_k=bk,
                     )
                     assert _is_power_of_two(config.block_m)
                     assert _is_power_of_two(config.block_n)
@@ -939,7 +968,7 @@ class TestConfigValidity:
           The result equals MappedTuningConfig.defaults().
         """
         mapper = ConfigMapper()
-        config = mapper.map_record(None)  # type: ignore[arg-type]
+        config = mapper.map_record(None)
         assert config == MappedTuningConfig.defaults()
 
     def test_mapped_config_to_triton_config(self) -> None:
@@ -952,15 +981,21 @@ class TestConfigValidity:
           The triton.Config has correct BLOCK_SIZE_{M,N,K} in kwargs,
           and correct num_warps/num_stages/num_ctas.
         """
-        import triton  # local import: Config creation requires triton
 
         config = MappedTuningConfig(
-            block_m=64, block_n=128, block_k=32,
-            num_warps=8, num_stages=4, num_ctas=2,
+            block_m=64,
+            block_n=128,
+            block_k=32,
+            num_warps=8,
+            num_stages=4,
+            num_ctas=2,
         )
-        triton_cfg = config.to_triton_config({
-            "BLOCK_SIZE": 64, "GROUP_SIZE": 8,
-        })
+        triton_cfg = config.to_triton_config(
+            {
+                "BLOCK_SIZE": 64,
+                "GROUP_SIZE": 8,
+            }
+        )
         assert triton_cfg.kwargs["BLOCK_SIZE_M"] == 64
         assert triton_cfg.kwargs["BLOCK_SIZE_N"] == 128
         assert triton_cfg.kwargs["BLOCK_SIZE_K"] == 32
@@ -1016,10 +1051,10 @@ class TestBoundsInPipeline:
         ir = _reduction_ttgir()
         extractor = BoundsExtractor()
         bounds = extractor.extract(ir, KernelKind.REDUCTION)
-        assert bounds.reduce_size == 128, \
+        assert bounds.reduce_size == 128, (
             f"Expected reduce_size=128 (axis 0 on 128x1024), got {bounds.reduce_size}"
-        assert bounds.keep_size == 1024, \
-            f"Expected keep_size=1024, got {bounds.keep_size}"
+        )
+        assert bounds.keep_size == 1024, f"Expected keep_size=1024, got {bounds.keep_size}"
         assert bounds.data_dtype == "float32"
 
     def test_bounds_extractor_parses_elementwise_ir(self) -> None:
@@ -1057,7 +1092,9 @@ class TestBoundsInPipeline:
         capture = IRCapture()
         ir = _matmul_ttgir()
         result = capture.capture_from_text(
-            ir, source_hash="test", target="nvidia/nvidia-a100",
+            ir,
+            source_hash="test",
+            target="nvidia/nvidia-a100",
         )
         assert result.kind == KernelKind.MATMUL
         assert result.bounds.m == 128
@@ -1081,7 +1118,9 @@ class TestBoundsInPipeline:
         capture = IRCapture()
         ir = _reduction_ttgir()
         result = capture.capture_from_text(
-            ir, source_hash="test_reduce", target="nvidia/nvidia-a100",
+            ir,
+            source_hash="test_reduce",
+            target="nvidia/nvidia-a100",
         )
         assert result.kind == KernelKind.REDUCTION
         assert result.bounds.reduce_size == 128
@@ -1108,10 +1147,11 @@ class TestBoundsInPipeline:
             (_elementwise_ttgir(), KernelKind.ELEMENTWISE),
         ]:
             result = capture.capture_from_text(
-                ir_text, source_hash="test", target="nvidia/nvidia-a100",
+                ir_text,
+                source_hash="test",
+                target="nvidia/nvidia-a100",
             )
-            assert result.kind == expected, \
-                f"Expected {expected.name}, got {result.kind.name}"
+            assert result.kind == expected, f"Expected {expected.name}, got {result.kind.name}"
 
     def test_bounds_extraction_through_inline_pipeline(self) -> None:
         """Bounds extracted through IR capture flow to the tuning pipeline.
@@ -1129,7 +1169,9 @@ class TestBoundsInPipeline:
         capture = IRCapture()
         ir = _matmul_ttgir()
         result = capture.capture_from_text(
-            ir, source_hash="test", target="nvidia/nvidia-a100",
+            ir,
+            source_hash="test",
+            target="nvidia/nvidia-a100",
         )
         bounds = result.bounds
         assert bounds.m is not None and bounds.m > 0
@@ -1165,14 +1207,13 @@ class TestBoundsInPipeline:
           IR with two dots and a reduce followed by exp is classified
           as ATTENTION.
         """
-        from src.bridges.triton_tvm.ir_classifier import IRClassifier
         from src.bridges.triton_tvm.ir_capture import KernelKind
+        from src.bridges.triton_tvm.ir_classifier import IRClassifier
 
         classifier = IRClassifier()
         ir = _attention_ttgir()
         result = classifier.classify(ir)
-        assert result == KernelKind.ATTENTION, \
-            f"Expected ATTENTION, got {result.kind.name}"
+        assert result == KernelKind.ATTENTION, f"Expected ATTENTION, got {result.kind.name}"
 
     def test_bounds_extraction_errors_are_informative(self) -> None:
         """Bounds extraction errors carry clear messages.
@@ -1282,7 +1323,8 @@ class TestTuningResultValidity:
           Returns a list of MappedTuningConfig with different block sizes.
         """
         configs = auto_tuning_bridge.tune_configs_list(
-            sample_matmul_metadata, "nvidia/nvidia-a100",
+            sample_matmul_metadata,
+            "nvidia/nvidia-a100",
         )
         assert len(configs) >= 1
         for cfg in configs:
@@ -1306,7 +1348,8 @@ class TestTuningResultValidity:
         """
         bridge = TritonTVMBridge(cache_dir=cache_dir, enable_tvm=False)
         result = bridge._fallback_config(
-            sample_matmul_metadata, FallbackTier.L4_TRITON_DEFAULT,
+            sample_matmul_metadata,
+            FallbackTier.L4_TRITON_DEFAULT,
         )
         # For matmul, fallback should be 128x128x32
         assert result.block_m == 128

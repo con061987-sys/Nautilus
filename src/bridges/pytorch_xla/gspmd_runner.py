@@ -93,12 +93,25 @@ _TENSOR_TYPE_RE = re.compile(
 
 # Dtype name → byte width (IEEE-754 single/half/bfloat16/double + common ints).
 _DTYPE_BYTES: dict[str, int] = {
-    "f64": 8, "f32": 4, "f16": 2, "bf16": 2,
-    "f8e4m3fn": 1, "f8e5m2": 1, "f8e4m3": 1,
-    "f8e5m2fnuz": 1, "f8e4m3fnuz": 1,
-    "i64": 8, "i32": 4, "i16": 2, "i8": 1,
-    "ui64": 8, "ui32": 4, "ui16": 2, "ui8": 1,
-    "bool": 1, "pred": 1,
+    "f64": 8,
+    "f32": 4,
+    "f16": 2,
+    "bf16": 2,
+    "f8e4m3fn": 1,
+    "f8e5m2": 1,
+    "f8e4m3": 1,
+    "f8e5m2fnuz": 1,
+    "f8e4m3fnuz": 1,
+    "i64": 8,
+    "i32": 4,
+    "i16": 2,
+    "i8": 1,
+    "ui64": 8,
+    "ui32": 4,
+    "ui16": 2,
+    "ui8": 1,
+    "bool": 1,
+    "pred": 1,
 }
 
 # Map of StableHLO op token → canonical collective kind label.
@@ -206,9 +219,7 @@ def _parse_collectives_from_mlir(mlir_text: str) -> list[dict[str, Any]]:
         # type is always before the `: ( ... ) -> ... ` trailer.
         tail = mlir_text[match.end() : match.end() + 1024]
         sig_match = re.search(r":\s*\([^)]*\)\s*->\s*[^{;]+", tail, re.DOTALL)
-        operand_type = (
-            _first_tensor_type(sig_match.group(0)) if sig_match else ""
-        )
+        operand_type = _first_tensor_type(sig_match.group(0)) if sig_match else ""
         operand_bytes = _parse_tensor_type_bytes(operand_type)
         out.append(
             {
@@ -251,11 +262,7 @@ def verify_cost_model_estimate(
     if bandwidth_gbps <= 0:
         return True, 0.0, 0.0
     bandwidth_bytes_per_s = (bandwidth_gbps * 1e9) / 8.0
-    predicted_s = (
-        estimated_bytes / bandwidth_bytes_per_s
-        if bandwidth_bytes_per_s > 0
-        else 0.0
-    )
+    predicted_s = estimated_bytes / bandwidth_bytes_per_s if bandwidth_bytes_per_s > 0 else 0.0
     if measured_time_s <= 0:
         return True, predicted_s, float("inf")
     rel_err = abs(predicted_s - measured_time_s) / measured_time_s
@@ -509,8 +516,10 @@ def _collectives_from_actual_mlir(
 
         op_token = entry["op_token"]
         op_kind = (
-            "sum" if kind in ("all-reduce", "reduce-scatter")
-            else "identity" if kind == "all-gather"
+            "sum"
+            if kind in ("all-reduce", "reduce-scatter")
+            else "identity"
+            if kind == "all-gather"
             else "exchange"
         )
         out.append(
@@ -521,7 +530,9 @@ def _collectives_from_actual_mlir(
                 "mesh_axes": list(mesh_axes),
                 "num_devices": num_devices,
                 "estimated_bytes": cost.from_operand_bytes(
-                    kind, operand_bytes, num_devices,
+                    kind,
+                    operand_bytes,
+                    num_devices,
                 ),
                 "operand_type": entry["operand_type"],
                 "operand_bytes": operand_bytes,
@@ -560,7 +571,8 @@ def _estimate_collectives_from_spec(
                 "mesh_axes": list(ts.mesh_axes),
                 "num_devices": num_devices,
                 "estimated_bytes": cost.all_reduce_bytes(
-                    tensor_bytes, num_devices,
+                    tensor_bytes,
+                    num_devices,
                 ),
                 "operand_type": "",
                 "operand_bytes": tensor_bytes,
@@ -597,7 +609,9 @@ def _compute_collectives(
     """
     if sharded_mlir_text:
         from_graph = _collectives_from_actual_mlir(
-            sharded_mlir_text, spec, total_devices,
+            sharded_mlir_text,
+            spec,
+            total_devices,
         )
         if from_graph:
             return from_graph
@@ -692,10 +706,11 @@ class _TorchXLASharding:
     def is_available() -> bool:
         try:
             import torch_xla  # noqa: F401
-            from torch_xla.experimental.sharding_impl import (  # noqa: F401
-                shard_module,  # noqa: F401
-            )
             from torch_xla.distributed.spmd import Mesh  # noqa: F401
+            from torch_xla.experimental.sharding_impl import (  # noqa: F401
+                shard_module,
+            )
+
             return True
         except ImportError:
             return False
@@ -710,8 +725,8 @@ class _TorchXLASharding:
     ) -> tuple[str, ShardingSpec]:
         """Run the real XLA GSPMD shard_module path."""
         try:
-            from torch_xla.experimental.sharding_impl import shard_module
             from torch_xla.distributed.spmd import Mesh
+            from torch_xla.experimental.sharding_impl import shard_module
         except ImportError as exc:
             raise GSPMDError(
                 f"torch_xla sharding APIs unavailable: {exc}",
@@ -726,7 +741,10 @@ class _TorchXLASharding:
 
         # Build partition specs from the sharding spec strategy
         shardings = _build_default_shardings(
-            module, mesh_shape, strategy, custom_shardings,
+            module,
+            mesh_shape,
+            strategy,
+            custom_shardings,
         )
         partition_specs: dict[str, Any] = {}
         for tname, ts in shardings.items():
@@ -785,7 +803,9 @@ class _TorchXLASharding:
                 op_shardings[tname] = xla_mesh.get_op_sharding(spec_tuple)
             except Exception as exc:
                 logger.debug(
-                    "xla_mesh.get_op_sharding failed for %s: %s", tname, exc,
+                    "xla_mesh.get_op_sharding failed for %s: %s",
+                    tname,
+                    exc,
                 )
 
         # Use the graph-partition transformation to insert real
@@ -835,10 +855,12 @@ class _OpenXlaPjrtSharding:
     def is_available() -> bool:
         try:
             from torch_xla._internal import pjrt as tpx_pjrt  # noqa: F401
+
             return True
         except ImportError:
             try:
                 import openxla  # noqa: F401
+
                 return True
             except ImportError:
                 return False
@@ -855,7 +877,10 @@ class _OpenXlaPjrtSharding:
         # Try the real PJRT compile path. If unavailable, raise so
         # the runner can fall through to the tertiary tier.
         compile_result = cls._try_pjrt_compile(
-            module, mesh_shape, strategy, custom_shardings,
+            module,
+            mesh_shape,
+            strategy,
+            custom_shardings,
         )
         if compile_result is not None:
             return compile_result
@@ -885,7 +910,10 @@ class _OpenXlaPjrtSharding:
         """
         total_dev = _total_devices(mesh_shape)
         shardings = _build_default_shardings(
-            module, mesh_shape, strategy, custom_shardings,
+            module,
+            mesh_shape,
+            strategy,
+            custom_shardings,
         )
         spec = ShardingSpec(
             mesh_shape=mesh_shape,
@@ -926,8 +954,7 @@ class _OpenXlaPjrtSharding:
                 # PJRT may not be able to compile raw MLIR text
                 # directly. Log and continue to graph partition.
                 logger.debug(
-                    "PJRT compile() failed (falling back to graph "
-                    "partition): %s",
+                    "PJRT compile() failed (falling back to graph partition): %s",
                     exc,
                 )
 
@@ -1002,7 +1029,10 @@ class _GraphPartitionSharding:
 
         total_dev = _total_devices(mesh_shape)
         shardings = _build_default_shardings(
-            module, mesh_shape, strategy, custom_shardings,
+            module,
+            mesh_shape,
+            strategy,
+            custom_shardings,
         )
 
         sharded_text, inserted_collectives = partition_mlir_with_collectives(
@@ -1188,6 +1218,32 @@ _SHARDING_TIERS = [
 ]
 
 
+# ── TVM MetaSchedule target inference ────────────────────────────────────
+
+
+class _TVMMetaScheduleSharding:
+    """TVM-MetaSchedule target inference for a hardware mesh.
+
+    Exposes :meth:`_mesh_target` so callers can look up the TVM
+    target string (e.g. ``"nvidia/nvidia-h100"``) for a given mesh
+    without reaching into the sibling ``device_mesh_utils`` module.
+    Pure delegate; no state.
+    """
+
+    @staticmethod
+    def _mesh_target(mesh: Any) -> str:
+        """Return the TVM target string for a mesh or mesh-shape list.
+
+        Delegates to
+        :func:`src.bridges.pytorch_xla.device_mesh_utils.infer_target_from_mesh`.
+        """
+        # Imported lazily to avoid an import-time cycle: device_mesh_utils
+        # transitively imports types defined in this module.
+        from .device_mesh_utils import infer_target_from_mesh
+
+        return infer_target_from_mesh(mesh)
+
+
 # ── Public runner class ────────────────────────────────────────────────
 
 
@@ -1325,10 +1381,7 @@ class GSPMDRunner:
             strategy=strategy.name,
         ) as sp:
             for tier_name, tier_cls in _SHARDING_TIERS:
-                if (
-                    tier_name == "graph_partition"
-                    and not self.enable_graph_partition
-                ):
+                if tier_name == "graph_partition" and not self.enable_graph_partition:
                     attempt_history.append(f"{tier_name}: disabled by config")
                     with stage(sp, tier_name) as st:
                         st.set(status="disabled")
@@ -1368,9 +1421,7 @@ class GSPMDRunner:
                         # Validate REAL collective ops in the output
                         # — not just sharding annotations
                         op_counts = _count_collectives(sharded_text)
-                        collectives_inserted = list(
-                            sharding_spec.inserted_collectives
-                        )
+                        collectives_inserted = list(sharding_spec.inserted_collectives)
 
                         # A sharded partition MUST contain at least
                         # one collective op (when the spec is
@@ -1378,8 +1429,7 @@ class GSPMDRunner:
                         # sharded tensor). Pure annotation is no
                         # longer accepted.
                         has_sharded_tensors = any(
-                            ts.mesh_axes
-                            for ts in sharding_spec.tensor_shardings.values()
+                            ts.mesh_axes for ts in sharding_spec.tensor_shardings.values()
                         )
                         if has_sharded_tensors and not op_counts:
                             raise GSPMDError(
@@ -1394,9 +1444,7 @@ class GSPMDRunner:
                         tier_used = tier_name
                         st.set(
                             status="success",
-                            tensors_sharded=len(
-                                sharding_spec.tensor_shardings
-                            ),
+                            tensors_sharded=len(sharding_spec.tensor_shardings),
                             collectives=len(sharding_spec.inserted_collectives),
                             comm_bytes=sharding_spec.estimated_comm_volume_bytes,
                             op_counts=op_counts,

@@ -32,9 +32,14 @@ try:
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
+
     class T:  # type: ignore
-        class prim_func: pass
-        class Buffer: pass
+        class prim_func:
+            pass
+
+        class Buffer:
+            pass
+
 
 logger = get_logger(__name__)
 
@@ -49,11 +54,11 @@ class TIRTemplateBuilder:
     def __init__(self) -> None:
         if not TVM_AVAILABLE:
             raise RuntimeError(
-                "TVM is required to build TIR templates. "
-                "Install with: pip install apache-tvm"
+                "TVM is required to build TIR templates. Install with: pip install apache-tvm"
             )
         # Lazy import to avoid circular dependency
         from .ir_to_tir import ConversionPipeline
+
         self._pipeline = ConversionPipeline()
 
     def build_from_captured_ir(
@@ -93,9 +98,9 @@ class TIRTemplateBuilder:
     ) -> tvm.IRModule:
         @T.prim_func
         def matmul_kernel(
-            A: T.Buffer((m, k), dtype),
-            B: T.Buffer((k, n), dtype),
-            C: T.Buffer((m, n), dtype),
+            A: T.Buffer[(m, k), dtype],
+            B: T.Buffer[(k, n), dtype],
+            C: T.Buffer[(m, n), dtype],
         ) -> None:
             for i, j, kk in T.grid(m, n, k):
                 with T.block("C"):
@@ -118,8 +123,8 @@ class TIRTemplateBuilder:
 
         @T.prim_func
         def reduce_kernel(
-            inp: T.Buffer((d0, d1), dtype),
-            out: T.Buffer((d0,), dtype),
+            inp: T.Buffer[(d0, d1), dtype],
+            out: T.Buffer[(d0,), dtype],
         ) -> None:
             for i in T.grid(d0):
                 with T.block("reduce"):
@@ -147,9 +152,9 @@ class TIRTemplateBuilder:
     ) -> tvm.IRModule:
         @T.prim_func
         def elem_kernel(
-            A: T.Buffer(shape, dtype),
-            B: T.Buffer(shape, dtype),
-            C: T.Buffer(shape, dtype),
+            A: T.Buffer[shape, dtype],
+            B: T.Buffer[shape, dtype],
+            C: T.Buffer[shape, dtype],
         ) -> None:
             for idx in T.grid(*shape):
                 with T.block("elem"):
@@ -229,7 +234,8 @@ class TIRTemplateBuilder:
         # The TVMScript should have defined a function with the
         # kernel's name; find it
         func_names = [
-            name for name, obj in namespace.items()
+            name
+            for name, obj in namespace.items()
             if callable(obj) and not name.startswith("_") and name != "T"
         ]
         if not func_names:

@@ -23,15 +23,12 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from src.common.errors import (
     AOTritonError,
     CompilationError,
     CompilationOutputMissingError,
     DependencyMissingError,
-    LLVMError,
-    NautilusError,
 )
 from src.common.logging import get_logger
 
@@ -68,6 +65,7 @@ class AMDCompilationResult:
 
 class AMDBackend:
     """AOT compilation for AMD ROCm GPUs via AOTriton or Triton+amdclang++."""
+
     def __init__(
         self,
         target_arch: AMDArch = AMDArch.GFX942,
@@ -75,10 +73,13 @@ class AMDBackend:
         timeout_seconds: float = 120.0,
     ) -> None:
         self.target_arch = target_arch
-        self.cache_dir = Path(cache_dir or os.environ.get(
-            "NAUTILUS_AMD_CACHE",
-            str(Path.home() / ".cache" / "nautilus" / "amd"),
-        ))
+        self.cache_dir = Path(
+            cache_dir
+            or os.environ.get(
+                "NAUTILUS_AMD_CACHE",
+                str(Path.home() / ".cache" / "nautilus" / "amd"),
+            )
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timeout_seconds = timeout_seconds
         self._aotriton_version = self._detect_aotriton()
@@ -105,7 +106,13 @@ class AMDBackend:
         start = time.perf_counter()
 
         cache_key = self._compute_cache_key(
-            kernel_source, kernel_name, block_m, block_n, block_k, num_warps, num_stages,
+            kernel_source,
+            kernel_name,
+            block_m,
+            block_n,
+            block_k,
+            num_warps,
+            num_stages,
         )
         cached = self._check_cache(cache_key)
         if cached is not None:
@@ -123,23 +130,32 @@ class AMDBackend:
         used_aotriton = False
         try:
             hsaco_bytes = self._run_aotriton(
-                kernel_source, kernel_name, block_m, block_n, block_k, num_warps, num_stages,
+                kernel_source,
+                kernel_name,
+                block_m,
+                block_n,
+                block_k,
+                num_warps,
+                num_stages,
             )
             used_aotriton = True
         except DependencyMissingError as exc:
-            log.info("AOTriton unavailable, falling back to Triton+amdclang++",
-                     error=str(exc))
+            log.info("AOTriton unavailable, falling back to Triton+amdclang++", error=str(exc))
             hsaco_bytes = None
         except Exception as exc:
-            log.warning("AOTriton compile failed; trying Triton fallback",
-                        error=str(exc))
+            log.warning("AOTriton compile failed; trying Triton fallback", error=str(exc))
             hsaco_bytes = None
 
         if hsaco_bytes is None:
             try:
                 hsaco_bytes = self._run_triton_fallback(
-                    kernel_source, kernel_name, block_m, block_n, block_k,
-                    num_warps, num_stages,
+                    kernel_source,
+                    kernel_name,
+                    block_m,
+                    block_n,
+                    block_k,
+                    num_warps,
+                    num_stages,
                 )
             except Exception as exc:
                 elapsed = time.perf_counter() - start
@@ -160,7 +176,10 @@ class AMDBackend:
         if not hsaco_bytes or len(hsaco_bytes) <= 100:
             raise CompilationOutputMissingError(
                 f"AMD HSACO output is empty or stub-sized for {kernel_name}",
-                context={"arch": self.target_arch.value, "size": len(hsaco_bytes) if hsaco_bytes else 0},
+                context={
+                    "arch": self.target_arch.value,
+                    "size": len(hsaco_bytes) if hsaco_bytes else 0,
+                },
             )
 
         if not self._validate_hsaco(hsaco_bytes):
@@ -176,7 +195,8 @@ class AMDBackend:
         elapsed = time.perf_counter() - start
         log.info(
             "AMD AOT compile complete",
-            kernel=kernel_name, arch=self.target_arch.value,
+            kernel=kernel_name,
+            arch=self.target_arch.value,
             hsaco_size=len(hsaco_bytes),
             used_aotriton=used_aotriton,
             elapsed_s=elapsed,
@@ -204,10 +224,13 @@ class AMDBackend:
         """Use AOTriton's Python API or CLI to compile."""
         # First, try the Python API
         try:
-            import aotriton  # type: ignore[import-untyped]
-            from aotriton import compile  # type: ignore[import-untyped]
+            import aotriton
+            from aotriton import compile
+
             with self._lock:
-                tmp_dir = Path(tempfile.mkdtemp(prefix="nautilus_aotriton_", dir=str(self.cache_dir)))
+                tmp_dir = Path(
+                    tempfile.mkdtemp(prefix="nautilus_aotriton_", dir=str(self.cache_dir))
+                )
                 try:
                     src_path = tmp_dir / f"{kernel_name}.py"
                     src_path.write_text(kernel_source)
@@ -235,8 +258,14 @@ class AMDBackend:
                     "AOTriton not installed. Install with: pip install aotriton",
                 ) from exc
             return self._run_aotriton_cli(
-                aotriton_cli, kernel_source, kernel_name,
-                block_m, block_n, block_k, num_warps, num_stages,
+                aotriton_cli,
+                kernel_source,
+                kernel_name,
+                block_m,
+                block_n,
+                block_k,
+                num_warps,
+                num_stages,
             )
 
     def _run_aotriton_cli(
@@ -251,21 +280,32 @@ class AMDBackend:
         num_stages: int,
     ) -> bytes:
         with self._lock:
-            tmp_dir = Path(tempfile.mkdtemp(prefix="nautilus_aotriton_cli_", dir=str(self.cache_dir)))
+            tmp_dir = Path(
+                tempfile.mkdtemp(prefix="nautilus_aotriton_cli_", dir=str(self.cache_dir))
+            )
             try:
                 src_path = tmp_dir / f"{kernel_name}.py"
                 src_path.write_text(kernel_source)
                 out_path = tmp_dir / f"{kernel_name}.hsaco"
                 cmd = [
-                    cli_path, "compile",
-                    "--src", str(src_path),
-                    "--output", str(out_path),
-                    "--target", self.target_arch.value,
-                    "--num-warps", str(num_warps),
-                    "--num-stages", str(num_stages),
+                    cli_path,
+                    "compile",
+                    "--src",
+                    str(src_path),
+                    "--output",
+                    str(out_path),
+                    "--target",
+                    self.target_arch.value,
+                    "--num-warps",
+                    str(num_warps),
+                    "--num-stages",
+                    str(num_stages),
                 ]
                 result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=self.timeout_seconds,
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout_seconds,
                 )
                 if result.returncode != 0 or not out_path.exists():
                     raise CompilationError(
@@ -302,7 +342,7 @@ class AMDBackend:
             import importlib.util
 
             import triton
-            from triton.compiler import ASTSource  # type: ignore[attr-defined]
+            from triton.compiler import ASTSource
         except ImportError as exc:
             raise DependencyMissingError(
                 "Triton not installed; cannot do AMD fallback",
@@ -329,12 +369,17 @@ class AMDBackend:
                     },
                 )
                 source = ASTSource(
-                    fn=fn, constants={}, signature=signature, constexprs=constexprs,
+                    fn=fn,
+                    constants={},
+                    signature=signature,
+                    constexprs=constexprs,
                     attrs={"num_warps": num_warps, "num_stages": num_stages},
                 )
                 options = {"num_warps": num_warps, "num_stages": num_stages}
                 compiled = triton.compiler.compile(
-                    src=source, target="rocm", options=options,
+                    src=source,
+                    target="rocm",
+                    options=options,
                 )
                 asm = compiled.asm
                 ll_text = asm.get("ll") or asm.get("llvm")
@@ -348,13 +393,18 @@ class AMDBackend:
                 hsaco_path = tmp_dir / f"{kernel_name}.hsaco"
                 cmd = [
                     self._amdclangpp_path,
-                    "-x", "ir",
+                    "-x",
+                    "ir",
                     f"--offload-arch={self.target_arch.value}",
-                    "-o", str(hsaco_path),
+                    "-o",
+                    str(hsaco_path),
                     str(ll_path),
                 ]
                 result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=self.timeout_seconds,
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout_seconds,
                 )
                 if result.returncode != 0 or not hsaco_path.exists():
                     raise CompilationError(
@@ -375,22 +425,34 @@ class AMDBackend:
         # Look for amdgcn target triple
         text = hsaco_bytes.decode("latin-1", errors="ignore")
         if "amdgcn" not in text and "AMDGPU" not in text:
-            log.warning("HSACO does not declare amdgcn target",
-                        size=len(hsaco_bytes))
+            log.warning("HSACO does not declare amdgcn target", size=len(hsaco_bytes))
             return False
         return True
 
     def _compute_cache_key(
         self,
-        source: str, name: str, block_m: int, block_n: int, block_k: int,
-        num_warps: int, num_stages: int,
+        source: str,
+        name: str,
+        block_m: int,
+        block_n: int,
+        block_k: int,
+        num_warps: int,
+        num_stages: int,
     ) -> str:
-        payload = json.dumps({
-            "source": source, "name": name, "arch": self.target_arch.value,
-            "block_m": block_m, "block_n": block_n, "block_k": block_k,
-            "num_warps": num_warps, "num_stages": num_stages,
-            "aotriton_version": self._aotriton_version,
-        }, sort_keys=True)
+        payload = json.dumps(
+            {
+                "source": source,
+                "name": name,
+                "arch": self.target_arch.value,
+                "block_m": block_m,
+                "block_n": block_n,
+                "block_k": block_k,
+                "num_warps": num_warps,
+                "num_stages": num_stages,
+                "aotriton_version": self._aotriton_version,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def _check_cache(self, cache_key: str) -> Path | None:
@@ -405,6 +467,7 @@ class AMDBackend:
     def _detect_aotriton(self) -> str:
         try:
             import aotriton
+
             return getattr(aotriton, "__version__", "unknown")
         except ImportError:
             pass
@@ -413,7 +476,10 @@ class AMDBackend:
             return "unavailable"
         try:
             result = subprocess.run(
-                [cli, "--version"], capture_output=True, text=True, timeout=5,
+                [cli, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 return result.stdout.strip() or "unknown"

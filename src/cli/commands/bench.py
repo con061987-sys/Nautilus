@@ -35,6 +35,11 @@ from typing import Any
 
 import click
 
+# Ensure the project root is on sys.path so 'benchmarks' package resolves
+_project_root = Path(__file__).resolve().parent.parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from benchmarks.results import (
     DEFAULT_REGRESSION_THRESHOLDS,
     DEFAULT_RESULTS_DIR,
@@ -102,6 +107,7 @@ def _common_threshold_options(f: Any) -> Any:
     )
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         return f(*args, **kwargs)
+
     # Click's decorator stack is applied bottom-up. We rebuild manually
     # by chaining. (The clean way is the @click.option chain above, but
     # reusing a helper keeps the per-command bodies short.)
@@ -179,19 +185,22 @@ aborts early if ``--fail-fast`` is set.
 """,
 )
 @click.option(
-    "--benchmark", "-b",
+    "--benchmark",
+    "-b",
     "benchmarks",
     multiple=True,
     help="Run only these benchmarks (e.g. 'kernels/matmul'). Repeatable.",
 )
 @click.option(
-    "--target", "-t",
+    "--target",
+    "-t",
     "targets",
     multiple=True,
     help="Run only these targets (e.g. 'nvidia/sm_90'). Repeatable.",
 )
 @click.option(
-    "--output-dir", "-o",
+    "--output-dir",
+    "-o",
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
     default=None,
     help=(
@@ -200,7 +209,8 @@ aborts early if ``--fail-fast`` is set.
     ),
 )
 @click.option(
-    "--trials", "-n",
+    "--trials",
+    "-n",
     type=click.IntRange(min=1, max=10000),
     default=10,
     show_default=True,
@@ -226,8 +236,10 @@ aborts early if ``--fail-fast`` is set.
     help="Abort the whole run on the first benchmark error.",
 )
 @click.option(
-    "--json", "as_json",
-    is_flag=True, default=False,
+    "--json",
+    "as_json",
+    is_flag=True,
+    default=False,
     help="Print the result set as JSON to stdout in addition to writing it.",
 )
 def run_cmd(
@@ -324,34 +336,33 @@ filter out improvements (handy for CI gating).
 """,
 )
 @click.option(
-    "--baseline", "-b",
+    "--baseline",
+    "-b",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
     help="Path to the baseline result set JSON.",
 )
 @click.option(
-    "--candidate", "-c",
+    "--candidate",
+    "-c",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
     help="Path to the candidate result set JSON.",
 )
 @click.option(
-    "--latest", "-l",
+    "--latest",
+    "-l",
     type=click.IntRange(min=2, max=1000),
     default=None,
     help=(
-        "Use the N most recent runs from the results dir; "
-        "(N-1)th is baseline, Nth is candidate."
+        "Use the N most recent runs from the results dir; (N-1)th is baseline, Nth is candidate."
     ),
 )
 @click.option(
     "--results-dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
     default=None,
-    help=(
-        f"Where to find result sets. "
-        f"Default: $NAUTILUS_BENCH_DIR or {DEFAULT_RESULTS_DIR}."
-    ),
+    help=(f"Where to find result sets. Default: $NAUTILUS_BENCH_DIR or {DEFAULT_RESULTS_DIR}."),
 )
 @click.option(
     "--direction",
@@ -399,7 +410,8 @@ filter out improvements (handy for CI gating).
     ),
 )
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json", "markdown"], case_sensitive=False),
     default="table",
     show_default=True,
@@ -479,8 +491,7 @@ def _compare_impl(
         runs = ResultSet.list_runs(rs_dir)
         if len(runs) < 2:
             raise NautilusError(
-                f"--latest {latest} requested but only {len(runs)} runs "
-                f"exist in {rs_dir}",
+                f"--latest {latest} requested but only {len(runs)} runs exist in {rs_dir}",
                 context={"results_dir": str(rs_dir)},
             )
         # list_runs returns newest-first. Baseline = older reference;
@@ -506,7 +517,8 @@ def _compare_impl(
     # Direction filter for "improvements" is symmetric: we run a
     # full compare, then keep only improvements in the output.
     report = compare_result_sets(
-        baseline_rs, candidate_rs,
+        baseline_rs,
+        candidate_rs,
         thresholds=overrides or None,
         only_regressions=only_regressions,
     )
@@ -544,17 +556,20 @@ computing stats; ``--all`` disables the truncation.
 """,
 )
 @click.option(
-    "--benchmark", "-b",
+    "--benchmark",
+    "-b",
     default=None,
     help="Restrict history to one benchmark (e.g. 'kernels/matmul').",
 )
 @click.option(
-    "--vendor", "-v",
+    "--vendor",
+    "-v",
     default=None,
     help="Restrict history to one vendor (e.g. 'nvidia/sm_90').",
 )
 @click.option(
-    "--metric", "-m",
+    "--metric",
+    "-m",
     type=click.Choice(
         ["exec_time_s", "compile_time_s", "binary_size_b", "memory_mb"],
         case_sensitive=False,
@@ -567,10 +582,7 @@ computing stats; ``--all`` disables the truncation.
     "--results-dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
     default=None,
-    help=(
-        f"Where to find result sets. "
-        f"Default: $NAUTILUS_BENCH_DIR or {DEFAULT_RESULTS_DIR}."
-    ),
+    help=(f"Where to find result sets. Default: $NAUTILUS_BENCH_DIR or {DEFAULT_RESULTS_DIR}."),
 )
 @click.option(
     "--last",
@@ -580,12 +592,15 @@ computing stats; ``--all`` disables the truncation.
     help="How many recent runs to consider.",
 )
 @click.option(
-    "--all", "use_all",
-    is_flag=True, default=False,
+    "--all",
+    "use_all",
+    is_flag=True,
+    default=False,
     help="Use all runs, ignoring --last.",
 )
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json"], case_sensitive=False),
     default="table",
     show_default=True,
@@ -603,7 +618,10 @@ def history_cmd(
     """Show metric trend over time."""
     rs_dir = (results_dir or DEFAULT_RESULTS_DIR).resolve()
     points = load_history(
-        rs_dir, benchmark=benchmark, vendor=vendor, metric=metric,
+        rs_dir,
+        benchmark=benchmark,
+        vendor=vendor,
+        metric=metric,
     )
     if not points:
         click.echo(
@@ -618,17 +636,26 @@ def history_cmd(
     full_count = len(points)
 
     if fmt == "json":
-        click.echo(json.dumps({
-            "benchmark": benchmark,
-            "vendor": vendor,
-            "metric": metric,
-            "total_points": full_count,
-            "summary": summary,
-        }, indent=2))
+        click.echo(
+            json.dumps(
+                {
+                    "benchmark": benchmark,
+                    "vendor": vendor,
+                    "metric": metric,
+                    "total_points": full_count,
+                    "summary": summary,
+                },
+                indent=2,
+            )
+        )
     else:
         _print_history_table(
-            benchmark=benchmark, vendor=vendor, metric=metric,
-            summary=summary, total_points=full_count, last_n=last_n,
+            benchmark=benchmark,
+            vendor=vendor,
+            metric=metric,
+            summary=summary,
+            total_points=full_count,
+            last_n=last_n,
         )
 
 
@@ -687,7 +714,7 @@ def list_cmd() -> None:
     for b in benches:
         try:
             targets = b.targets()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             targets = [f"<error: {exc}>"]
         click.echo(f"{b.name():30s}  targets={','.join(targets)}")
 
@@ -700,10 +727,7 @@ def list_cmd() -> None:
 def _format_table(report: ComparisonReport, *, direction: str) -> str:
     """Plain-text table of findings."""
     lines: list[str] = []
-    lines.append(
-        f"Compare {report.baseline_id} → {report.candidate_id} "
-        f"(direction={direction})"
-    )
+    lines.append(f"Compare {report.baseline_id} → {report.candidate_id} (direction={direction})")
     lines.append("")
     if not report.findings:
         lines.append("(no findings)")
@@ -742,16 +766,13 @@ def _format_table(report: ComparisonReport, *, direction: str) -> str:
 def _format_markdown(report: ComparisonReport) -> str:
     """Markdown table of findings (for PR comments)."""
     lines: list[str] = []
-    lines.append(
-        f"## Bench: {report.baseline_id} → {report.candidate_id}"
-    )
+    lines.append(f"## Bench: {report.baseline_id} → {report.candidate_id}")
     lines.append("")
     if not report.findings:
         lines.append("_No findings._")
     else:
         lines.append(
-            "| benchmark | vendor | metric | baseline | candidate | "
-            "delta | threshold | direction |"
+            "| benchmark | vendor | metric | baseline | candidate | delta | threshold | direction |"
         )
         lines.append("|---|---|---|---:|---:|---:|---:|---|")
         for f in report.findings:
@@ -778,4 +799,4 @@ _ = _common_threshold_options
 
 
 if __name__ == "__main__":
-    cli()  # type: ignore[reportArgumentType]
+    cli()

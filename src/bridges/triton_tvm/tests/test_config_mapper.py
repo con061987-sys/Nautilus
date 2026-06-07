@@ -22,8 +22,11 @@ class TestMappedTuningConfig:
     def test_to_triton_config(self) -> None:
         """to_triton_config should produce a valid triton.Config."""
         config = MappedTuningConfig(
-            block_m=64, block_n=128, block_k=32,
-            num_warps=8, num_stages=4,
+            block_m=64,
+            block_n=128,
+            block_k=32,
+            num_warps=8,
+            num_stages=4,
         )
         triton_cfg = config.to_triton_config({"BLOCK_SIZE": 64})
         assert triton_cfg.kwargs["BLOCK_SIZE_M"] == 64
@@ -44,9 +47,9 @@ class TestConfigMapper:
         trace = {
             "instructions": [{"type": "MultiLevelTiling"}],
             "decisions": {
-                "tile_m": [1, 2, 4],      # product = 8
-                "tile_n": [1, 2, 4],      # product = 8
-                "tile_k": [2, 4],          # product = 8
+                "tile_m": [1, 2, 4],  # product = 8
+                "tile_n": [1, 2, 4],  # product = 8
+                "tile_k": [2, 4],  # product = 8
                 "stages": 4,
             },
         }
@@ -77,15 +80,17 @@ class TestConfigMapper:
     def test_map_none_record(self) -> None:
         """None trace should return default config."""
         mapper = ConfigMapper()
-        config = mapper.map_record(None)  # type: ignore[arg-type]
+        config = mapper.map_record(None)
         assert config == MappedTuningConfig.defaults()
 
     def test_map_json_record(self) -> None:
         """JSON-serialized record should parse correctly."""
         mapper = ConfigMapper()
-        json_record = json.dumps({
-            "decisions": {"tile_m": [1, 8, 2], "tile_n": [1, 4, 4]},
-        })
+        json_record = json.dumps(
+            {
+                "decisions": {"tile_m": [1, 8, 2], "tile_n": [1, 4, 4]},
+            }
+        )
         config = mapper.map_json_record(json_record)
         assert config.block_m == 16  # 1*8*2
         assert config.block_n == 16  # 1*4*4
@@ -101,9 +106,9 @@ class TestConfigMapper:
                     self.__dict__ = {
                         "instructions": [{"type": "MultiLevelTiling"}, {"type": "AutoBind"}],
                         "decisions": {
-                            "tile_m": [2, 4, 4],       # 32
-                            "tile_n": [2, 4, 4],       # 32
-                            "tile_k": [4, 4],           # 16
+                            "tile_m": [2, 4, 4],  # 32
+                            "tile_n": [2, 4, 4],  # 32
+                            "tile_k": [4, 4],  # 16
                             "thread_binding": [256, 1],  # 256 threads = 8 warps
                             "stages": 5,
                         },

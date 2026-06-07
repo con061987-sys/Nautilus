@@ -10,7 +10,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 import click
 
@@ -29,14 +28,16 @@ Useful as a first diagnostic step when a build or run fails.
 """,
 )
 @click.option(
-    "--target", "-t",
+    "--target",
+    "-t",
     type=click.Choice(["all", "cuda", "rocm", "intel"], case_sensitive=False),
     default="all",
     show_default=True,
     help="Focus on a specific target's dependencies.",
 )
 @click.option(
-    "--json", "as_json",
+    "--json",
+    "as_json",
     is_flag=True,
     default=False,
     help="Machine-readable JSON output.",
@@ -65,6 +66,7 @@ def _verify_impl(target: str, as_json: bool) -> None:
 
     # 2. Add hardware summary
     from src.common.hardware import format_device_summary
+
     hardware_text = format_device_summary()
 
     if as_json:
@@ -72,10 +74,15 @@ def _verify_impl(target: str, as_json: bool) -> None:
             env_report = json.loads(result.stdout)
         except json.JSONDecodeError:
             env_report = {"raw_stdout": result.stdout}
-        click.echo(json.dumps({
-            "env": env_report,
-            "hardware": hardware_text,
-        }, indent=2))
+        click.echo(
+            json.dumps(
+                {
+                    "env": env_report,
+                    "hardware": hardware_text,
+                },
+                indent=2,
+            )
+        )
     else:
         click.echo(result.stdout)
         click.echo()
@@ -89,4 +96,4 @@ def _verify_impl(target: str, as_json: bool) -> None:
 
 
 if __name__ == "__main__":
-    cli()  # type: ignore[reportArgumentType]
+    cli()

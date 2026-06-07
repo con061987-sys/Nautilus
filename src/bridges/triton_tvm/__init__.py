@@ -58,9 +58,10 @@ _LAZY_EXPORTS = {
 }
 
 
-def __getattr__(name: str):  # type: ignore[no-untyped-def]
+def __getattr__(name: str):
     if name in _LAZY_EXPORTS:
         import importlib
+
         module = importlib.import_module(_LAZY_EXPORTS[name])
         attr = getattr(module, name)
         globals()[name] = attr

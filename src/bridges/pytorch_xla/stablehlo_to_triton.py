@@ -62,13 +62,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 __all__ = [
-    "TritonSource",
-    "translate",
-    "parse_mlir",
-    "UnsupportedStableHLOOpError",
     "ParsedFunc",
     "ParsedOp",
     "TensorSpec",
+    "TritonSource",
+    "UnsupportedStableHLOOpError",
+    "parse_mlir",
+    "translate",
 ]
 
 
@@ -263,9 +263,7 @@ def _parse_tensor_type(type_str: str) -> TensorSpec:
     """
     m = _TENSOR_TYPE_RE.search(type_str)
     if not m:
-        raise UnsupportedStableHLOOpError(
-            f"Cannot parse tensor type from {type_str!r}"
-        )
+        raise UnsupportedStableHLOOpError(f"Cannot parse tensor type from {type_str!r}")
     shape_str = m.group("shape")
     dtype = _normalize_dtype(m.group("dtype"))
     if shape_str:
@@ -360,9 +358,7 @@ def parse_mlir(stablehlo_mlir: str) -> ParsedFunc:
 
     func_match = _FUNC_RE.search(stablehlo_mlir)
     if not func_match:
-        raise ValueError(
-            "No `func.func @name(...)` definition found in MLIR text"
-        )
+        raise ValueError("No `func.func @name(...)` definition found in MLIR text")
 
     name = func_match.group("name")
     args_str = func_match.group("args")
@@ -462,9 +458,7 @@ def _parse_generic_op(m: re.Match[str], line: str) -> ParsedOp:
     attributes = _parse_attr_dict(attrs_raw)
 
     if op_name not in _OP_INPUT_ARITY:
-        raise UnsupportedStableHLOOpError(
-            f"Unsupported StableHLO op: {op_name!r}"
-        )
+        raise UnsupportedStableHLOOpError(f"Unsupported StableHLO op: {op_name!r}")
 
     return ParsedOp(
         result_name=result_name,
@@ -502,9 +496,7 @@ def _parse_custom_op(m: re.Match[str], line: str) -> ParsedOp:
     result_dtype = result_type.dtype
 
     if op_name not in _OP_INPUT_ARITY:
-        raise UnsupportedStableHLOOpError(
-            f"Unsupported StableHLO op: {op_name!r}"
-        )
+        raise UnsupportedStableHLOOpError(f"Unsupported StableHLO op: {op_name!r}")
 
     return ParsedOp(
         result_name=result_name,
@@ -622,9 +614,7 @@ def _emit_op(op: ParsedOp, ssa_to_var: dict[str, str]) -> str:
     base = op.op_name.rsplit(".", 1)[-1]  # 'stablehlo.add' → 'add'
     handler = _OP_HANDLERS.get(base)
     if handler is None:
-        raise UnsupportedStableHLOOpError(
-            f"Unsupported StableHLO op: {op.op_name!r}"
-        )
+        raise UnsupportedStableHLOOpError(f"Unsupported StableHLO op: {op.op_name!r}")
     return handler(result_var, operands, op, ssa_to_var)
 
 
@@ -729,27 +719,17 @@ def _handle_reduce(result_var: str, operands: list[str], op: ParsedOp, _) -> str
     return f"    {result_var} = {tl_fn}({x}, axis={axis})\n"
 
 
-def _handle_broadcast_in_dim(
-    result_var: str, operands: list[str], op: ParsedOp, _
-) -> str:
+def _handle_broadcast_in_dim(result_var: str, operands: list[str], op: ParsedOp, _) -> str:
     x = operands[0]
-    return (
-        f"    {result_var} = tl.broadcast_to({x}, "
-        f"{_shape_to_triton(op.result_shape)})\n"
-    )
+    return f"    {result_var} = tl.broadcast_to({x}, {_shape_to_triton(op.result_shape)})\n"
 
 
 def _handle_reshape(result_var: str, operands: list[str], op: ParsedOp, _) -> str:
     x = operands[0]
-    return (
-        f"    {result_var} = tl.reshape({x}, "
-        f"{_shape_to_triton(op.result_shape)})\n"
-    )
+    return f"    {result_var} = tl.reshape({x}, {_shape_to_triton(op.result_shape)})\n"
 
 
-def _handle_concatenate(
-    result_var: str, operands: list[str], op: ParsedOp, _
-) -> str:
+def _handle_concatenate(result_var: str, operands: list[str], op: ParsedOp, _) -> str:
     a, b = operands[0], operands[1]
     dim_str = op.attributes.get("dimension", "0").strip(":i64").strip()
     try:
@@ -771,9 +751,7 @@ def _handle_slice(result_var: str, operands: list[str], op: ParsedOp, _) -> str:
         stride_list = [1] * len(start_list)
     # We emit a tuple of slice tuples. Triton accepts
     #   x[start0:limit0:stride0, start1:limit1:stride1, ...]
-    slices = ", ".join(
-        f"{s}:{l}:{st}" for s, l, st in zip(start_list, limit_list, stride_list)
-    )
+    slices = ", ".join(f"{s}:{l}:{st}" for s, l, st in zip(start_list, limit_list, stride_list))
     return f"    {result_var} = {x}[{slices}]\n"
 
 
@@ -838,10 +816,7 @@ def _emit_kernel(parsed: ParsedFunc, kernel_name: str) -> str:
     sig_lines.append("    BLOCK_K: tl.constexpr,")
     parts.append("\n".join(sig_lines))
     parts.append("):")
-    parts.append(
-        f'    """Auto-generated Triton kernel from StableHLO function '
-        f'`{parsed.name}`."""'
-    )
+    parts.append(f'    """Auto-generated Triton kernel from StableHLO function `{parsed.name}`."""')
     parts.append("    pid = tl.program_id(0)")
 
     # Load each input
@@ -859,10 +834,7 @@ def _emit_kernel(parsed: ParsedFunc, kernel_name: str) -> str:
             # Skip unsupported ops with a comment marker so the
             # kernel stays syntactically valid (the orchestrator
             # will route to a fallback for these).
-            line = (
-                f"    # SKIPPED unsupported op: {op.op_name} "
-                f"(operands: {op.operands})\n"
-            )
+            line = f"    # SKIPPED unsupported op: {op.op_name} (operands: {op.operands})\n"
         parts.append(line)
 
     # Store the final result
@@ -871,8 +843,7 @@ def _emit_kernel(parsed: ParsedFunc, kernel_name: str) -> str:
         parts.append(f"    tl.store(out_ptr + tl.arange(0, 1), {final})")
     else:
         # No return value known — store a zero of the right shape
-        parts.append("    tl.store(out_ptr + tl.arange(0, 1), tl.zeros((1,), "
-                     "dtype=tl.float32))")
+        parts.append("    tl.store(out_ptr + tl.arange(0, 1), tl.zeros((1,), dtype=tl.float32))")
 
     parts.append("")
     return "\n".join(parts)
@@ -943,8 +914,7 @@ def translate(
         ast.parse(source)
     except SyntaxError as exc:
         raise ValueError(
-            f"Generated Triton source has a syntax error: {exc}. "
-            f"This is a bug in the translator."
+            f"Generated Triton source has a syntax error: {exc}. This is a bug in the translator."
         ) from exc
 
     return TritonSource(

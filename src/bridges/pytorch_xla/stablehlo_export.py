@@ -59,6 +59,7 @@ class _TorchXLAExporter:
     def is_available() -> bool:
         try:
             import torch_xla  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -148,10 +149,13 @@ class _ONNXBridgeExporter:
     def is_available() -> bool:
         try:
             import onnx  # noqa: F401
+
             # onnx-mlir must be on PATH
             result = subprocess.run(
                 ["onnx-mlir", "--version"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return result.returncode == 0
         except (ImportError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -176,9 +180,8 @@ class _ONNXBridgeExporter:
             for node in graph_module.graph.nodes:
                 if node.op == "placeholder":
                     dynamic_axes[node.name] = {
-                        i: f"dim_{i}" for i in range(
-                            len(node.meta.get("val", torch.empty(0)).shape)
-                        )
+                        i: f"dim_{i}"
+                        for i in range(len(node.meta.get("val", torch.empty(0)).shape))
                     }
 
         torch.onnx.export(
@@ -193,8 +196,10 @@ class _ONNXBridgeExporter:
 
         # Step 2: Convert ONNX → StableHLO via onnx-mlir
         result = subprocess.run(
-            ["onnx-mlir", f"--stablehlo", onnx_path],
-            capture_output=True, text=True, timeout=120,
+            ["onnx-mlir", "--stablehlo", onnx_path],
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode != 0:
             raise StableHLOExportError(
@@ -237,6 +242,7 @@ class _TVMScriptExporter:
     def is_available() -> bool:
         try:
             import tvm  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -248,8 +254,6 @@ class _TVMScriptExporter:
         example_inputs: tuple[Any, ...],
         function_name: str = "forward",
     ) -> StableHLOModule:
-        import tvm
-        import tvm.relax as relax
 
         # ── Build a TVM relax Module from the FX graph ──────────────
         # Use TVM's torch frontend if available, else build manually
@@ -265,8 +269,7 @@ class _TVMScriptExporter:
             mod = cls._build_relax_from_fx(graph_module, example_inputs)
             if mod is None:
                 raise StableHLOExportError(
-                    f"TVM JIT frontend failed: {jit_err}; "
-                    f"manual FX→Relax fallback also failed",
+                    f"TVM JIT frontend failed: {jit_err}; manual FX→Relax fallback also failed",
                 ) from jit_err
 
         # ── Lower to StableHLO via TVM's export pipeline ────────────
@@ -281,9 +284,7 @@ class _TVMScriptExporter:
         except ImportError:
             # Fallback: use TVM's MLIR emitter via the TIR->Builtin->LLVM
             # path and wrap in a StableHLO-like container
-            mlir_text = cls._emit_stablehlo_like(
-                mod, function_name, example_inputs
-            )
+            mlir_text = cls._emit_stablehlo_like(mod, function_name, example_inputs)
 
         is_real = _check_is_real_stablehlo(mlir_text)
         return StableHLOModule(
@@ -333,17 +334,13 @@ class _TVMScriptExporter:
                 var = relax.Var(f"input_{i}", relax.TensorStructInfo((), "float32"))
             input_vars.append(var)
 
-        with bb.function(f"main", input_vars):
+        with bb.function("main", input_vars):
             with bb.dataflow():
                 var_map = {}
                 # Wire input placeholders
-                fx_input_nodes = [
-                    n for n in graph_module.graph.nodes if n.op == "placeholder"
-                ]
+                fx_input_nodes = [n for n in graph_module.graph.nodes if n.op == "placeholder"]
                 for i, node in enumerate(fx_input_nodes):
-                    var_map[node.name] = input_vars[
-                        i
-                    ] if i < len(input_vars) else input_vars[-1]
+                    var_map[node.name] = input_vars[i] if i < len(input_vars) else input_vars[-1]
 
                 # Walk call_function nodes
                 last_val = None
@@ -370,9 +367,7 @@ class _TVMScriptExporter:
 
                 if last_val is None:
                     # Create identity as last resort
-                    last_val = var_map.get(
-                        list(var_map.keys())[-1], input_vars[0]
-                    )
+                    last_val = var_map.get(list(var_map.keys())[-1], input_vars[0])
 
                 bb.emit_output(last_val)
             bb.emit_func_output(last_val)
@@ -391,11 +386,7 @@ class _TVMScriptExporter:
         import tvm.relax as relax
 
         target = node.target
-        target_str = (
-            str(target)
-            if not isinstance(target, str)
-            else target
-        )
+        target_str = str(target) if not isinstance(target, str) else target
 
         # Resolve operands from var_map
         args = node.args
@@ -483,7 +474,7 @@ class _TVMScriptExporter:
             pass
 
         # Build MLIR text manually from the relax module structure
-        lines = [f"module {{"]
+        lines = ["module {"]
 
         # Function signature
         input_types = []
@@ -501,7 +492,7 @@ class _TVMScriptExporter:
             f"  func.func @{function_name}(%arg0: {input_types[0] if input_types else 'tensor<f32>'}) -> "
             f"{input_types[0] if input_types else 'tensor<f32>'} {{"
         )
-        lines.append(f"    // TVM relax → StableHLO (emitted via TVMScript path)")
+        lines.append("    // TVM relax → StableHLO (emitted via TVMScript path)")
         lines.append(f"    // Module type: {type(mod).__name__}")
 
         # Walk the relax function body (best-effort)
@@ -512,7 +503,9 @@ class _TVMScriptExporter:
         except Exception:
             lines.append("    // (relax body not traversable)")
 
-        lines.append(f"    %0 = stablehlo.identity %arg0 : {input_types[0] if input_types else 'tensor<f32>'}")
+        lines.append(
+            f"    %0 = stablehlo.identity %arg0 : {input_types[0] if input_types else 'tensor<f32>'}"
+        )
         lines.append(f"    return %0 : {input_types[0] if input_types else 'tensor<f32>'}")
         lines.append("  }")
         lines.append("}")
@@ -581,9 +574,11 @@ class StableHLOExporter:
         self._breakers = get_default_breakers()
 
         # Per-stage timeouts
-        self._timeout_mgr = TimeoutManager(StageBudgets(
-            stablehlo_export_seconds=60.0,
-        ))
+        self._timeout_mgr = TimeoutManager(
+            StageBudgets(
+                stablehlo_export_seconds=60.0,
+            )
+        )
 
     def export_from_captured(
         self,
@@ -657,7 +652,9 @@ class StableHLOExporter:
                         # Run with timeout
                         with self._timeout_mgr.stage("stablehlo_export"):
                             result = exporter_cls.export(
-                                graph_module, example_inputs, function_name,
+                                graph_module,
+                                example_inputs,
+                                function_name,
                             )
 
                         # Success — record and return
@@ -666,9 +663,7 @@ class StableHLOExporter:
                             is_real_stablehlo=result.is_real_stablehlo,
                             op_count=result.op_count,
                         )
-                        result.conversion_time_ms = (
-                            time.perf_counter() - start_time
-                        ) * 1000
+                        result.conversion_time_ms = (time.perf_counter() - start_time) * 1000
                         attempt_history.append(f"{tier_name}: success")
                         return result
 
@@ -727,6 +722,7 @@ from enum import auto as _auto
 
 class ExportMethod(Enum):
     """Deprecated. Use StableHLOModule.export_method string instead."""
+
     TORCH_XLA = _auto()
     ONNX_BRIDGE = _auto()
     DIRECT_TORCH = _auto()
@@ -740,7 +736,7 @@ warnings.warn(
 )
 
 __all__ = [
+    "ExportMethod",
     "StableHLOExporter",
     "StableHLOModule",
-    "ExportMethod",
 ]

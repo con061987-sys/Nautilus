@@ -133,10 +133,12 @@ class MetaScheduleAdapter:
         """
         if not TVM_AVAILABLE:
             logger.info("TVM unavailable, returning Err")
-            return Err(TuningError(
-                "TVM is not installed; cannot run MetaSchedule tuning",
-                context={"target": target_str},
-            ))
+            return Err(
+                TuningError(
+                    "TVM is not installed; cannot run MetaSchedule tuning",
+                    context={"target": target_str},
+                )
+            )
 
         max_trials = max_trials or self.default_max_trials
         num_trials_per_iter = num_trials_per_iter or self.default_num_trials_per_iter
@@ -153,10 +155,12 @@ class MetaScheduleAdapter:
             target = Target(target_str)
         except (ValueError, TypeError) as exc:
             logger.error("Invalid TVM target %r: %s", target_str, exc)
-            return Err(TuningError(
-                f"Invalid TVM target: {target_str}",
-                context={"target": target_str, "cause": str(exc)},
-            ))
+            return Err(
+                TuningError(
+                    f"Invalid TVM target: {target_str}",
+                    context={"target": target_str, "cause": str(exc)},
+                )
+            )
 
         work_dir = os.path.join(self.cache_dir, "tuning", _sanitize_target(target_str))
 
@@ -165,14 +169,18 @@ class MetaScheduleAdapter:
             os.makedirs(work_dir, exist_ok=True)
         except OSError as exc:
             logger.error("Cannot create work_dir %s: %s", work_dir, exc)
-            return Err(TuningError(
-                f"Cannot create tuning work_dir: {work_dir}",
-                context={"work_dir": work_dir, "cause": str(exc)},
-            ))
+            return Err(
+                TuningError(
+                    f"Cannot create tuning work_dir: {work_dir}",
+                    context={"work_dir": work_dir, "cause": str(exc)},
+                )
+            )
 
         logger.info(
             "Starting MetaSchedule tuning: target=%s, max_trials=%d, work_dir=%s",
-            target_str, max_trials, work_dir,
+            target_str,
+            max_trials,
+            work_dir,
         )
 
         # Specific exception handlers: we deliberately do NOT use
@@ -181,7 +189,11 @@ class MetaScheduleAdapter:
         # to the caller instead of being silently masked.
         try:
             database = self._run_tune_with_timeout(
-                tir_mod, target, work_dir, max_trials, num_trials_per_iter,
+                tir_mod,
+                target,
+                work_dir,
+                max_trials,
+                num_trials_per_iter,
             )
 
             best = database.query_tuning_record(
@@ -190,16 +202,21 @@ class MetaScheduleAdapter:
 
             if best is None:
                 logger.warning("MetaSchedule returned no tuning records")
-                return Err(TuningError(
-                    "MetaSchedule produced no tuning records",
-                    context={"target": target_str, "max_trials": max_trials},
-                ))
+                return Err(
+                    TuningError(
+                        "MetaSchedule produced no tuning records",
+                        context={"target": target_str, "max_trials": max_trials},
+                    )
+                )
 
             mapped = self.config_mapper.map_record(best)
             logger.info(
                 "Tuning complete: block=(%d,%d,%d) warps=%d stages=%d",
-                mapped.block_m, mapped.block_n, mapped.block_k,
-                mapped.num_warps, mapped.num_stages,
+                mapped.block_m,
+                mapped.block_n,
+                mapped.block_k,
+                mapped.num_warps,
+                mapped.num_stages,
             )
 
             if cache_key:
@@ -208,7 +225,8 @@ class MetaScheduleAdapter:
                 except (OSError, ValueError, TypeError) as cache_exc:
                     logger.warning(
                         "Cache write failed for key=%s: %s",
-                        cache_key[:12], cache_exc,
+                        cache_key[:12],
+                        cache_exc,
                     )
 
             return Ok(mapped)
@@ -216,46 +234,60 @@ class MetaScheduleAdapter:
         except StageTimeoutError as exc:
             logger.error(
                 "MetaSchedule tuning timed out (budget=%.1fs elapsed=%.1fs)",
-                exc.budget_s, exc.elapsed_s,
+                exc.budget_s,
+                exc.elapsed_s,
             )
-            return Err(TuningError(
-                f"MetaSchedule tuning timed out after {exc.elapsed_s:.1f}s",
-                context={
-                    "target": target_str,
-                    "budget_s": exc.budget_s,
-                    "elapsed_s": exc.elapsed_s,
-                },
-            ))
+            return Err(
+                TuningError(
+                    f"MetaSchedule tuning timed out after {exc.elapsed_s:.1f}s",
+                    context={
+                        "target": target_str,
+                        "budget_s": exc.budget_s,
+                        "elapsed_s": exc.elapsed_s,
+                    },
+                )
+            )
         except (ValueError, TypeError) as exc:
             logger.error("MetaSchedule tuning rejected input: %s", exc)
-            return Err(TuningError(
-                f"MetaSchedule tuning rejected input: {exc}",
-                context={"target": target_str, "cause": str(exc)},
-            ))
+            return Err(
+                TuningError(
+                    f"MetaSchedule tuning rejected input: {exc}",
+                    context={"target": target_str, "cause": str(exc)},
+                )
+            )
         except ImportError as exc:
             logger.error(
-                "MetaSchedule tuning: import failed mid-flight (%s)", exc,
+                "MetaSchedule tuning: import failed mid-flight (%s)",
+                exc,
             )
-            return Err(TuningError(
-                f"MetaSchedule tuning: missing dependency: {exc}",
-                context={"target": target_str, "cause": str(exc)},
-            ))
+            return Err(
+                TuningError(
+                    f"MetaSchedule tuning: missing dependency: {exc}",
+                    context={"target": target_str, "cause": str(exc)},
+                )
+            )
         except OSError as exc:
             logger.error(
-                "MetaSchedule tuning: filesystem error (%s)", exc,
+                "MetaSchedule tuning: filesystem error (%s)",
+                exc,
             )
-            return Err(TuningError(
-                f"MetaSchedule tuning: filesystem error: {exc}",
-                context={"target": target_str, "cause": str(exc)},
-            ))
+            return Err(
+                TuningError(
+                    f"MetaSchedule tuning: filesystem error: {exc}",
+                    context={"target": target_str, "cause": str(exc)},
+                )
+            )
         except RuntimeError as exc:
             logger.error(
-                "MetaSchedule tuning: TVM runtime error (%s)", exc,
+                "MetaSchedule tuning: TVM runtime error (%s)",
+                exc,
             )
-            return Err(TuningError(
-                f"MetaSchedule tuning: TVM runtime error: {exc}",
-                context={"target": target_str, "cause": str(exc)},
-            ))
+            return Err(
+                TuningError(
+                    f"MetaSchedule tuning: TVM runtime error: {exc}",
+                    context={"target": target_str, "cause": str(exc)},
+                )
+            )
 
     # ------------------------------------------------------------------
     # Private implementation
@@ -317,7 +349,9 @@ class MetaScheduleAdapter:
             logger.error(
                 "MetaSchedule tuning exceeded budget of %.1fs (elapsed=%.1fs); "
                 "aborting. work_dir=%s",
-                budget, elapsed, work_dir,
+                budget,
+                elapsed,
+                work_dir,
             )
             raise StageTimeoutError(stage_name, budget, elapsed)
 

@@ -78,9 +78,14 @@ class BoundsExtractionError(Exception):
 # ``tt.matmul`` / ``tt.bmm`` names are not in the upstream Triton
 # dialect but appear in vendor forks and downstream dialects; they
 # are handled identically.
-_MATMUL_OPS: Final[frozenset[str]] = frozenset({
-    "tt.dot", "tt.dot_scaled", "tt.matmul", "tt.bmm",
-})
+_MATMUL_OPS: Final[frozenset[str]] = frozenset(
+    {
+        "tt.dot",
+        "tt.dot_scaled",
+        "tt.matmul",
+        "tt.bmm",
+    }
+)
 
 # scf.for header: ``scf.for %i = <lb> to <ub> { ... }``. The two
 # integer groups are the loop lower and upper bound. This is the
@@ -162,12 +167,11 @@ class BoundsExtractor:
         try:
             return self._parser.parse(ir_text)
         except Exception as exc:
-            raise BoundsExtractionError(
-                f"Failed to parse TTGIR: {exc}"
-            ) from exc
+            raise BoundsExtractionError(f"Failed to parse TTGIR: {exc}") from exc
 
     def _build_value_type_map(
-        self, func: TTGIRFunction,
+        self,
+        func: TTGIRFunction,
     ) -> dict[str, TTGIRType]:
         """Build SSA value → :class:`TTGIRType` map from args and ops.
 
@@ -261,10 +265,7 @@ class BoundsExtractor:
             a_name, b_name = op.operands[0], op.operands[1]
             a_type = value_types.get(a_name)
             b_type = value_types.get(b_name)
-            result_type = (
-                value_types.get(op.result_name)
-                if op.result_name else None
-            )
+            result_type = value_types.get(op.result_name) if op.result_name else None
 
             self._assert_tensor_shape(a_type, a_name, op.name)
             self._assert_tensor_shape(b_type, b_name, op.name)
@@ -346,8 +347,7 @@ class BoundsExtractor:
             r_m, r_n = result_type.shape
             if r_m != m or r_n != n:
                 raise BoundsExtractionError(
-                    f"Result shape {result_type.shape} inconsistent with "
-                    f"AxB dims (M={m}, N={n})",
+                    f"Result shape {result_type.shape} inconsistent with AxB dims (M={m}, N={n})",
                 )
 
         return m, n, k_a
@@ -434,8 +434,7 @@ class BoundsExtractor:
             ndim = len(input_type.shape)
             if axis < 0 or axis >= ndim:
                 raise BoundsExtractionError(
-                    f"tt.reduce axis={axis} out of range for input shape "
-                    f"{input_type.shape}",
+                    f"tt.reduce axis={axis} out of range for input shape {input_type.shape}",
                 )
 
             reduce_size = input_type.shape[axis]
@@ -468,8 +467,7 @@ class BoundsExtractor:
 
         op_names = [op.name for op in func.iter_all_ops()]
         raise BoundsExtractionError(
-            f"IR classified as REDUCTION but no tt.reduce op found; "
-            f"ops present: {op_names}",
+            f"IR classified as REDUCTION but no tt.reduce op found; ops present: {op_names}",
         )
 
     def _parse_reduce_axis(self, op: TTGIROperation) -> int:
@@ -495,8 +493,7 @@ class BoundsExtractor:
             return int(axis_text)
         except ValueError as exc:
             raise BoundsExtractionError(
-                f"tt.reduce 'axis' attribute is not an integer: "
-                f"{op.attributes['axis']!r}",
+                f"tt.reduce 'axis' attribute is not an integer: {op.attributes['axis']!r}",
             ) from exc
 
     def _extract_elementwise_bounds(
@@ -520,14 +517,18 @@ class BoundsExtractor:
             ttype = value_types.get(arg_name)
             if self._has_known_shape(ttype):
                 return self._build_elementwise_bounds(
-                    ttype, value_types, loop_bounds,
+                    ttype,
+                    value_types,
+                    loop_bounds,
                 )
 
         # Fallback: any SSA value with a known shape.
         for ttype in value_types.values():
             if self._has_known_shape(ttype):
                 return self._build_elementwise_bounds(
-                    ttype, value_types, loop_bounds,
+                    ttype,
+                    value_types,
+                    loop_bounds,
                 )
 
         raise BoundsExtractionError(
@@ -580,7 +581,8 @@ class BoundsExtractor:
     # ------------------------------------------------------------------
 
     def _extract_loop_bounds(
-        self, func: TTGIRFunction,
+        self,
+        func: TTGIRFunction,
     ) -> list[tuple[int, int]]:
         """Extract ``scf.for`` loop bounds (start, end) from FOR_LOOP ops.
 
@@ -630,13 +632,11 @@ class BoundsExtractor:
         """Raise :class:`BoundsExtractionError` if shape cannot be resolved."""
         if ttype is None:
             raise BoundsExtractionError(
-                f"Cannot resolve tensor type for {value_name!r} "
-                f"(operand of {context_op!r})",
+                f"Cannot resolve tensor type for {value_name!r} (operand of {context_op!r})",
             )
         if not ttype.shape:
             raise BoundsExtractionError(
-                f"Operand {value_name!r} of {context_op!r} has no shape "
-                f"(type {ttype.raw!r})",
+                f"Operand {value_name!r} of {context_op!r} has no shape (type {ttype.raw!r})",
             )
         if any(d <= 0 for d in ttype.shape):
             raise BoundsExtractionError(

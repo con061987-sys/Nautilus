@@ -10,6 +10,7 @@ Covers:
         produces a finite-sentinel ULP error so downstream
         tolerance check catches the divergence.
 """
+
 from __future__ import annotations
 
 import math
@@ -52,7 +53,8 @@ def bit_exact_validator() -> MathValidator:
 
 class TestNaNHandling:
     def test_all_nan_bit_exact_returns_zero_tuple(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ref = np.array([float("nan")] * 8)
         act = np.array([float("nan")] * 8)
@@ -61,7 +63,8 @@ class TestNaNHandling:
         assert ulp_e == 0.0
 
     def test_all_nan_non_bit_exact_falls_through(
-        self, validator: MathValidator,
+        self,
+        validator: MathValidator,
     ) -> None:
         """Outside bit-exact mode, all-NaN still produces 0.0
         (no finite baseline to compare against)."""
@@ -72,7 +75,8 @@ class TestNaNHandling:
         assert ulp_e == 0.0
 
     def test_partial_nan_masked_out_of_ulp(
-        self, validator: MathValidator,
+        self,
+        validator: MathValidator,
     ) -> None:
         """A single NaN position must not poison the ULP max."""
         ref = np.array([1.0, 2.0, float("nan"), 4.0])
@@ -85,7 +89,8 @@ class TestNaNHandling:
         assert math.isfinite(abs_e)
 
     def test_both_nan_at_position_zero_ulp(
-        self, validator: MathValidator,
+        self,
+        validator: MathValidator,
     ) -> None:
         ref = np.array([float("nan"), 1.0, 2.0])
         act = np.array([float("nan"), 1.0, 2.0])
@@ -97,7 +102,8 @@ class TestNaNHandling:
         assert ulp_e == 0.0
 
     def test_nan_mismatch_yields_finite_sentinel(
-        self, validator: MathValidator,
+        self,
+        validator: MathValidator,
     ) -> None:
         """NaN in only one of ref/act at a position is treated
         as a divergence (finite ULP, not inf/NaN, so the
@@ -129,13 +135,15 @@ class TestNaNHandling:
 
 class TestBitExactModeGate:
     def test_disabled_passes_through_unchanged(
-        self, validator: MathValidator,
+        self,
+        validator: MathValidator,
     ) -> None:
         ir = 'module { "triton_gpu" { } }'
         assert validator.insert_rounding_correction(ir) == ir
 
     def test_empty_input_passes_through(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         assert bit_exact_validator.insert_rounding_correction("") == ""
         assert bit_exact_validator.insert_rounding_correction("   \n") == "   \n"
@@ -143,17 +151,19 @@ class TestBitExactModeGate:
 
 class TestFormatDetection:
     def test_detect_ttgir(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = (
-            "module attributes {tt.target = \"cuda:0\"} {\n"
+            'module attributes {tt.target = "cuda:0"} {\n'
             "  tt.func @kernel() { tt.load %x : !tt.ptr<f32> }\n"
             "}\n"
         )
         assert bit_exact_validator._detect_ir_format(ir) == "ttgir"
 
     def test_detect_mlir(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = (
             "module {\n"
@@ -166,21 +176,23 @@ class TestFormatDetection:
         assert bit_exact_validator._detect_ir_format(ir) == "mlir"
 
     def test_detect_llvm(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = (
             "; ModuleID = 'kernel.ll'\n"
-            "target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128\"\n"
-            "target triple = \"x86_64-unknown-linux-gnu\"\n"
+            'target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"\n'
+            'target triple = "x86_64-unknown-linux-gnu"\n'
             "define float @kernel(float %x) #0 {\n"
             "  ret float %x\n"
             "}\n"
-            "attributes #0 = { \"noimplicitfloat\" }\n"
+            'attributes #0 = { "noimplicitfloat" }\n'
         )
         assert bit_exact_validator._detect_ir_format(ir) == "llvm"
 
     def test_unknown_raises(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         with pytest.raises(ValidationError):
             bit_exact_validator.insert_rounding_correction("just some text")
@@ -188,13 +200,10 @@ class TestFormatDetection:
 
 class TestTTGIRInjection:
     def test_injects_into_existing_module_attrs(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
-        ir = (
-            "module attributes {tt.target = \"cuda:0\"} {\n"
-            "  tt.func @kernel() {}\n"
-            "}\n"
-        )
+        ir = 'module attributes {tt.target = "cuda:0"} {\n  tt.func @kernel() {}\n}\n'
         out = bit_exact_validator.insert_rounding_correction(ir)
         assert 'tt.mode = "ieee"' in out
         assert "nautilus.bit_exact = true" in out
@@ -202,7 +211,8 @@ class TestTTGIRInjection:
         assert "tt.func @kernel()" in out
 
     def test_injects_into_plain_module_block(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = "module {\n  tt.func @k() {}\n}\n"
         out = bit_exact_validator.insert_rounding_correction(ir)
@@ -210,13 +220,10 @@ class TestTTGIRInjection:
         assert "nautilus.bit_exact = true" in out
 
     def test_idempotent(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
-        ir = (
-            "module attributes {tt.target = \"cuda:0\"} {\n"
-            "  tt.func @kernel() {}\n"
-            "}\n"
-        )
+        ir = 'module attributes {tt.target = "cuda:0"} {\n  tt.func @kernel() {}\n}\n'
         once = bit_exact_validator.insert_rounding_correction(ir)
         twice = bit_exact_validator.insert_rounding_correction(once)
         # Idempotent: re-running does not duplicate the attribute
@@ -225,7 +232,8 @@ class TestTTGIRInjection:
 
 class TestMLIRInjection:
     def test_injects_arith_fastmath_false(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = (
             "module {\n"
@@ -241,13 +249,10 @@ class TestMLIRInjection:
         assert "func.func @kernel()" in out
 
     def test_idempotent(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
-        ir = (
-            "module attributes {some.attr = 0} {\n"
-            "  func.func @k() { return }\n"
-            "}\n"
-        )
+        ir = "module attributes {some.attr = 0} {\n  func.func @k() { return }\n}\n"
         once = bit_exact_validator.insert_rounding_correction(ir)
         twice = bit_exact_validator.insert_rounding_correction(once)
         assert once == twice
@@ -255,12 +260,13 @@ class TestMLIRInjection:
 
 class TestLLVMInjection:
     def test_adds_attribute_group_and_references_it(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = (
             "; ModuleID = 'kernel.ll'\n"
-            "target datalayout = \"e-m:e\"\n"
-            "target triple = \"x86_64-unknown-linux-gnu\"\n"
+            'target datalayout = "e-m:e"\n'
+            'target triple = "x86_64-unknown-linux-gnu"\n'
             "define float @kernel(float %x) {\n"
             "  ret float %x\n"
             "}\n"
@@ -277,31 +283,28 @@ class TestLLVMInjection:
         assert "attributes #0 =" in out
 
     def test_idempotent_on_annotated_ir(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
-        ir = (
-            "; ModuleID = 'kernel.ll'\n"
-            "define float @kernel(float %x) {\n"
-            "  ret float %x\n"
-            "}\n"
-        )
+        ir = "; ModuleID = 'kernel.ll'\ndefine float @kernel(float %x) {\n  ret float %x\n}\n"
         once = bit_exact_validator.insert_rounding_correction(ir)
         twice = bit_exact_validator.insert_rounding_correction(once)
         assert once == twice
 
     def test_does_not_clobber_existing_attr_group(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         ir = (
             "; ModuleID = 'kernel.ll'\n"
             "define float @kernel(float %x) #5 {\n"
             "  ret float %x\n"
             "}\n"
-            "attributes #5 = { \"nounwind\" }\n"
+            'attributes #5 = { "nounwind" }\n'
         )
         out = bit_exact_validator.insert_rounding_correction(ir)
         # Existing attr group preserved
-        assert "attributes #5 = { \"nounwind\" }" in out
+        assert 'attributes #5 = { "nounwind" }' in out
         # The function reference still points to #5 (not 0)
         assert "@kernel(float %x) #5 {" in out
         # The new group was still emitted
@@ -315,7 +318,8 @@ class TestLLVMInjection:
 
 class TestValidateKernelOutput:
     def test_all_nan_in_bit_exact_passes(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         report = bit_exact_validator.validate_kernel_output(
             kernel_name="my_kernel",
@@ -327,10 +331,12 @@ class TestValidateKernelOutput:
         assert report.max_ulp_error == 0.0
 
     def test_bit_exact_detects_real_mismatch(
-        self, bit_exact_validator: MathValidator,
+        self,
+        bit_exact_validator: MathValidator,
     ) -> None:
         bit_exact_validator.set_op_strictness(
-            "my_kernel", StrictnessLevel.BIT_EXACT,
+            "my_kernel",
+            StrictnessLevel.BIT_EXACT,
         )
         report = bit_exact_validator.validate_kernel_output(
             kernel_name="my_kernel",
@@ -341,10 +347,12 @@ class TestValidateKernelOutput:
         assert report.max_ulp_error > 0.0
 
     def test_tolerant_passes_within_ulp(
-        self, validator: MathValidator,
+        self,
+        validator: MathValidator,
     ) -> None:
         validator.set_op_strictness(
-            "k", StrictnessLevel.ULP_16,
+            "k",
+            StrictnessLevel.ULP_16,
         )
         ref = np.array([1.0, 2.0, 3.0])
         act = ref + np.finfo(np.float64).eps  # 1 ULP away
@@ -354,6 +362,5 @@ class TestValidateKernelOutput:
             actual=act,
         )
         assert report.bit_exact is True, (
-            f"Expected bit_exact (1 ULP within ULP_16), got "
-            f"max_ulp_error={report.max_ulp_error}"
+            f"Expected bit_exact (1 ULP within ULP_16), got max_ulp_error={report.max_ulp_error}"
         )

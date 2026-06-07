@@ -29,7 +29,9 @@ def _read_section_names(path: Path) -> list[str]:
     """Return every non-empty section name in an ELF object via readelf."""
     r = subprocess.run(
         ["readelf", "-W", "-S", str(path)],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     names: list[str] = []
     for line in r.stdout.splitlines():
@@ -42,6 +44,7 @@ def _read_section_names(path: Path) -> list[str]:
 def _lld_or_skip() -> None:
     """Skip the test (via pytest.skip) when lld is not on PATH."""
     import pytest
+
     if shutil.which("ld.lld") is None and shutil.which("lld") is None:
         pytest.skip("lld not installed")
 
@@ -126,8 +129,7 @@ class TestUniqueSectionNaming:
         assert section_name_for("nvidia", "matmul") == ".nautilus.nvidia.matmul"
         assert section_name_for("amd", "layernorm") == ".nautilus.amd.layernorm"
         assert (
-            section_name_for("nvidia", "matmul", fmt_suffix="ptx")
-            == ".nautilus.nvidia.ptx.matmul"
+            section_name_for("nvidia", "matmul", fmt_suffix="ptx") == ".nautilus.nvidia.ptx.matmul"
         )
         assert (
             section_name_for("nvidia", "matmul", fmt_suffix="cubin")
@@ -145,7 +147,8 @@ class TestUniqueSectionNaming:
             KernelBlob(kernel_name="k1", vendor="amd", arch="gfx942", fmt="hsaco", data=b"d"),
         ]
         result = linker.link_fat_binary(
-            kernels=blobs, kernel_name="k1",
+            kernels=blobs,
+            kernel_name="k1",
             output_path=tmp_path / "uniq.fat.o",
         )
         assert result.is_usable
@@ -159,16 +162,25 @@ class TestUniqueSectionNaming:
         _lld_or_skip()
         linker = FatBinaryLinker(cache_dir=str(tmp_path / "link"))
         blobs = [
-            KernelBlob(kernel_name="matmul", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX),
-            KernelBlob(kernel_name="attention", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX),
-            KernelBlob(kernel_name="layernorm", vendor="amd", arch="gfx942", fmt="hsaco", data=SAMPLE_HSACO),
+            KernelBlob(
+                kernel_name="matmul", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX
+            ),
+            KernelBlob(
+                kernel_name="attention", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX
+            ),
+            KernelBlob(
+                kernel_name="layernorm", vendor="amd", arch="gfx942", fmt="hsaco", data=SAMPLE_HSACO
+            ),
         ]
         result = linker.link_fat_binary(
-            kernels=blobs, kernel_name="multi",
+            kernels=blobs,
+            kernel_name="multi",
             output_path=tmp_path / "readelf.fat.o",
         )
         names = _read_section_names(result.output_path)
-        nautilus_sections = [n for n in names if n.startswith(".nautilus.") and n != ".nautilus.index"]
+        nautilus_sections = [
+            n for n in names if n.startswith(".nautilus.") and n != ".nautilus.index"
+        ]
         assert len(nautilus_sections) == 3
         assert len(set(nautilus_sections)) == 3, (
             f"lld silently merged sections: {nautilus_sections}"
@@ -184,7 +196,8 @@ class TestUniqueSectionNaming:
             KernelBlob(kernel_name="b", vendor="nvidia", arch="sm_90", fmt="ptx", data=b"y"),
         ]
         result = linker.link_fat_binary(
-            kernels=blobs, kernel_name="dup_test",
+            kernels=blobs,
+            kernel_name="dup_test",
             output_path=tmp_path / "silent.fat.o",
         )
         assert result.is_usable
@@ -199,11 +212,14 @@ class TestNautilusIndex:
         _lld_or_skip()
         linker = FatBinaryLinker(cache_dir=str(tmp_path / "link"))
         blobs = [
-            KernelBlob(kernel_name="alpha", vendor="nvidia", arch="sm_90", fmt="ptx", data=b"12345"),
-            KernelBlob(kernel_name="beta",  vendor="amd",    arch="gfx942", fmt="hsaco", data=b"67890"),
+            KernelBlob(
+                kernel_name="alpha", vendor="nvidia", arch="sm_90", fmt="ptx", data=b"12345"
+            ),
+            KernelBlob(kernel_name="beta", vendor="amd", arch="gfx942", fmt="hsaco", data=b"67890"),
         ]
         result = linker.link_fat_binary(
-            kernels=blobs, kernel_name="alpha",
+            kernels=blobs,
+            kernel_name="alpha",
             output_path=tmp_path / "idx.fat.o",
         )
         records = result.index_text.strip("\n").split("\n")
@@ -219,17 +235,27 @@ class TestNautilusIndex:
         """The C runtime stub should be able to look up blobs by (kernel, vendor)."""
         linker = FatBinaryLinker(cache_dir=str(tmp_path / "link"))
         blobs = [
-            KernelBlob(kernel_name="hello", vendor="intel", arch="xe_hpg", fmt="spv", data=b"X" * 17),
+            KernelBlob(
+                kernel_name="hello", vendor="intel", arch="xe_hpg", fmt="spv", data=b"X" * 17
+            ),
         ]
         section_names = [section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt) for b in blobs]
-        index_text = "\n".join(
-            "|".join([
-                b.kernel_name, b.vendor, b.arch, b.fmt,
-                section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
-                str(len(b.data)),
-            ])
-            for b in blobs
-        ) + "\n\n"
+        index_text = (
+            "\n".join(
+                "|".join(
+                    [
+                        b.kernel_name,
+                        b.vendor,
+                        b.arch,
+                        b.fmt,
+                        section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
+                        str(len(b.data)),
+                    ]
+                )
+                for b in blobs
+            )
+            + "\n\n"
+        )
         nm = linker._build_index_object(tmp_path, blobs, section_names, index_text)
         assert nm is not None and nm.exists()
         r = subprocess.run(["nm", "--defined-only", str(nm)], capture_output=True, text=True)
@@ -244,8 +270,17 @@ class TestNautilusIndex:
             stub_path.parent.mkdir(parents=True, exist_ok=True)
             src_c = repo_root / "src" / "bridges" / "aot_packager" / "runtime_stub.c"
             subprocess.run(
-                ["gcc", "-c", "-nostdlib", "-ffreestanding", "-Wall", "-std=c11",
-                 "-o", str(stub_path), str(src_c)],
+                [
+                    "gcc",
+                    "-c",
+                    "-nostdlib",
+                    "-ffreestanding",
+                    "-Wall",
+                    "-std=c11",
+                    "-o",
+                    str(stub_path),
+                    str(src_c),
+                ],
                 check=True,
             )
         r = subprocess.run(["nm", "--defined-only", str(stub_path)], capture_output=True, text=True)

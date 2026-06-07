@@ -20,9 +20,10 @@ import os
 import time
 import uuid
 from collections import deque
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 from src.common.logging import get_logger, get_stdlib_logger
 
@@ -32,6 +33,7 @@ logger = get_logger(__name__)
 @dataclass
 class StageLog:
     """A single stage execution record within a span."""
+
     stage_name: str
     status: str  # "started" | "completed" | "failed" | "skipped"
     start_time: float
@@ -44,6 +46,7 @@ class StageLog:
 @dataclass
 class Span:
     """A single bridge execution span — tracks all stages."""
+
     span_id: str
     kernel_hash: str
     target: str
@@ -116,7 +119,10 @@ def span(
     _active_spans[sid] = s
     logger.info(
         "Span[%s] start: kernel=%s..%s target=%s",
-        sid, kernel_hash[:12], "", target,
+        sid,
+        kernel_hash[:12],
+        "",
+        target,
     )
     try:
         yield s
@@ -132,7 +138,10 @@ def span(
         _completed_spans.append(s)
         logger.info(
             "Span[%s] %s in %.1fms (%d stages)",
-            sid, s.status, s.duration_ms, len(s.stages),
+            sid,
+            s.status,
+            s.duration_ms,
+            len(s.stages),
         )
 
 
@@ -155,7 +164,8 @@ def stage(
     parent_span.add_stage(stage_log)
     logger.debug(
         "Span[%s] stage[%s] start",
-        parent_span.span_id, stage_name,
+        parent_span.span_id,
+        stage_name,
     )
     try:
         yield stage_log
@@ -169,33 +179,38 @@ def stage(
         stage_log.duration_ms = (stage_log.end_time - stage_log.start_time) * 1000
         logger.debug(
             "Span[%s] stage[%s] %s in %.1fms",
-            parent_span.span_id, stage_name, stage_log.status,
+            parent_span.span_id,
+            stage_name,
+            stage_log.status,
             stage_log.duration_ms,
         )
 
 
 def emit_span_json(span_obj: Span) -> str:
     """Serialize a span to JSON for observability backends."""
-    return json.dumps({
-        "span_id": span_obj.span_id,
-        "kernel_hash": span_obj.kernel_hash,
-        "target": span_obj.target,
-        "start_time": span_obj.start_time,
-        "end_time": span_obj.end_time,
-        "duration_ms": span_obj.duration_ms,
-        "status": span_obj.status,
-        "stages": [
-            {
-                "stage_name": s.stage_name,
-                "status": s.status,
-                "duration_ms": s.duration_ms,
-                "metadata": s.metadata,
-                "error": s.error,
-            }
-            for s in span_obj.stages
-        ],
-        "metadata": span_obj.metadata,
-    }, indent=2)
+    return json.dumps(
+        {
+            "span_id": span_obj.span_id,
+            "kernel_hash": span_obj.kernel_hash,
+            "target": span_obj.target,
+            "start_time": span_obj.start_time,
+            "end_time": span_obj.end_time,
+            "duration_ms": span_obj.duration_ms,
+            "status": span_obj.status,
+            "stages": [
+                {
+                    "stage_name": s.stage_name,
+                    "status": s.status,
+                    "duration_ms": s.duration_ms,
+                    "metadata": s.metadata,
+                    "error": s.error,
+                }
+                for s in span_obj.stages
+            ],
+            "metadata": span_obj.metadata,
+        },
+        indent=2,
+    )
 
 
 def configure_logging(
@@ -223,27 +238,31 @@ def configure_logging(
     if json_format:
         console.setFormatter(JsonFormatter())
     else:
-        console.setFormatter(logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        ))
+        console.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            )
+        )
     bridge_logger.addHandler(console)
 
     # File handler
     if log_file:
         from pathlib import Path
+
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         if json_format:
             file_handler.setFormatter(JsonFormatter())
         else:
-            file_handler.setFormatter(logging.Formatter(
-                "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d: %(message)s"
-            ))
+            file_handler.setFormatter(
+                logging.Formatter("%(asctime)s [%(levelname)s] %(name)s:%(lineno)d: %(message)s")
+            )
         bridge_logger.addHandler(file_handler)
 
 
 class JsonFormatter(logging.Formatter):
     """JSON log formatter for observability backends."""
+
     def format(self, record: logging.LogRecord) -> str:
         log_obj = {
             "timestamp": time.time(),
@@ -260,11 +279,11 @@ class JsonFormatter(logging.Formatter):
 __all__ = [
     "Span",
     "StageLog",
+    "clear_ir_dumps",
+    "configure_logging",
+    "dump_ir",
+    "emit_span_json",
+    "get_ir_dumps",
     "span",
     "stage",
-    "dump_ir",
-    "get_ir_dumps",
-    "clear_ir_dumps",
-    "emit_span_json",
-    "configure_logging",
 ]

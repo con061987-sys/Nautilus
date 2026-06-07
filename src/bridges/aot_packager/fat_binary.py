@@ -23,19 +23,30 @@ from typing import Any
 
 
 class SectionFormat(Enum):
-    """Binary format of a kernel section."""
-    PTX = "ptx"              # Nvidia PTX text
-    CUBIN = "cubin"          # Nvidia cubin
-    HSACO = "hsaco"          # AMD HSA Code Object
-    SPV = "spv"              # Intel SPIR-V
-    STUB = "stub"            # C runtime stub object
+    """Binary format of a kernel section.
+
+    The enum value is the on-the-wire string used in
+    ``.nautilus.index`` records and JSON serialisations. New entries
+    must be **appended** — :meth:`FatBinary.to_bytes` encodes the
+    format as the index in the enum, so reordering breaks previously
+    linked fat binaries.
+    """
+
+    PTX = "ptx"  # Nvidia PTX text
+    CUBIN = "cubin"  # Nvidia cubin
+    HSACO = "hsaco"  # AMD HSA Code Object
+    SPV = "spv"  # Intel SPIR-V
+    METALLIB = "metallib"  # Apple Metal library (MTLB magic)
+    AIR = "air"  # Apple Intermediate Representation (AIRI magic)
+    STUB = "stub"  # C runtime stub object
 
 
 @dataclass
 class KernelSection:
     """One vendor's kernel binary within a fat binary."""
-    vendor: str                    # "nvidia" / "amd" / "intel"
-    arch: str                      # "sm_90" / "gfx942" / "intel_gpu_xehpg"
+
+    vendor: str  # "nvidia" / "amd" / "intel"
+    arch: str  # "sm_90" / "gfx942" / "intel_gpu_xehpg"
     format: SectionFormat
     data: bytes
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -85,8 +96,7 @@ class FatBinary:
     def add_section(self, section: KernelSection) -> None:
         # Replace existing section for the same vendor+arch
         self.sections = [
-            s for s in self.sections
-            if not (s.vendor == section.vendor and s.arch == section.arch)
+            s for s in self.sections if not (s.vendor == section.vendor and s.arch == section.arch)
         ]
         self.sections.append(section)
 
@@ -114,7 +124,7 @@ class FatBinary:
         return b""
 
     @classmethod
-    def from_json(cls, json_text: str) -> "FatBinary":
+    def from_json(cls, json_text: str) -> FatBinary:
         """Deserialize from JSON."""
         data = json.loads(json_text)
         sections = []
@@ -170,7 +180,7 @@ class FatBinary:
         return bytes(out)
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "FatBinary":
+    def from_bytes(cls, data: bytes) -> FatBinary:
         """Deserialize from the compact binary format."""
         if data[:4] != b"NFAT":
             raise ValueError(f"Invalid fat binary magic: {data[:4]!r}")
@@ -180,7 +190,7 @@ class FatBinary:
         offset = 5
         name_len = struct.unpack_from("<H", data, offset)[0]
         offset += 2
-        kernel_name = data[offset:offset + name_len].decode("utf-8")
+        kernel_name = data[offset : offset + name_len].decode("utf-8")
         offset += name_len
         num_sections = struct.unpack_from("<H", data, offset)[0]
         offset += 2
@@ -188,24 +198,26 @@ class FatBinary:
         for _ in range(num_sections):
             vendor_len = data[offset]
             offset += 1
-            vendor = data[offset:offset + vendor_len].decode("utf-8")
+            vendor = data[offset : offset + vendor_len].decode("utf-8")
             offset += vendor_len
             arch_len = data[offset]
             offset += 1
-            arch = data[offset:offset + arch_len].decode("utf-8")
+            arch = data[offset : offset + arch_len].decode("utf-8")
             offset += arch_len
             format_idx = data[offset]
             offset += 1
             data_len = struct.unpack_from("<I", data, offset)[0]
             offset += 4
-            section_data = data[offset:offset + data_len]
+            section_data = data[offset : offset + data_len]
             offset += data_len
-            sections.append(KernelSection(
-                vendor=vendor,
-                arch=arch,
-                format=list(SectionFormat)[format_idx],
-                data=section_data,
-            ))
+            sections.append(
+                KernelSection(
+                    vendor=vendor,
+                    arch=arch,
+                    format=list(SectionFormat)[format_idx],
+                    data=section_data,
+                )
+            )
         return cls(kernel_name=kernel_name, sections=sections)
 
     def save(self, path: Path) -> None:
@@ -213,6 +225,6 @@ class FatBinary:
         path.write_bytes(self.to_bytes())
 
     @classmethod
-    def load(cls, path: Path) -> "FatBinary":
+    def load(cls, path: Path) -> FatBinary:
         """Load a fat binary from a file."""
         return cls.from_bytes(path.read_bytes())

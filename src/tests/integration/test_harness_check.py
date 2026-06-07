@@ -10,6 +10,7 @@ This file is its own acceptance test for the harness. If it fails
 after a refactor, the harness itself is broken — not the bridges it
 shields.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,6 @@ from typing import Any
 import pytest
 
 from src.tests.conftest import EvidenceCapture
-
 
 # ── CLI options are registered ──────────────────────────────────────────
 
@@ -45,18 +45,18 @@ class TestEvidenceCaptureFixture:
     files named ``{test_name}-{timestamp}-{slug}.{ext}``."""
 
     def test_evidence_disabled_when_no_dir(
-        self, evidence_capture: EvidenceCapture | None,
+        self,
+        evidence_capture: EvidenceCapture | None,
     ) -> None:
         """Without --evidence-dir the fixture yields None and writes nothing."""
         assert evidence_capture is None
 
     def test_evidence_attaches_text(
-        self, request: pytest.FixtureRequest,
+        self,
+        request: pytest.FixtureRequest,
     ) -> None:
         """Drive the fixture with a custom --evidence-dir and assert the file lands."""
         import tempfile
-
-        from src.tests.conftest import evidence_capture as evidence_capture_fixture
 
         with tempfile.TemporaryDirectory() as tmp:
             # Inject a resolved evidence_dir by patching the option on the
@@ -80,7 +80,8 @@ class TestEvidenceCaptureFixture:
             assert "outcome: passed" in body
 
     def test_evidence_attach_json_and_bytes(
-        self, request: pytest.FixtureRequest,
+        self,
+        request: pytest.FixtureRequest,
     ) -> None:
         from src.tests.conftest import EvidenceCapture as _EC
 
@@ -100,7 +101,8 @@ class TestEvidenceCaptureFixture:
                 cap.finalize(outcome="passed")
 
     def test_evidence_captures_warnings(
-        self, request: pytest.FixtureRequest,
+        self,
+        request: pytest.FixtureRequest,
     ) -> None:
         """A WARNING+ log record should land in the warnings file."""
         from src.tests.conftest import EvidenceCapture as _EC
@@ -120,7 +122,8 @@ class TestEvidenceCaptureFixture:
             assert "[WARNING]" in content
 
     def test_evidence_finalize_is_idempotent(
-        self, request: pytest.FixtureRequest,
+        self,
+        request: pytest.FixtureRequest,
     ) -> None:
         from src.tests.conftest import EvidenceCapture as _EC
 
@@ -139,13 +142,16 @@ class TestAutoTuningBridgeFixture:
     """The auto_tuning_bridge fixture must yield a real TritonTVMBridge."""
 
     def test_yields_real_bridge_instance(
-        self, auto_tuning_bridge: Any,
+        self,
+        auto_tuning_bridge: Any,
     ) -> None:
         from src.bridges.triton_tvm.bridge_orchestrator import TritonTVMBridge
+
         assert isinstance(auto_tuning_bridge, TritonTVMBridge)
 
     def test_tvm_adapter_patches_are_installed(
-        self, auto_tuning_bridge: Any,
+        self,
+        auto_tuning_bridge: Any,
     ) -> None:
         # The mocked MetaScheduleAdapter.tune + IRCapture.capture must be
         # exposed on the bridge so tests can assert call counts.
@@ -161,9 +167,11 @@ class TestAotPackagerFixture:
     """The aot_packager fixture must yield a real FatBinaryBuilder."""
 
     def test_yields_real_builder_instance(
-        self, aot_packager: Any,
+        self,
+        aot_packager: Any,
     ) -> None:
         from src.bridges.aot_packager.builder import FatBinaryBuilder
+
         assert isinstance(aot_packager, FatBinaryBuilder)
 
     def test_vendor_mocks_are_installed(self, aot_packager: Any) -> None:
@@ -171,10 +179,13 @@ class TestAotPackagerFixture:
             assert hasattr(aot_packager, attr), f"missing mock attribute: {attr}"
 
     def test_build_produces_synthetic_fat_binary(
-        self, aot_packager: Any, tmp_path: Path,
+        self,
+        aot_packager: Any,
+        tmp_path: Path,
     ) -> None:
         """A full build() call must succeed end-to-end with the mocks active."""
         from src.bridges.aot_packager.builder import FatBinaryConfig
+
         config = FatBinaryConfig(
             kernel_name="mock_kernel",
             kernel_source=(
@@ -200,9 +211,11 @@ class TestShardingBridgeFixture:
     """The sharding_bridge fixture must yield a real AutoShardingBridge."""
 
     def test_yields_real_bridge_instance(
-        self, sharding_bridge: Any,
+        self,
+        sharding_bridge: Any,
     ) -> None:
         from src.bridges.pytorch_xla.pipeline_orchestrator import AutoShardingBridge
+
         assert isinstance(sharding_bridge, AutoShardingBridge)
 
     def test_gspmd_mocks_are_installed(self, sharding_bridge: Any) -> None:
@@ -210,7 +223,8 @@ class TestShardingBridgeFixture:
             assert hasattr(sharding_bridge, attr), f"missing mock attribute: {attr}"
 
     def test_circuit_breakers_disabled_in_mocked_mode(
-        self, sharding_bridge: Any,
+        self,
+        sharding_bridge: Any,
     ) -> None:
         # When using mocks, the fixture disables breakers to avoid
         # pulling in extra deps; verify that's the case.
@@ -222,9 +236,11 @@ class TestCudaIngestorFixture:
     """The cuda_ingestor fixture must yield a real CudaKernelCompiler."""
 
     def test_yields_real_compiler_instance(
-        self, cuda_ingestor: Any,
+        self,
+        cuda_ingestor: Any,
     ) -> None:
         from src.bridges.cuda_ingest.kernel_compiler import CudaKernelCompiler
+
         assert isinstance(cuda_ingestor, CudaKernelCompiler)
 
     def test_parser_mock_is_installed(self, cuda_ingestor: Any) -> None:
@@ -252,18 +268,20 @@ class TestUseRealBackendMarker:
 
     @pytest.mark.use_real_backend
     def test_auto_tuning_bridge_skips_without_tvm(
-        self, auto_tuning_bridge: Any,
+        self,
+        auto_tuning_bridge: Any,
     ) -> None:
         # When --use-real-backend is set but TVM/Triton are missing,
         # the fixture should skip. We don't assert success or failure
         # here — pytest handles the skip outcome — but we do assert
         # the fixture is wired (yielded a real bridge OR skipped with a
         # clear reason). Touching the fixture forces its evaluation.
-        assert auto_tuning_bridge is not None or True  # noqa: B015
+        assert auto_tuning_bridge is not None or True
 
     @pytest.mark.use_real_backend
     def test_aot_packager_skips_without_lld(
-        self, aot_packager: Any,
+        self,
+        aot_packager: Any,
     ) -> None:
         # Same pattern: in CI without lld/gcc, this test is skipped.
-        assert aot_packager is not None or True  # noqa: B015
+        assert aot_packager is not None or True

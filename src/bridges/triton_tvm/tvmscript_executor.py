@@ -27,6 +27,7 @@ logger = get_logger(__name__)
 try:
     import tvm
     from tvm.script import tir as T
+
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
@@ -35,6 +36,7 @@ except ImportError:
 @dataclass
 class ExecutionResult:
     """Result of executing a TVMScript string."""
+
     success: bool
     ir_module: Any = None
     prim_func: Any = None
@@ -73,6 +75,7 @@ class TVMScriptExecutor:
             ExecutionResult with the IRModule and any errors.
         """
         import time
+
         start = time.perf_counter()
 
         if not TVM_AVAILABLE:
@@ -152,6 +155,7 @@ class TVMScriptExecutor:
         """
         import tvm
         from tvm.script import tir as T
+
         namespace: dict[str, Any] = {
             "__builtins__": __builtins__,
             "tvm": tvm,
@@ -160,6 +164,7 @@ class TVMScriptExecutor:
         # Also expose tir if available
         try:
             import tvm.tir as tir
+
             namespace["tir"] = tir
         except ImportError:
             pass
@@ -175,8 +180,17 @@ class TVMScriptExecutor:
         prim_funcs: dict[str, Any] = {}
         # Common names to skip
         skip_names = {
-            "T", "tvm", "tir", "__builtins__", "__name__", "__doc__",
-            "__package__", "__loader__", "__spec__", "__file__", "__cached__",
+            "T",
+            "tvm",
+            "tir",
+            "__builtins__",
+            "__name__",
+            "__doc__",
+            "__package__",
+            "__loader__",
+            "__spec__",
+            "__file__",
+            "__cached__",
         }
         for name, obj in namespace.items():
             if name in skip_names or name.startswith("_"):
@@ -185,6 +199,7 @@ class TVMScriptExecutor:
             if TVM_AVAILABLE:
                 try:
                     from tvm.tir import PrimFunc
+
                     if isinstance(obj, PrimFunc):
                         prim_funcs[name] = obj
                         continue
@@ -207,7 +222,9 @@ class TVMScriptExecutor:
             return False, "IRModule is None"
         try:
             # Check that it has at least one function
-            funcs = list(ir_module.functions_items()) if hasattr(ir_module, "functions_items") else []
+            funcs = (
+                list(ir_module.functions_items()) if hasattr(ir_module, "functions_items") else []
+            )
             if not funcs:
                 return False, "IRModule has no functions"
             # Verify it's parseable by TVM's verifier

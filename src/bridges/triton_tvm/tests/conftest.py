@@ -21,6 +21,7 @@ def cache_dir(tmp_path: Path) -> str:
 def sample_matmul_metadata() -> Any:
     """Create a sample KernelMetadata for a matmul kernel."""
     from src.bridges.triton_tvm.metadata_extractor import KernelMetadata
+
     return KernelMetadata(
         kernel_name="matmul_kernel",
         source_hash="abc123",
@@ -44,6 +45,7 @@ def sample_matmul_metadata() -> Any:
 def sample_reduction_metadata() -> Any:
     """Create a sample KernelMetadata for a reduction kernel."""
     from src.bridges.triton_tvm.metadata_extractor import KernelMetadata
+
     return KernelMetadata(
         kernel_name="reduce_kernel",
         source_hash="def456",
@@ -64,6 +66,7 @@ def sample_reduction_metadata() -> Any:
 def sample_elementwise_metadata() -> Any:
     """Create a sample KernelMetadata for an elementwise kernel."""
     from src.bridges.triton_tvm.metadata_extractor import KernelMetadata
+
     return KernelMetadata(
         kernel_name="add_kernel",
         source_hash="ghi789",
@@ -105,7 +108,6 @@ def auto_tuning_bridge(cache_dir: str) -> Any:
     """
     import src.bridges.triton_tvm.bridge_orchestrator as bo_mod
     import src.bridges.triton_tvm.metaschedule_adapter as ms_mod
-
     from src.bridges.triton_tvm.bridge_orchestrator import TritonTVMBridge
     from src.bridges.triton_tvm.config_mapper import MappedTuningConfig
     from src.common.result import Ok
@@ -119,10 +121,15 @@ def auto_tuning_bridge(cache_dir: str) -> Any:
         bridge._build_tir_template = MagicMock(return_value=MagicMock())
 
         bridge.tvm_adapter.tune = MagicMock(
-            return_value=Ok(MappedTuningConfig(
-                block_m=64, block_n=128, block_k=64,
-                num_warps=8, num_stages=4,
-            )),
+            return_value=Ok(
+                MappedTuningConfig(
+                    block_m=64,
+                    block_n=128,
+                    block_k=64,
+                    num_warps=8,
+                    num_stages=4,
+                )
+            ),
         )
 
         return bridge

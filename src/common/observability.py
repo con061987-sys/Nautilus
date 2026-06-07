@@ -15,20 +15,17 @@ import enum
 import sys
 import threading
 import time
-import uuid
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, Literal, TypeVar
+from dataclasses import dataclass
+from typing import Any, Literal, TypeVar
 
 from src.common.errors import (
     CircuitOpenError,
-    NautilusError,
     StageTimeoutError,
     TotalBudgetExceededError,
 )
 from src.common.logging import get_logger
-from src.common.logging import span as span_ctx
-from src.common.logging import stage as stage_ctx
 
 T = TypeVar("T")
 log = get_logger("nautilus.observability")
@@ -38,18 +35,19 @@ log = get_logger("nautilus.observability")
 
 
 class CircuitState(str, enum.Enum):
-    CLOSED = "closed"          # Normal operation
-    HALF_OPEN = "half_open"    # Trial: allow one call to test recovery
-    OPEN = "open"              # Failing: short-circuit calls
+    CLOSED = "closed"  # Normal operation
+    HALF_OPEN = "half_open"  # Trial: allow one call to test recovery
+    OPEN = "open"  # Failing: short-circuit calls
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Tuning knobs for a circuit breaker."""
+
     name: str = "default"
-    failure_threshold: int = 5          # Consecutive failures to open
-    reset_timeout_seconds: float = 30.0 # How long to stay open before half-open trial
-    half_open_max_trials: int = 1       # How many probes allowed in half-open
+    failure_threshold: int = 5  # Consecutive failures to open
+    reset_timeout_seconds: float = 30.0  # How long to stay open before half-open trial
+    half_open_max_trials: int = 1  # How many probes allowed in half-open
     excluded_exceptions: tuple[type[BaseException], ...] = ()
 
 
@@ -87,6 +85,7 @@ class CircuitBreaker:
         with breaker:
             do_risky_thing()
     """
+
     def __init__(self, config: CircuitBreakerConfig) -> None:
         self._config = config
         self._stats = _BreakerStats()
@@ -179,15 +178,14 @@ class CircuitBreaker:
             if self._stats.state == CircuitState.HALF_OPEN:
                 if self._stats.half_open_remaining <= 0:
                     raise CircuitOpenError(
-                        f"Circuit '{self._config.name}' is HALF_OPEN "
-                        f"and used all trial slots",
+                        f"Circuit '{self._config.name}' is HALF_OPEN and used all trial slots",
                         context={"breaker": self._config.name},
                     )
                 self._stats.half_open_remaining -= 1
 
         try:
             result = fn(*args, **kwargs)
-        except (self._config.excluded_exceptions + (Exception,)) as exc:
+        except self._config.excluded_exceptions + (Exception,) as exc:
             if isinstance(exc, self._config.excluded_exceptions):
                 # Don't count toward breaker
                 raise
@@ -197,7 +195,7 @@ class CircuitBreaker:
             self._record_success()
             return result
 
-    def __enter__(self) -> "CircuitBreaker":
+    def __enter__(self) -> CircuitBreaker:
         self._maybe_transition()
         if self._stats.state == CircuitState.OPEN:
             raise CircuitOpenError(
@@ -206,7 +204,7 @@ class CircuitBreaker:
             )
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> "Literal[False]":
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
         if exc is None:
             self._record_success()
             return False
@@ -226,21 +224,41 @@ class CircuitBreaker:
 def _build_default_breakers() -> dict[str, CircuitBreaker]:
     """Construct a fresh dict of framework-standard circuit breakers."""
     return {
-        "tvm_tune": CircuitBreaker(CircuitBreakerConfig(
-            name="tvm_tune", failure_threshold=3, reset_timeout_seconds=60.0,
-        )),
-        "triton_compile": CircuitBreaker(CircuitBreakerConfig(
-            name="triton_compile", failure_threshold=5, reset_timeout_seconds=30.0,
-        )),
-        "aotriton_compile": CircuitBreaker(CircuitBreakerConfig(
-            name="aotriton_compile", failure_threshold=3, reset_timeout_seconds=60.0,
-        )),
-        "gspmd": CircuitBreaker(CircuitBreakerConfig(
-            name="gspmd", failure_threshold=3, reset_timeout_seconds=30.0,
-        )),
-        "lld_link": CircuitBreaker(CircuitBreakerConfig(
-            name="lld_link", failure_threshold=5, reset_timeout_seconds=15.0,
-        )),
+        "tvm_tune": CircuitBreaker(
+            CircuitBreakerConfig(
+                name="tvm_tune",
+                failure_threshold=3,
+                reset_timeout_seconds=60.0,
+            )
+        ),
+        "triton_compile": CircuitBreaker(
+            CircuitBreakerConfig(
+                name="triton_compile",
+                failure_threshold=5,
+                reset_timeout_seconds=30.0,
+            )
+        ),
+        "aotriton_compile": CircuitBreaker(
+            CircuitBreakerConfig(
+                name="aotriton_compile",
+                failure_threshold=3,
+                reset_timeout_seconds=60.0,
+            )
+        ),
+        "gspmd": CircuitBreaker(
+            CircuitBreakerConfig(
+                name="gspmd",
+                failure_threshold=3,
+                reset_timeout_seconds=30.0,
+            )
+        ),
+        "lld_link": CircuitBreaker(
+            CircuitBreakerConfig(
+                name="lld_link",
+                failure_threshold=5,
+                reset_timeout_seconds=15.0,
+            )
+        ),
     }
 
 
@@ -283,6 +301,7 @@ def reset_default_breakers() -> dict[str, CircuitBreaker]:
 @dataclass
 class StageBudgets:
     """Per-stage timeouts. NOT a single global timeout."""
+
     ir_capture_seconds: float = 10.0
     tvm_tune_seconds: float = 600.0
     triton_compile_seconds: float = 120.0
@@ -309,6 +328,7 @@ class TimeoutManager:
     Unlike a single global timeout, this tracks which stage is
     actually slow, and aborts with a typed error.
     """
+
     def __init__(self, budgets: StageBudgets) -> None:
         self._budgets = budgets
         self._start_time: float | None = None
@@ -387,11 +407,11 @@ class TimeoutManager:
 
 
 __all__ = [
-    "CircuitState",
-    "CircuitBreakerConfig",
     "CircuitBreaker",
-    "get_default_breakers",
-    "reset_default_breakers",
+    "CircuitBreakerConfig",
+    "CircuitState",
     "StageBudgets",
     "TimeoutManager",
+    "get_default_breakers",
+    "reset_default_breakers",
 ]

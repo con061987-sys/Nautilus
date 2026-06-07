@@ -143,10 +143,11 @@ class KernelBlob:
     all of them in ``.nautilus.index`` so the runtime stub can
     discover them at startup.
     """
+
     kernel_name: str
-    vendor: str          # "nvidia" / "amd" / "intel" / "apple"
-    arch: str            # "sm_90" / "gfx942" / "xe_hpg" — free-form identifier
-    fmt: str             # "ptx" / "cubin" / "hsaco" / "spv" / "metallib"
+    vendor: str  # "nvidia" / "amd" / "intel" / "apple"
+    arch: str  # "sm_90" / "gfx942" / "xe_hpg" — free-form identifier
+    fmt: str  # "ptx" / "cubin" / "hsaco" / "spv" / "metallib"
     data: bytes
     metadata: dict[str, str] = field(default_factory=dict)
 
@@ -154,6 +155,7 @@ class KernelBlob:
 @dataclass
 class LinkingResult:
     """Result of a fat binary linking operation."""
+
     success: bool
     output_path: Path | None = None
     output_size: int = 0
@@ -183,10 +185,13 @@ class FatBinaryLinker:
         timeout_seconds: float = 30.0,
         stub_path: str | None = None,
     ) -> None:
-        self.cache_dir = Path(cache_dir or os.environ.get(
-            "NAUTILUS_LINK_CACHE",
-            str(Path.home() / ".cache" / "nautilus" / "link"),
-        ))
+        self.cache_dir = Path(
+            cache_dir
+            or os.environ.get(
+                "NAUTILUS_LINK_CACHE",
+                str(Path.home() / ".cache" / "nautilus" / "link"),
+            )
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timeout_seconds = timeout_seconds
         # Default to <repo_root>/build/runtime_stub.o, the artifact of
@@ -206,6 +211,8 @@ class FatBinaryLinker:
         nvidia_cubin: bytes | None = None,
         amd_hsaco: bytes | None = None,
         intel_spv: bytes | None = None,
+        apple_metallib: bytes | None = None,
+        apple_air: bytes | None = None,
         runtime_stub_o: bytes | None = None,
         kernel_name: str = "kernel",
         output_path: Path | None = None,
@@ -219,6 +226,7 @@ class FatBinaryLinker:
         supported via the ``kernels`` argument.
         """
         import time
+
         start = time.perf_counter()
 
         if runtime_stub_o is None and self.default_stub_path.exists():
@@ -230,6 +238,8 @@ class FatBinaryLinker:
             nvidia_cubin=nvidia_cubin,
             amd_hsaco=amd_hsaco,
             intel_spv=intel_spv,
+            apple_metallib=apple_metallib,
+            apple_air=apple_air,
             default_kernel_name=kernel_name,
         )
         if not blobs and runtime_stub_o is None:
@@ -247,7 +257,9 @@ class FatBinaryLinker:
 
         # Check cache
         cache_key = self._compute_link_cache_key(
-            blobs, runtime_stub_o, section_names,
+            blobs,
+            runtime_stub_o,
+            section_names,
         )
         cached_path = self._cache_path_for(cache_key)
         if cached_path.exists() and cached_path.stat().st_size > 0:
@@ -267,7 +279,9 @@ class FatBinaryLinker:
         temp_dir.mkdir(exist_ok=True)
         try:
             section_files = self._write_input_sections(
-                temp_dir, blobs, runtime_stub_o,
+                temp_dir,
+                blobs,
+                runtime_stub_o,
             )
             index_object = self._build_index_object(temp_dir, blobs, section_names, index_text)
             if index_object is not None:
@@ -319,6 +333,8 @@ class FatBinaryLinker:
         nvidia_cubin: bytes | None,
         amd_hsaco: bytes | None,
         intel_spv: bytes | None,
+        apple_metallib: bytes | None,
+        apple_air: bytes | None,
         default_kernel_name: str,
     ) -> list[KernelBlob]:
         if kernels:
@@ -336,29 +352,70 @@ class FatBinaryLinker:
 
         blobs: list[KernelBlob] = []
         if nvidia_ptx is not None:
-            blobs.append(KernelBlob(
-                kernel_name=default_kernel_name, vendor="nvidia",
-                arch="sm_90", fmt="ptx", data=nvidia_ptx,
-            ))
+            blobs.append(
+                KernelBlob(
+                    kernel_name=default_kernel_name,
+                    vendor="nvidia",
+                    arch="sm_90",
+                    fmt="ptx",
+                    data=nvidia_ptx,
+                )
+            )
         if nvidia_cubin is not None:
-            blobs.append(KernelBlob(
-                kernel_name=default_kernel_name, vendor="nvidia",
-                arch="sm_90", fmt="cubin", data=nvidia_cubin,
-            ))
+            blobs.append(
+                KernelBlob(
+                    kernel_name=default_kernel_name,
+                    vendor="nvidia",
+                    arch="sm_90",
+                    fmt="cubin",
+                    data=nvidia_cubin,
+                )
+            )
         if amd_hsaco is not None:
-            blobs.append(KernelBlob(
-                kernel_name=default_kernel_name, vendor="amd",
-                arch="gfx942", fmt="hsaco", data=amd_hsaco,
-            ))
+            blobs.append(
+                KernelBlob(
+                    kernel_name=default_kernel_name,
+                    vendor="amd",
+                    arch="gfx942",
+                    fmt="hsaco",
+                    data=amd_hsaco,
+                )
+            )
         if intel_spv is not None:
-            blobs.append(KernelBlob(
-                kernel_name=default_kernel_name, vendor="intel",
-                arch="xe_hpg", fmt="spv", data=intel_spv,
-            ))
+            blobs.append(
+                KernelBlob(
+                    kernel_name=default_kernel_name,
+                    vendor="intel",
+                    arch="xe_hpg",
+                    fmt="spv",
+                    data=intel_spv,
+                )
+            )
+        if apple_metallib is not None:
+            blobs.append(
+                KernelBlob(
+                    kernel_name=default_kernel_name,
+                    vendor="apple",
+                    arch="metallib",
+                    fmt="metallib",
+                    data=apple_metallib,
+                )
+            )
+        if apple_air is not None:
+            blobs.append(
+                KernelBlob(
+                    kernel_name=default_kernel_name,
+                    vendor="apple",
+                    arch="air",
+                    fmt="air",
+                    data=apple_air,
+                )
+            )
         return blobs
 
     def _build_section_plan(
-        self, blobs: list[KernelBlob],
+        self,
+        blobs: list[KernelBlob],
     ) -> tuple[list[str], str]:
         """Compute unique section names for every blob and the
         text payload of the .nautilus.index section.
@@ -381,14 +438,16 @@ class FatBinaryLinker:
         # newline terminated (empty record) so the C parser can
         # detect the end with a single strchr loop.
         records = [
-            "|".join([
-                _sanitize_section_token(b.kernel_name),
-                _sanitize_section_token(b.vendor),
-                _sanitize_section_token(b.arch),
-                _sanitize_section_token(b.fmt),
-                section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
-                str(len(b.data)),
-            ])
+            "|".join(
+                [
+                    _sanitize_section_token(b.kernel_name),
+                    _sanitize_section_token(b.vendor),
+                    _sanitize_section_token(b.arch),
+                    _sanitize_section_token(b.fmt),
+                    section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
+                    str(len(b.data)),
+                ]
+            )
             for b in blobs
         ]
         index_text = "\n".join(records) + "\n\n"
@@ -401,18 +460,24 @@ class FatBinaryLinker:
         section_names: list[str],
     ) -> str:
         """Compute a cache key for the link operation."""
-        payload = json.dumps({
-            "kernels": [
-                {
-                    "n": b.kernel_name, "v": b.vendor, "a": b.arch, "f": b.fmt,
-                    "d": b.data.hex(),
-                }
-                for b in blobs
-            ],
-            "section_names": list(section_names),
-            "runtime_stub": runtime_stub_o.hex() if runtime_stub_o else "",
-            "lld_version": self._lld_version,
-        }, sort_keys=True)
+        payload = json.dumps(
+            {
+                "kernels": [
+                    {
+                        "n": b.kernel_name,
+                        "v": b.vendor,
+                        "a": b.arch,
+                        "f": b.fmt,
+                        "d": b.data.hex(),
+                    }
+                    for b in blobs
+                ],
+                "section_names": list(section_names),
+                "runtime_stub": runtime_stub_o.hex() if runtime_stub_o else "",
+                "lld_version": self._lld_version,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def _cache_path_for(self, cache_key: str) -> Path:
@@ -476,12 +541,12 @@ class FatBinaryLinker:
         holder_c.write_text(
             "/* Auto-generated by FatBinaryLinker._build_index_object. */\n"
             "/* Hand-edit at your own risk — this file is rewritten on every link. */\n"
-            "__attribute__((section(\".nautilus.index\"), used))\n"
+            '__attribute__((section(".nautilus.index"), used))\n'
             "const unsigned char nautilus_index_data[] = {\n"
             f"    {hex_payload}\n"
             "};\n"
             "\n"
-            "__attribute__((section(\".nautilus.index\"), used))\n"
+            '__attribute__((section(".nautilus.index"), used))\n'
             "const unsigned long nautilus_index_size = sizeof(nautilus_index_data);\n"
         )
 
@@ -492,15 +557,21 @@ class FatBinaryLinker:
                 "gcc not found in PATH; cannot compile .nautilus.index holder",
             )
         cmd = [
-            gcc, "-c",
+            gcc,
+            "-c",
             "-fPIC",
-            "-Wall", "-Wno-unused-but-set-variable",
-            "-o", str(holder_o),
+            "-Wall",
+            "-Wno-unused-but-set-variable",
+            "-o",
+            str(holder_o),
             str(holder_c),
         ]
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
         except subprocess.TimeoutExpired as exc:
             raise LinkingError(
@@ -509,8 +580,7 @@ class FatBinaryLinker:
             ) from exc
         if result.returncode != 0 or not holder_o.exists():
             raise LinkingError(
-                f"gcc failed to compile .nautilus.index holder: "
-                f"{result.stderr or '(no stderr)'}",
+                f"gcc failed to compile .nautilus.index holder: {result.stderr or '(no stderr)'}",
                 context={"cmd": cmd, "stdout": result.stdout, "stderr": result.stderr},
             )
         logger.debug(
@@ -567,19 +637,19 @@ class FatBinaryLinker:
         )
         header = (
             e_ident
-            + struct.pack("<H", _ET_REL)              # e_type
-            + struct.pack("<H", _EM_X86_64)           # e_machine
-            + struct.pack("<I", _EV_CURRENT)          # e_version
-            + struct.pack("<Q", 0)                    # e_entry
-            + struct.pack("<Q", 0)                    # e_phoff
-            + struct.pack("<Q", sht_offset)           # e_shoff
-            + struct.pack("<I", 0)                    # e_flags
-            + struct.pack("<H", e_ehsize)             # e_ehsize
-            + struct.pack("<H", 0)                    # e_phentsize
-            + struct.pack("<H", 0)                    # e_phnum
-            + struct.pack("<H", e_shentsize)          # e_shentsize
-            + struct.pack("<H", e_shnum)              # e_shnum
-            + struct.pack("<H", 2)                    # e_shstrndx (index of .shstrtab)
+            + struct.pack("<H", _ET_REL)  # e_type
+            + struct.pack("<H", _EM_X86_64)  # e_machine
+            + struct.pack("<I", _EV_CURRENT)  # e_version
+            + struct.pack("<Q", 0)  # e_entry
+            + struct.pack("<Q", 0)  # e_phoff
+            + struct.pack("<Q", sht_offset)  # e_shoff
+            + struct.pack("<I", 0)  # e_flags
+            + struct.pack("<H", e_ehsize)  # e_ehsize
+            + struct.pack("<H", 0)  # e_phentsize
+            + struct.pack("<H", 0)  # e_phnum
+            + struct.pack("<H", e_shentsize)  # e_shentsize
+            + struct.pack("<H", e_shnum)  # e_shnum
+            + struct.pack("<H", 2)  # e_shstrndx (index of .shstrtab)
         )
         assert len(header) == 64, f"ELF header is {len(header)} bytes, expected 64"
 
@@ -590,16 +660,16 @@ class FatBinaryLinker:
         # runtime loader mmaps it into the process image.
         sh1 = struct.pack(
             "<IIQQQQIIQQ",
-            sh_name_offset,   # sh_name (offset into shstrtab)
-            sht_type,         # sh_type
-            _SHF_ALLOC,       # sh_flags
-            0,                # sh_addr (relocatable — addresses fixed at link)
-            e_ehsize,         # sh_offset
-            len(data),        # sh_size
-            0,                # sh_link
-            0,                # sh_info
-            1,                # sh_addralign
-            0,                # sh_entsize
+            sh_name_offset,  # sh_name (offset into shstrtab)
+            sht_type,  # sh_type
+            _SHF_ALLOC,  # sh_flags
+            0,  # sh_addr (relocatable — addresses fixed at link)
+            e_ehsize,  # sh_offset
+            len(data),  # sh_size
+            0,  # sh_link
+            0,  # sh_info
+            1,  # sh_addralign
+            0,  # sh_entsize
         )
 
         # SHT entry 2: .shstrtab. SHT_STRTAB sections do not carry
@@ -608,15 +678,15 @@ class FatBinaryLinker:
         sh2 = struct.pack(
             "<IIQQQQIIQQ",
             shstrtab_name_offset,  # sh_name
-            _SHT_STRTAB,           # sh_type
-            0,                     # sh_flags
-            0,                     # sh_addr
+            _SHT_STRTAB,  # sh_type
+            0,  # sh_flags
+            0,  # sh_addr
             e_ehsize + len(data),  # sh_offset
-            len(shstrtab),         # sh_size
-            0,                     # sh_link
-            0,                     # sh_info
-            1,                     # sh_addralign
-            0,                     # sh_entsize
+            len(shstrtab),  # sh_size
+            0,  # sh_link
+            0,  # sh_info
+            1,  # sh_addralign
+            0,  # sh_entsize
         )
         sht = null_sh + sh1 + sh2
         assert len(sht) == 3 * 64, f"SHT is {len(sht)} bytes, expected 192"
@@ -636,36 +706,46 @@ class FatBinaryLinker:
         timeout, non-zero exit, missing output file).
         """
         if not self._lld_path:
-            return Err(LinkingError(
-                "lld not found in PATH. Install LLVM (apt install lld / "
-                "brew install llvm). The fat binary cannot be linked "
-                "without lld.",
-            ))
+            return Err(
+                LinkingError(
+                    "lld not found in PATH. Install LLVM (apt install lld / "
+                    "brew install llvm). The fat binary cannot be linked "
+                    "without lld.",
+                )
+            )
 
         cmd = [
-            self._lld_path, "-r",  # relocatable link
-            "-o", str(output_path),
+            self._lld_path,
+            "-r",  # relocatable link
+            "-o",
+            str(output_path),
             *[str(p) for p in section_files.values()],
         ]
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True,
+                cmd,
+                capture_output=True,
+                text=True,
                 timeout=self.timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
-            return Err(LinkingError(
-                f"lld timed out after {self.timeout_seconds}s",
-                cause=exc,
-            ))
+            return Err(
+                LinkingError(
+                    f"lld timed out after {self.timeout_seconds}s",
+                    cause=exc,
+                )
+            )
         if result.returncode != 0 or not output_path.exists():
-            return Err(LinkingError(
-                f"lld failed: {result.stderr or '(no stderr)'}",
-                context={
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                    "cmd": cmd,
-                },
-            ))
+            return Err(
+                LinkingError(
+                    f"lld failed: {result.stderr or '(no stderr)'}",
+                    context={
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "cmd": cmd,
+                    },
+                )
+            )
         return Ok(output_path)
 
     def _count_sections(self, path: Path) -> dict[str, int]:
@@ -692,7 +772,9 @@ class FatBinaryLinker:
         try:
             result = subprocess.run(
                 [self._lld_path, "--version"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 return result.stdout.strip().split("\n")[0] or "unknown"

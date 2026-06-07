@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from src.bridges.cuda_ingest.parser import CudaParser
 from src.bridges.cuda_ingest.pointer_analysis import (
     AliasInfo,
@@ -21,7 +19,7 @@ from src.bridges.cuda_ingest.pointer_analysis import (
     PointerLayout,
 )
 
-SAMPLE_RESTRICT_KERNEL = '''
+SAMPLE_RESTRICT_KERNEL = """
 __global__ void restrict_kernel(
     const float* __restrict__ A,
     const float* __restrict__ B,
@@ -33,10 +31,10 @@ __global__ void restrict_kernel(
         C[i] = A[i] + B[i];
     }
 }
-'''
+"""
 
 
-SAMPLE_ALIASED_KERNEL = '''
+SAMPLE_ALIASED_KERNEL = """
 __global__ void aliased_kernel(
     const float* A,
     const float* B,
@@ -48,10 +46,10 @@ __global__ void aliased_kernel(
         C[i] = A[i] + B[i];
     }
 }
-'''
+"""
 
 
-SAMPLE_LOCAL_ASSIGN_KERNEL = '''
+SAMPLE_LOCAL_ASSIGN_KERNEL = """
 __global__ void local_assign_kernel(
     const float* __restrict__ A,
     float* C,
@@ -63,10 +61,10 @@ __global__ void local_assign_kernel(
         C[i] = p[i] + 1.0f;
     }
 }
-'''
+"""
 
 
-SAMPLE_SHMEM_KERNEL = '''
+SAMPLE_SHMEM_KERNEL = """
 __global__ void smem_kernel(
     const float* A,
     float* C,
@@ -79,7 +77,7 @@ __global__ void smem_kernel(
         C[i] = tile[0][0];
     }
 }
-'''
+"""
 
 
 def make_kernel(source: str) -> Any:
@@ -162,9 +160,7 @@ class TestPointerAnalyzer:
         # All three restrict pointers are disjoint from every other restrict
         # pointer, so they `aliases_nothing`.
         for name, info in alias_map.items():
-            assert info.aliases_nothing, (
-                f"restrict pointer {name} should aliases_nothing"
-            )
+            assert info.aliases_nothing, f"restrict pointer {name} should aliases_nothing"
 
     def test_layouts_recorded_for_parameters(self) -> None:
         """analyze_kernel should produce a PointerLayout for each pointer param."""
@@ -211,11 +207,11 @@ class TestPointerAnalyzer:
 
     def test_empty_kernel_no_aliases(self) -> None:
         """A kernel with no parameters has an empty alias map."""
-        source = '''
+        source = """
 __global__ void empty() {
     int i = threadIdx.x;
 }
-'''
+"""
         kernel = make_kernel(source)
         analyzer = PointerAnalyzer()
         alias_map = analyzer.analyze_aliases(kernel)

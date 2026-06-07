@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import ast
 import json
-import os
 import sys
 from pathlib import Path
-from typing import Any
 
 import click
 
@@ -23,9 +21,9 @@ from src.common.errors import (
     KernelNotFoundError,
     NautilusError,
 )
-from src.common.logging import configure_logging, get_logger
+from src.common.logging import get_logger
 from src.common.logging import span as span_context
-from src.common.types import Arch, Err, HardwareTarget, Ok, Result, TuningConfig, Vendor
+from src.common.types import Arch, HardwareTarget, TuningConfig, Vendor
 
 log = get_logger("nautilus.cli.tune")
 
@@ -47,8 +45,9 @@ def _extract_kernel_from_source(source: str) -> tuple[str, str]:
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for dec in node.decorator_list:
-                if (isinstance(dec, ast.Attribute) and dec.attr == "jit") or \
-                   (isinstance(dec, ast.Name) and dec.id == "jit"):
+                if (isinstance(dec, ast.Attribute) and dec.attr == "jit") or (
+                    isinstance(dec, ast.Name) and dec.id == "jit"
+                ):
                     # Include the decorator line(s) by walking back from the def
                     # to the first decorator. ast gives us decorator locations.
                     first_dec_lineno = min(
@@ -88,7 +87,11 @@ def _parse_target(target_str: str) -> HardwareTarget:
             vendor_str = "nvidia"
         elif arch_str.startswith("gfx"):
             vendor_str = "amd"
-        elif arch_str.startswith("xe") or arch_str.startswith("intel") or arch_str.startswith("gaudi"):
+        elif (
+            arch_str.startswith("xe")
+            or arch_str.startswith("intel")
+            or arch_str.startswith("gaudi")
+        ):
             vendor_str = "intel"
         else:
             raise NautilusError(
@@ -103,7 +106,9 @@ def _parse_target(target_str: str) -> HardwareTarget:
     try:
         vendor = Vendor(vendor_str.lower())
     except ValueError as exc:
-        raise NautilusError(f"Unknown vendor {vendor_str!r}", context={"vendor": vendor_str}) from exc
+        raise NautilusError(
+            f"Unknown vendor {vendor_str!r}", context={"vendor": vendor_str}
+        ) from exc
     try:
         arch = Arch(arch_str.lower())
     except ValueError as exc:
@@ -136,30 +141,35 @@ Examples:
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
 )
 @click.option(
-    "--target", "-t",
+    "--target",
+    "-t",
     required=True,
     help="Target hardware as 'vendor/arch' (e.g. nvidia/sm_90, amd/gfx942, intel/xe_hpg).",
 )
 @click.option(
-    "--trials", "-n",
+    "--trials",
+    "-n",
     type=click.IntRange(min=1, max=10000),
     default=64,
     show_default=True,
     help="Number of MetaSchedule trials.",
 )
 @click.option(
-    "--kernel-name", "-k",
+    "--kernel-name",
+    "-k",
     default=None,
     help="Name of the @triton.jit function (auto-detected if only one in file).",
 )
 @click.option(
-    "--out", "-o",
+    "--out",
+    "-o",
     type=click.Path(dir_okay=False, writable=True, path_type=Path),
     default=None,
     help="Write configs to this JSON file (default: stdout).",
 )
 @click.option(
-    "--json", "as_json",
+    "--json",
+    "as_json",
     is_flag=True,
     default=False,
     help="Print configs as a JSON list (instead of human-readable).",
@@ -170,8 +180,15 @@ Examples:
     default=False,
     help="Bypass cache; re-tune even if a record exists.",
 )
-def cli(kernel_file: Path, target: str, trials: int, kernel_name: str | None,
-        out: Path | None, as_json: bool, force: bool) -> None:
+def cli(
+    kernel_file: Path,
+    target: str,
+    trials: int,
+    kernel_name: str | None,
+    out: Path | None,
+    as_json: bool,
+    force: bool,
+) -> None:
     """Tune a Triton kernel."""
     try:
         _tune_impl(kernel_file, target, trials, kernel_name, out, as_json, force)
@@ -230,6 +247,7 @@ def _tune_impl(
             KernelMetadata,
             MetadataExtractor,
         )
+
         extractor = MetadataExtractor()
         # Synthesize a metadata record. We use the source's signature
         # to get a default block size; the real TVM tuning pass will
@@ -237,8 +255,12 @@ def _tune_impl(
         metadata = KernelMetadata(
             kernel_name=final_name,
             source_hash=_hash_source(kernel_text),
-            grid_0=1, grid_1=1, grid_2=1,
-            num_warps=4, num_stages=3, num_ctas=1,
+            grid_0=1,
+            grid_1=1,
+            grid_2=1,
+            num_warps=4,
+            num_stages=3,
+            num_ctas=1,
         )
 
         # The TVM tuning chain returns a MappedTuningConfig. We
@@ -260,8 +282,12 @@ def _tune_impl(
             num_stages=mapped.num_stages,
             num_ctas=mapped.num_ctas,
         )
-        sp.set(block_m=config.block_m, block_n=config.block_n,
-               num_warps=config.num_warps, num_stages=config.num_stages)
+        sp.set(
+            block_m=config.block_m,
+            block_n=config.block_n,
+            num_warps=config.num_warps,
+            num_stages=config.num_stages,
+        )
 
     # 3. Emit result
     output_dict = {
@@ -299,8 +325,9 @@ def _tune_impl(
 def _hash_source(text: str) -> str:
     """Deterministic hash of kernel source text."""
     import hashlib
+
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 if __name__ == "__main__":
-    cli()  # type: ignore[reportArgumentType]
+    cli()

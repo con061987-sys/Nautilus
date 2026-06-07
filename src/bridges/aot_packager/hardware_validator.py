@@ -85,13 +85,13 @@ class _ZeModuleDesc(ctypes.Structure):
     """
 
     _fields_ = [
-        ("stype", ctypes.c_uint32),        # ze_structure_type_t (enum)
-        ("pNext", ctypes.c_void_p),        # extension chain (NULL)
-        ("format", ctypes.c_uint32),       # ze_module_format_t (enum)
-        ("inputSize", ctypes.c_size_t),   # size_t
-        ("pInput", ctypes.c_void_p),       # const uint8_t* (SPIR-V blob)
+        ("stype", ctypes.c_uint32),  # ze_structure_type_t (enum)
+        ("pNext", ctypes.c_void_p),  # extension chain (NULL)
+        ("format", ctypes.c_uint32),  # ze_module_format_t (enum)
+        ("inputSize", ctypes.c_size_t),  # size_t
+        ("pInput", ctypes.c_void_p),  # const uint8_t* (SPIR-V blob)
         ("pBuildFlags", ctypes.c_char_p),  # const char* (NULL)
-        ("pConstants", ctypes.c_void_p),   # const ze_module_constants_t* (NULL)
+        ("pConstants", ctypes.c_void_p),  # const ze_module_constants_t* (NULL)
     ]
 
 
@@ -150,8 +150,9 @@ def _safe_load(vendor: str) -> ctypes.CDLL | None:
     if vendor == "amd":
         # HIP can be exposed via libamdhip64.so (driver) or
         # librocmcore.so. Try both, prefer the HIP one.
-        return _load_lib_candidate(("libamdhip64.so.6", "libamdhip64.so.5",
-                                    "libamdhip64.so.4", "libamdhip64.so"))
+        return _load_lib_candidate(
+            ("libamdhip64.so.6", "libamdhip64.so.5", "libamdhip64.so.4", "libamdhip64.so")
+        )
     if vendor == "intel":
         # Level Zero loader: libze_loader.so.1 (shipped with
         # oneAPI) on top of libze_loader.so.
@@ -161,14 +162,16 @@ def _safe_load(vendor: str) -> ctypes.CDLL | None:
 
 class ValidationMode(Enum):
     """How to perform the validation."""
-    LOCAL = "local"           # Use local hardware
-    CLOUD = "cloud"           # Use cloud dev environment
-    SKIP = "skip"             # Skip validation entirely
+
+    LOCAL = "local"  # Use local hardware
+    CLOUD = "cloud"  # Use cloud dev environment
+    SKIP = "skip"  # Skip validation entirely
 
 
 @dataclass
 class ValidationResult:
     """Result of a hardware validation."""
+
     vendor: str
     arch: str
     mode: ValidationMode
@@ -355,8 +358,10 @@ class HardwareValidator:
                 passed=False,
                 error=result["error"],
                 validation_time_s=elapsed,
-                hardware_info={"binary_size": binary_path.stat().st_size,
-                               "driver_available": False},
+                hardware_info={
+                    "binary_size": binary_path.stat().st_size,
+                    "driver_available": False,
+                },
             )
         return ValidationResult(
             vendor=vendor,
@@ -406,7 +411,7 @@ class HardwareValidator:
         libcuda.cuModuleLoadData.restype = ctypes.c_int
         libcuda.cuModuleLoadData.argtypes = [
             ctypes.POINTER(ctypes.c_void_p),  # CUmodule *module
-            ctypes.c_void_p,                  # const void *image
+            ctypes.c_void_p,  # const void *image
         ]
         module = ctypes.c_void_p()
         image = ctypes.c_char_p(binary_path.read_bytes())
@@ -460,7 +465,7 @@ class HardwareValidator:
         libhip.hipModuleLoadData.restype = ctypes.c_int
         libhip.hipModuleLoadData.argtypes = [
             ctypes.POINTER(ctypes.c_void_p),  # hipModule_t *module
-            ctypes.c_void_p,                  # const void *image
+            ctypes.c_void_p,  # const void *image
         ]
         module = ctypes.c_void_p()
         hsaco_bytes = binary_path.read_bytes()
@@ -535,11 +540,11 @@ class HardwareValidator:
         # The fix is to build a real descriptor and pass its address.
         libze.zeModuleCreate.restype = ctypes.c_int
         libze.zeModuleCreate.argtypes = [
-            ctypes.c_void_p,                      # hContext
-            ctypes.c_void_p,                      # hDevice
-            ctypes.POINTER(_ZeModuleDesc),        # *desc
-            ctypes.POINTER(ctypes.c_void_p),      # *phModule
-            ctypes.POINTER(ctypes.c_void_p),      # *phBuildLog
+            ctypes.c_void_p,  # hContext
+            ctypes.c_void_p,  # hDevice
+            ctypes.POINTER(_ZeModuleDesc),  # *desc
+            ctypes.POINTER(ctypes.c_void_p),  # *phModule
+            ctypes.POINTER(ctypes.c_void_p),  # *phBuildLog
         ]
         desc, _input_buf = _build_ze_module_desc(spv_bytes)
         module = ctypes.c_void_p()
@@ -609,23 +614,28 @@ class HardwareValidator:
         Returns a dict with vendor/arch info for each detected device.
         """
         import subprocess as sp
+
         detected: dict[str, Any] = {"devices": []}
         # Check for Nvidia
         try:
             result = sp.run(
                 ["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.strip().split("\n"):
                     if not line.strip():
                         continue
                     parts = [p.strip() for p in line.split(",")]
-                    detected["devices"].append({
-                        "vendor": "nvidia",
-                        "name": parts[0],
-                        "compute_cap": parts[1] if len(parts) > 1 else "",
-                    })
+                    detected["devices"].append(
+                        {
+                            "vendor": "nvidia",
+                            "name": parts[0],
+                            "compute_cap": parts[1] if len(parts) > 1 else "",
+                        }
+                    )
         except (FileNotFoundError, sp.TimeoutExpired):
             pass
 
@@ -633,15 +643,19 @@ class HardwareValidator:
         try:
             result = sp.run(
                 ["rocm-smi", "--showproductname"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 for line in result.stdout.strip().split("\n"):
                     if "Card" in line or "GPU" in line:
-                        detected["devices"].append({
-                            "vendor": "amd",
-                            "name": line.strip(),
-                        })
+                        detected["devices"].append(
+                            {
+                                "vendor": "amd",
+                                "name": line.strip(),
+                            }
+                        )
         except (FileNotFoundError, sp.TimeoutExpired):
             pass
 

@@ -50,6 +50,7 @@ class Vendor(str, Enum):
     unknown input is attached by ``types.py`` to keep
     ``primitives`` free of bridge-specific exceptions.
     """
+
     NVIDIA = "nvidia"
     AMD = "amd"
     INTEL = "intel"
@@ -59,28 +60,29 @@ class Vendor(str, Enum):
 
 class Arch(str, Enum):
     """GPU architecture. Vendor-agnostic identifier (e.g. sm_90, gfx942, xe_hpg)."""
+
     # NVIDIA
-    SM_70 = "sm_70"      # V100
-    SM_75 = "sm_75"      # Turing
-    SM_80 = "sm_80"      # A100
-    SM_86 = "sm_86"      # A100
-    SM_89 = "sm_89"      # RTX 4090
-    SM_90 = "sm_90"      # H100 Hopper
-    SM_100 = "sm_100"    # B100 Blackwell
-    SM_120 = "sm_120"    # B200 Blackwell
+    SM_70 = "sm_70"  # V100
+    SM_75 = "sm_75"  # Turing
+    SM_80 = "sm_80"  # A100
+    SM_86 = "sm_86"  # A100
+    SM_89 = "sm_89"  # RTX 4090
+    SM_90 = "sm_90"  # H100 Hopper
+    SM_100 = "sm_100"  # B100 Blackwell
+    SM_120 = "sm_120"  # B200 Blackwell
     # AMD
-    GFX900 = "gfx900"    # MI50
-    GFX906 = "gfx906"    # MI60
-    GFX908 = "gfx908"    # MI100
-    GFX90A = "gfx90a"    # MI200 / MI250
-    GFX942 = "gfx942"    # MI300X
-    GFX950 = "gfx950"    # MI325X
+    GFX900 = "gfx900"  # MI50
+    GFX906 = "gfx906"  # MI60
+    GFX908 = "gfx908"  # MI100
+    GFX90A = "gfx90a"  # MI200 / MI250
+    GFX942 = "gfx942"  # MI300X
+    GFX950 = "gfx950"  # MI325X
     # Intel
     XE = "intel_gpu_xe"
     XE_LP = "intel_gpu_xelp"
     XE_HPG = "intel_gpu_xehpg"  # Arc
     XE_HPC = "intel_gpu_xehpc"  # Ponte Vecchio
-    XE2 = "intel_gpu_xe2"        # Lunar Lake / Battlemage
+    XE2 = "intel_gpu_xe2"  # Lunar Lake / Battlemage
     GAUDI2 = "intel_gaudi2"
     GAUDI3 = "intel_gaudi3"
     # Apple
@@ -134,6 +136,7 @@ class HardwareTarget:
     receives and every dispatch path needs to inspect. Only depends on
     ``Vendor`` and ``Arch``.
     """
+
     vendor: Vendor
     arch: Arch
     alias: str = ""  # e.g. "nvidia/nvidia-h100" for TVM
@@ -261,6 +264,7 @@ class NautilusError(Exception):
     type-narrowing root used by ``Result``'s ``Err`` arm and by the
     ``__cause__`` chaining every error participates in.
     """
+
     message: str
     code: ErrorCode = ErrorCode.INTERNAL_ERROR
     cause: Exception | None = None
@@ -271,9 +275,7 @@ class NautilusError(Exception):
         super().__init__(self.message)
         # Capture the call-site traceback for debugging
         if not self._traceback:
-            self._traceback = "".join(
-                traceback.format_stack(limit=8)[:-1]
-            )
+            self._traceback = "".join(traceback.format_stack(limit=8)[:-1])
         if self.cause is not None and not self.__cause__:
             self.__cause__ = self.cause
 
@@ -313,6 +315,7 @@ U = TypeVar("U")
 @dataclass(frozen=True)
 class Ok(Generic[T]):
     """Successful Result carrying value of type T."""
+
     value: T
 
     def is_ok(self) -> bool:
@@ -349,6 +352,7 @@ class Ok(Generic[T]):
 @dataclass(frozen=True)
 class Err(Generic[E]):
     """Failed Result carrying error of type E (must be BaseException)."""
+
     error: E
 
     def is_ok(self) -> bool:

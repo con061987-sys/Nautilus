@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -105,12 +104,22 @@ class TestFatBinary:
     def test_add_section_replaces_existing(self) -> None:
         """add_section should replace existing section for the same vendor+arch."""
         fb = FatBinary(kernel_name="test")
-        fb.add_section(KernelSection(
-            vendor="nvidia", arch="sm_90", format=SectionFormat.PTX, data=b"old",
-        ))
-        fb.add_section(KernelSection(
-            vendor="nvidia", arch="sm_90", format=SectionFormat.PTX, data=b"new",
-        ))
+        fb.add_section(
+            KernelSection(
+                vendor="nvidia",
+                arch="sm_90",
+                format=SectionFormat.PTX,
+                data=b"old",
+            )
+        )
+        fb.add_section(
+            KernelSection(
+                vendor="nvidia",
+                arch="sm_90",
+                format=SectionFormat.PTX,
+                data=b"new",
+            )
+        )
         assert len(fb.sections) == 1
         assert fb.sections[0].data == b"new"
 
@@ -149,18 +158,22 @@ class TestFatBinary:
             kernel_name="test_kernel",
             metadata={"build_host": "ci-server-01"},
         )
-        original.add_section(KernelSection(
-            vendor="nvidia",
-            arch="sm_90",
-            format=SectionFormat.PTX,
-            data=SAMPLE_PTX,
-        ))
-        original.add_section(KernelSection(
-            vendor="amd",
-            arch="gfx942",
-            format=SectionFormat.HSACO,
-            data=SAMPLE_HSACO,
-        ))
+        original.add_section(
+            KernelSection(
+                vendor="nvidia",
+                arch="sm_90",
+                format=SectionFormat.PTX,
+                data=SAMPLE_PTX,
+            )
+        )
+        original.add_section(
+            KernelSection(
+                vendor="amd",
+                arch="gfx942",
+                format=SectionFormat.HSACO,
+                data=SAMPLE_HSACO,
+            )
+        )
 
         json_text = original.to_json()
         restored = FatBinary.from_json(json_text)
@@ -176,12 +189,14 @@ class TestFatBinary:
     def test_to_bytes_and_back(self, tmp_path: Path) -> None:
         """FatBinary should round-trip through the binary format."""
         original = FatBinary(kernel_name="bin_test")
-        original.add_section(KernelSection(
-            vendor="intel",
-            arch="intel_gpu_xehpg",
-            format=SectionFormat.SPV,
-            data=SAMPLE_SPV,
-        ))
+        original.add_section(
+            KernelSection(
+                vendor="intel",
+                arch="intel_gpu_xehpg",
+                format=SectionFormat.SPV,
+                data=SAMPLE_SPV,
+            )
+        )
 
         data = original.to_bytes()
         assert data[:4] == b"NFAT"
@@ -194,12 +209,14 @@ class TestFatBinary:
     def test_save_and_load(self, tmp_path: Path) -> None:
         """save() and load() should round-trip via file."""
         original = FatBinary(kernel_name="disk_test")
-        original.add_section(KernelSection(
-            vendor="nvidia",
-            arch="sm_90",
-            format=SectionFormat.PTX,
-            data=SAMPLE_PTX,
-        ))
+        original.add_section(
+            KernelSection(
+                vendor="nvidia",
+                arch="sm_90",
+                format=SectionFormat.PTX,
+                data=SAMPLE_PTX,
+            )
+        )
 
         path = tmp_path / "test.fat"
         original.save(path)

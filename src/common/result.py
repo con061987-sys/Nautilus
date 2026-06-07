@@ -40,6 +40,7 @@ U = TypeVar("U")
 @dataclass(frozen=True)
 class Ok(Generic[T]):
     """Successful Result carrying value of type T."""
+
     value: T
 
     def is_ok(self) -> bool:
@@ -76,6 +77,7 @@ class Ok(Generic[T]):
 @dataclass(frozen=True)
 class Err(Generic[E]):
     """Failed Result carrying error of type E (must be BaseException)."""
+
     error: E
 
     def is_ok(self) -> bool:

@@ -4,19 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from src.bridges.aot_packager.amd_backend import AMDArch
 from src.bridges.aot_packager.builder import (
     FatBinaryBuilder,
     FatBinaryConfig,
     FatBinaryResult,
 )
-from src.bridges.aot_packager.hardware_validator import ValidationMode
-from src.bridges.aot_packager.intel_backend import IntelTarget
-from src.bridges.aot_packager.nvidia_backend import NvidiaArch
 
-SAMPLE_KERNEL = '''
+SAMPLE_KERNEL = """
 import triton
 import triton.language as tl
 
@@ -39,7 +33,7 @@ def sample_matmul(
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
     acc += tl.dot(a, b)
     tl.store(C_ptr + rm[:, None] * N + rn[None, :], acc)
-'''
+"""
 
 
 class TestFatBinaryBuilder:
@@ -60,8 +54,11 @@ class TestFatBinaryBuilder:
         config = FatBinaryConfig(
             kernel_name="test_matmul",
             kernel_source=SAMPLE_KERNEL,
-            block_m=128, block_n=128, block_k=32,
-            num_warps=8, num_stages=3,
+            block_m=128,
+            block_n=128,
+            block_k=32,
+            num_warps=8,
+            num_stages=3,
             skip_validation=True,
         )
         result = builder.build(config)

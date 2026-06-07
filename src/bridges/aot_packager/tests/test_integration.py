@@ -29,7 +29,6 @@ import re
 import shutil
 import struct
 import subprocess
-import sys
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -44,10 +43,8 @@ from src.bridges.aot_packager.fat_binary import (
 from src.bridges.aot_packager.linker import (
     FatBinaryLinker,
     KernelBlob,
-    LinkingResult,
     section_name_for,
 )
-from src.common.result import Ok
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -121,7 +118,9 @@ def _readelf_sections(path: Path) -> dict[str, dict[str, str]]:
     """Parse ``readelf -SW`` output into a section-name -> fields dict."""
     r = subprocess.run(
         ["readelf", "-SW", str(path)],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     sections: dict[str, dict[str, str]] = {}
     for line in r.stdout.splitlines():
@@ -145,13 +144,17 @@ def _readelf_symbols(path: Path, *, defined: bool = True) -> list[str]:
     flag = "--defined-only" if defined else "--undefined-only"
     r = subprocess.run(
         ["nm", flag, str(path)],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if r.returncode != 0:
         # Fall back to readelf -s
         r2 = subprocess.run(
             ["readelf", "-s", str(path)],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         names: list[str] = []
         for line in r2.stdout.splitlines():
@@ -182,8 +185,7 @@ class TestSectionNamingConvention:
     def test_section_name_for_nvidia(self) -> None:
         assert section_name_for("nvidia", "matmul") == ".nautilus.nvidia.matmul"
         assert (
-            section_name_for("nvidia", "matmul", fmt_suffix="ptx")
-            == ".nautilus.nvidia.ptx.matmul"
+            section_name_for("nvidia", "matmul", fmt_suffix="ptx") == ".nautilus.nvidia.ptx.matmul"
         )
         assert (
             section_name_for("nvidia", "matmul", fmt_suffix="cubin")
@@ -194,10 +196,7 @@ class TestSectionNamingConvention:
         assert section_name_for("amd", "attention") == ".nautilus.amd.attention"
 
     def test_section_name_for_intel(self) -> None:
-        assert (
-            section_name_for("intel", "layernorm")
-            == ".nautilus.intel.layernorm"
-        )
+        assert section_name_for("intel", "layernorm") == ".nautilus.intel.layernorm"
 
     def test_section_name_sanitizes_tokens(self) -> None:
         """Non-alphanumeric chars in vendor/kernel names become underscores."""
@@ -241,20 +240,27 @@ class TestRuntimeStubCompilation:
     def _compile_stub(cls, tmp_path: Path) -> Path:
         """Compile runtime_stub.c and return the path to the .o file."""
         gcc = _gcc_or_skip()
-        stub_src = (
-            Path(__file__).resolve().parent.parent / "runtime_stub.c"
-        )
+        stub_src = Path(__file__).resolve().parent.parent / "runtime_stub.c"
         assert stub_src.exists(), f"runtime_stub.c not found at {stub_src}"
         stub_o = tmp_path / "runtime_stub.o"
         subprocess.run(
             [
-                gcc, "-c", "-nostdlib", "-ffreestanding",
-                "-Wall", "-Werror", "-std=c11",
-                "-I", str(stub_src.parent.parent.parent),  # so it finds c_api/
-                "-o", str(stub_o),
+                gcc,
+                "-c",
+                "-nostdlib",
+                "-ffreestanding",
+                "-Wall",
+                "-Werror",
+                "-std=c11",
+                "-I",
+                str(stub_src.parent.parent.parent),  # so it finds c_api/
+                "-o",
+                str(stub_o),
                 str(stub_src),
             ],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
             timeout=30,
         )
         assert stub_o.exists()
@@ -281,8 +287,7 @@ class TestRuntimeStubCompilation:
         }
         missing = required - set(symbols)
         assert not missing, (
-            f"Stub missing required symbols: {missing}. "
-            f"Found: {sorted(set(symbols) & required)}"
+            f"Stub missing required symbols: {missing}. Found: {sorted(set(symbols) & required)}"
         )
 
     def test_stub_exports_index_symbols(self, tmp_path: Path) -> None:
@@ -300,8 +305,7 @@ class TestRuntimeStubCompilation:
         undef = _readelf_symbols(stub_o, defined=False)
         for sym in ("nautilus_index_data", "nautilus_index_size"):
             assert sym in undef, (
-                f"Stub does not reference {sym!r} as undefined. "
-                f"Undefined symbols: {undef}"
+                f"Stub does not reference {sym!r} as undefined. Undefined symbols: {undef}"
             )
 
     def test_stub_references_per_vendor_kernels(self, tmp_path: Path) -> None:
@@ -317,8 +321,7 @@ class TestRuntimeStubCompilation:
             "nautilus_kernel_default",
         ):
             assert sym in undef, (
-                f"Stub does not reference {sym!r} as undefined. "
-                f"Undefined symbols: {undef}"
+                f"Stub does not reference {sym!r} as undefined. Undefined symbols: {undef}"
             )
 
     def test_host_arch_compatible(self, tmp_path: Path) -> None:
@@ -327,7 +330,9 @@ class TestRuntimeStubCompilation:
         stub_o = self._compile_stub(tmp_path)
         r = subprocess.run(
             ["readelf", "-h", str(stub_o)],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         # Determine expected machine type
         machine = None
@@ -341,9 +346,7 @@ class TestRuntimeStubCompilation:
                 f"Expected x86_64 ELF but got {machine}"
             )
         elif arch in ("aarch64", "arm64"):
-            assert machine == "AArch64", (
-                f"Expected AArch64 ELF but got {machine}"
-            )
+            assert machine == "AArch64", f"Expected AArch64 ELF but got {machine}"
 
 
 # ===========================================================================
@@ -360,7 +363,10 @@ class TestLinkerFatBinaryStructure:
         return FatBinaryLinker(cache_dir=str(tmp_path / "link_cache"))
 
     def _linked_path(
-        self, linker: FatBinaryLinker, tmp_path: Path, **kwargs: Any,
+        self,
+        linker: FatBinaryLinker,
+        tmp_path: Path,
+        **kwargs: Any,
     ) -> Path:
         """Helper: run link_fat_binary and return the output path."""
         result = linker.link_fat_binary(
@@ -386,7 +392,9 @@ class TestLinkerFatBinaryStructure:
         assert e_type == 1, f"Expected ET_REL (1), got {e_type}"
 
     def test_linked_sections_include_nautilus_nvidia(
-        self, linker: FatBinaryLinker, tmp_path: Path,
+        self,
+        linker: FatBinaryLinker,
+        tmp_path: Path,
     ) -> None:
         """The linked output must contain .nautilus.nvidia.ptx.integration_test
         and .nautilus.nvidia.cubin.integration_test sections."""
@@ -408,13 +416,17 @@ class TestLinkerFatBinaryStructure:
         """Every nautilus section in the linked output must have a unique name."""
         path = self._linked_path(linker, tmp_path)
         sections = _readelf_sections(path)
-        nautilus_names = [s for s in sections if s.startswith(".nautilus.") and s != ".nautilus.index"]
+        nautilus_names = [
+            s for s in sections if s.startswith(".nautilus.") and s != ".nautilus.index"
+        ]
         assert len(nautilus_names) == len(set(nautilus_names)), (
             f"Duplicate nautilus section names: {nautilus_names}"
         )
 
     def test_nautilus_index_section_exists_and_has_content(
-        self, linker: FatBinaryLinker, tmp_path: Path,
+        self,
+        linker: FatBinaryLinker,
+        tmp_path: Path,
     ) -> None:
         """The .nautilus.index section must be present with non-zero size
         and contain pipe-delimited records (Task 17)."""
@@ -426,13 +438,23 @@ class TestLinkerFatBinaryStructure:
         # Extract the raw bytes of .nautilus.index
         r = subprocess.run(
             ["readelf", "-x", ".nautilus.index", str(path)],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         raw_index_path = tmp_path / "nautilus.index.raw"
         objcopy_r = subprocess.run(
-            ["objcopy", "-O", "binary", "--only-section=.nautilus.index",
-             str(path), str(raw_index_path)],
-            capture_output=True, text=True, check=False,
+            [
+                "objcopy",
+                "-O",
+                "binary",
+                "--only-section=.nautilus.index",
+                str(path),
+                str(raw_index_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if objcopy_r.returncode == 0 and raw_index_path.exists():
             raw = raw_index_path.read_bytes()
@@ -440,7 +462,7 @@ class TestLinkerFatBinaryStructure:
             raw = b""
             for line in r.stdout.splitlines():
                 tokens = line.strip().split()
-                hex_groups = [t for t in tokens if re.match(r'^[0-9a-fA-F]+$', t)]
+                hex_groups = [t for t in tokens if re.match(r"^[0-9a-fA-F]+$", t)]
                 if len(hex_groups) >= 2:
                     raw += b"".join(bytes.fromhex(g) for g in hex_groups)
             raw = raw[:index_size]
@@ -451,14 +473,22 @@ class TestLinkerFatBinaryStructure:
         assert "|" in text, "Index missing pipe-delimited records"
 
     def test_linked_output_with_multiple_kernels(
-        self, linker: FatBinaryLinker, tmp_path: Path,
+        self,
+        linker: FatBinaryLinker,
+        tmp_path: Path,
     ) -> None:
         """Linking multiple kernels from the same vendor must produce
         unique sections for each."""
         blobs = [
-            KernelBlob(kernel_name="matmul", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX),
-            KernelBlob(kernel_name="attention", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX),
-            KernelBlob(kernel_name="matmul", vendor="amd", arch="gfx942", fmt="hsaco", data=SAMPLE_HSACO),
+            KernelBlob(
+                kernel_name="matmul", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX
+            ),
+            KernelBlob(
+                kernel_name="attention", vendor="nvidia", arch="sm_90", fmt="ptx", data=SAMPLE_PTX
+            ),
+            KernelBlob(
+                kernel_name="matmul", vendor="amd", arch="gfx942", fmt="hsaco", data=SAMPLE_HSACO
+            ),
         ]
         result = linker.link_fat_binary(
             kernels=blobs,
@@ -517,9 +547,7 @@ class TestFatBinaryWrapper:
         obj = tmp_path / "wrapped.o"
         obj.write_bytes(wrapped)
         sections = _readelf_sections(obj)
-        assert name in sections, (
-            f"Section {name!r} not found. Sections: {list(sections.keys())}"
-        )
+        assert name in sections, f"Section {name!r} not found. Sections: {list(sections.keys())}"
 
     def test_wrapped_section_data_integrity(self, tmp_path: Path) -> None:
         """The data stored in the wrapped section must round-trip correctly."""
@@ -533,7 +561,7 @@ class TestFatBinaryWrapper:
         assert name in sections
         offset = int(sections[name]["offset"], 16)
         size = int(sections[name]["size"], 16)
-        recovered = obj.read_bytes()[offset:offset + size]
+        recovered = obj.read_bytes()[offset : offset + size]
         assert recovered == payload, (
             f"Data mismatch: expected {len(payload)} bytes, got {len(recovered)}"
         )
@@ -545,14 +573,22 @@ class TestFatBinaryWrapper:
             KernelBlob(kernel_name="k1", vendor="nvidia", arch="sm_90", fmt="ptx", data=b"X" * 16),
         ]
         section_names = [section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt) for b in blobs]
-        index_text = "\n".join(
-            "|".join([
-                b.kernel_name, b.vendor, b.arch, b.fmt,
-                section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
-                str(len(b.data)),
-            ])
-            for b in blobs
-        ) + "\n\n"
+        index_text = (
+            "\n".join(
+                "|".join(
+                    [
+                        b.kernel_name,
+                        b.vendor,
+                        b.arch,
+                        b.fmt,
+                        section_name_for(b.vendor, b.kernel_name, fmt_suffix=b.fmt),
+                        str(len(b.data)),
+                    ]
+                )
+                for b in blobs
+            )
+            + "\n\n"
+        )
         obj_path = linker._build_index_object(tmp_path, blobs, section_names, index_text)
         assert obj_path is not None
         symbols = _readelf_symbols(obj_path, defined=True)
@@ -573,9 +609,7 @@ class TestRuntimeVendorDetection:
         """In CI (no GPU), nautilus_detect_vendor should return -1
         (NAUTILUS_VENDOR_UNKNOWN). We verify this by inspecting the C
         source logic directly."""
-        stub_src = (
-            Path(__file__).resolve().parent.parent / "runtime_stub.c"
-        ).read_text()
+        stub_src = (Path(__file__).resolve().parent.parent / "runtime_stub.c").read_text()
         # The detection functions use access("/dev/nvidia*", F_OK) etc.
         # In CI these files won't exist, so the C functions return 0.
         # We verify the C code structure is correct.
@@ -594,8 +628,7 @@ class TestRuntimeVendorDetection:
         """The nautilus_vendor_t enum in triton_c_api.h must match the
         static_assert values in runtime_stub.c."""
         header_path = (
-            Path(__file__).resolve().parent.parent.parent.parent
-            / "c_api" / "triton_c_api.h"
+            Path(__file__).resolve().parent.parent.parent.parent / "c_api" / "triton_c_api.h"
         )
         header_text = header_path.read_text()
         # Check that the enum values exist
@@ -606,7 +639,8 @@ class TestRuntimeVendorDetection:
         assert "NAUTILUS_VENDOR_UNKNOWN = -1" in header_text
 
     def test_runtime_dispatch_logic(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """Compile a small C program that links against the runtime stub
         and verifies vendor detection returns -1 (no GPU)."""
@@ -614,7 +648,8 @@ class TestRuntimeVendorDetection:
         stub_dir = Path(__file__).resolve().parent.parent
         repo_root = stub_dir.parent.parent.parent
         test_c = tmp_path / "test_vendor.c"
-        test_c.write_text(textwrap.dedent("""\
+        test_c.write_text(
+            textwrap.dedent("""\
             #include <stdio.h>
             #include <stdlib.h>
 
@@ -638,19 +673,34 @@ class TestRuntimeVendorDetection:
                 printf("VERSION=%s\\n", nautilus_version());
                 return vendor == -1 ? 0 : 1;
             }
-        """))
+        """)
+        )
 
         binary = tmp_path / "test_vendor"
         subprocess.run(
-            [gcc, "-std=c11", "-Wall", "-Werror",
-             "-I", str(stub_dir),
-             "-I", str(repo_root / "src"),
-             "-o", str(binary), str(test_c)],
-            capture_output=True, text=True, check=True,
+            [
+                gcc,
+                "-std=c11",
+                "-Wall",
+                "-Werror",
+                "-I",
+                str(stub_dir),
+                "-I",
+                str(repo_root / "src"),
+                "-o",
+                str(binary),
+                str(test_c),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
             timeout=30,
         )
         r = subprocess.run(
-            [str(binary)], capture_output=True, text=True, timeout=10,
+            [str(binary)],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         # On CI with no GPU, vendor should be -1 (UNKNOWN)
         # If there is a GPU, it might find one — that's still valid.
@@ -678,7 +728,9 @@ class TestFullPipelineWithHarness:
     compilers and the linker, so the test runs in any environment."""
 
     def test_build_all_vendors_calls_all_backends(
-        self, aot_packager: Any, tmp_path: Path,
+        self,
+        aot_packager: Any,
+        tmp_path: Path,
     ) -> None:
         """A full build with all vendors enabled must call each vendor
         backend and the linker exactly once."""
@@ -819,9 +871,9 @@ class TestFullPipelineWithHarness:
 
     def test_build_to_dict_serializable(self, aot_packager: Any, tmp_path: Path) -> None:
         """The build result must be JSON-serializable via to_dict()."""
-        from src.bridges.aot_packager.builder import FatBinaryConfig
-
         import json
+
+        from src.bridges.aot_packager.builder import FatBinaryConfig
 
         config = FatBinaryConfig(
             kernel_name="serialize_check",
@@ -840,7 +892,9 @@ class TestFullPipelineWithHarness:
         json.dumps(d)
 
     def test_build_error_when_no_vendors_succeed(
-        self, aot_packager: Any, tmp_path: Path,
+        self,
+        aot_packager: Any,
+        tmp_path: Path,
     ) -> None:
         """When all vendors are skipped and no stub is produced, the
         build must return a failure result — not crash."""
@@ -888,7 +942,10 @@ class TestFatBinaryRoundTrips:
         fb.add_section(KernelSection("intel", "xe_hpg", SectionFormat.SPV, SAMPLE_SPV))
         fb.add_section(
             KernelSection(
-                "nvidia", "sm_90", SectionFormat.PTX, SAMPLE_PTX,
+                "nvidia",
+                "sm_90",
+                SectionFormat.PTX,
+                SAMPLE_PTX,
                 metadata={"compilation_time_s": 0.5},
             ),
         )
@@ -950,7 +1007,10 @@ class TestKernelSectionProperties:
 
     def test_section_to_dict(self) -> None:
         section = KernelSection(
-            "amd", "gfx942", SectionFormat.HSACO, SAMPLE_HSACO,
+            "amd",
+            "gfx942",
+            SectionFormat.HSACO,
+            SAMPLE_HSACO,
             metadata={"arch": "cdna3"},
         )
         d = section.to_dict()
@@ -1006,11 +1066,13 @@ class TestLinkerErrorHandling:
         """Different inputs must NOT hit the same cache entry."""
         linker = FatBinaryLinker(cache_dir=str(tmp_path))
         r1 = linker.link_fat_binary(
-            nvidia_ptx=b"input_a", kernel_name="cache_iso",
+            nvidia_ptx=b"input_a",
+            kernel_name="cache_iso",
             output_path=tmp_path / "a.fat.o",
         )
         r2 = linker.link_fat_binary(
-            nvidia_ptx=b"input_b", kernel_name="cache_iso",
+            nvidia_ptx=b"input_b",
+            kernel_name="cache_iso",
             output_path=tmp_path / "b.fat.o",
         )
         assert r1.is_usable
@@ -1042,8 +1104,7 @@ class TestCApiConsistency:
     def test_c_api_vendor_enum_values(self) -> None:
         """Verify vendor enum values match across Python and C."""
         header_path = (
-            Path(__file__).resolve().parent.parent.parent.parent
-            / "c_api" / "triton_c_api.h"
+            Path(__file__).resolve().parent.parent.parent.parent / "c_api" / "triton_c_api.h"
         )
         header = header_path.read_text()
         # Nvidia = 0
@@ -1056,8 +1117,7 @@ class TestCApiConsistency:
     def test_c_api_arch_enum_values(self) -> None:
         """Verify arch enum values in the C header."""
         header_path = (
-            Path(__file__).resolve().parent.parent.parent.parent
-            / "c_api" / "triton_c_api.h"
+            Path(__file__).resolve().parent.parent.parent.parent / "c_api" / "triton_c_api.h"
         )
         header = header_path.read_text()
         assert re.search(r"NAUTILUS_ARCH_SM_90\s*=\s*90", header)
@@ -1067,8 +1127,7 @@ class TestCApiConsistency:
     def test_c_api_compile_signature(self) -> None:
         """The nautilus_compile() signature must be stable."""
         header_path = (
-            Path(__file__).resolve().parent.parent.parent.parent
-            / "c_api" / "triton_c_api.h"
+            Path(__file__).resolve().parent.parent.parent.parent / "c_api" / "triton_c_api.h"
         )
         header = header_path.read_text()
         assert "int nautilus_compile" in header
@@ -1080,9 +1139,7 @@ class TestCApiConsistency:
     def test_runtime_stub_static_asserts_match_c_api(self) -> None:
         """The _Static_assert values in runtime_stub.c must match the enum
         values in the C API header."""
-        stub_path = (
-            Path(__file__).resolve().parent.parent / "runtime_stub.c"
-        )
+        stub_path = Path(__file__).resolve().parent.parent / "runtime_stub.c"
         stub = stub_path.read_text()
         assert "NAUTILUS_VENDOR_NVIDIA  ==  0" in stub
         assert "NAUTILUS_VENDOR_AMD     ==  1" in stub

@@ -8,9 +8,7 @@ import pytest
 
 from src.bridges.triton_tvm.structured_logging import (
     Span,
-    StageLog,
     clear_ir_dumps,
-    configure_logging,
     dump_ir,
     emit_span_json,
     get_ir_dumps,
@@ -43,9 +41,8 @@ class TestSpanContext:
 
     def test_span_marks_failed_on_exception(self) -> None:
         """A span with an exception should be marked failed."""
-        with pytest.raises(RuntimeError):
-            with span_ctx("hash2", "target") as sp:
-                raise RuntimeError("test error")
+        with pytest.raises(RuntimeError), span_ctx("hash2", "target") as sp:
+            raise RuntimeError("test error")
         assert sp.status == "failed"
         assert "error" in sp.metadata
 
@@ -80,7 +77,9 @@ class TestStageContext:
     def test_stage_records_metadata(self) -> None:
         """Stages should record their metadata."""
         sp = Span(
-            span_id="test", kernel_hash="k", target="t",
+            span_id="test",
+            kernel_hash="k",
+            target="t",
             start_time=0.0,
         )
         with stage_ctx(sp, "extract", metadata={"kernel": "matmul"}) as st:
@@ -91,9 +90,8 @@ class TestStageContext:
     def test_stage_records_error(self) -> None:
         """Stages with exceptions should record the error."""
         sp = Span(span_id="test", kernel_hash="k", target="t", start_time=0.0)
-        with pytest.raises(ValueError):
-            with stage_ctx(sp, "extract") as st:
-                raise ValueError("test")
+        with pytest.raises(ValueError), stage_ctx(sp, "extract") as st:
+            raise ValueError("test")
         assert st.status == "failed"
         assert st.error == "test"
 
@@ -134,9 +132,8 @@ class TestEmitSpanJSON:
 
     def test_json_structure(self) -> None:
         """The JSON should contain all the expected fields."""
-        with span_ctx("hash_json", "target_json") as sp:
-            with stage_ctx(sp, "extract"):
-                pass
+        with span_ctx("hash_json", "target_json") as sp, stage_ctx(sp, "extract"):
+            pass
         json_str = emit_span_json(sp)
         data = json.loads(json_str)
         assert "span_id" in data
@@ -150,4 +147,5 @@ class TestEmitSpanJSON:
 def get_completed_spans_func():
     """Helper to import the module-level function."""
     from src.bridges.triton_tvm.structured_logging import get_completed_spans
+
     return get_completed_spans()

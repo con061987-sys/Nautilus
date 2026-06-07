@@ -161,7 +161,11 @@ def _render_shape(shape: tuple[int, ...]) -> str:
 
 
 def _build_matmul_ir(
-    m: int, k: int, n: int, dtype: str, op_name: str = "tt.dot",
+    m: int,
+    k: int,
+    n: int,
+    dtype: str,
+    op_name: str = "tt.dot",
 ) -> str:
     """Build a valid matmul IR snippet with the given M, N, K, dtype.
 
@@ -184,7 +188,11 @@ def _build_matmul_ir(
 
 
 def _build_bmm_ir(
-    batch: int, m: int, k: int, n: int, dtype: str,
+    batch: int,
+    m: int,
+    k: int,
+    n: int,
+    dtype: str,
 ) -> str:
     """Build a valid batched matmul IR snippet (tt.bmm)."""
     a_shape = _render_shape((batch, m, k))
@@ -203,7 +211,9 @@ def _build_bmm_ir(
 
 
 def _build_reduction_ir(
-    shape: tuple[int, ...], axis: int, dtype: str,
+    shape: tuple[int, ...],
+    axis: int,
+    dtype: str,
 ) -> str:
     """Build a valid ``tt.reduce`` IR snippet for the given shape/axis."""
     input_shape = _render_shape(shape)
@@ -265,7 +275,8 @@ class TestBoundsExtractor:
     def test_extract_matmul_asymmetric(self) -> None:
         """Asymmetric matmul (M=64, N=256, K=32) is extracted correctly."""
         bounds = self.extractor.extract(
-            MATMUL_IR_ASYMMETRIC, KernelKind.MATMUL,
+            MATMUL_IR_ASYMMETRIC,
+            KernelKind.MATMUL,
         )
         assert bounds.m == 64
         assert bounds.n == 256
@@ -477,10 +488,16 @@ class TestPropertyBasedExtraction:
         assert bounds.m > 0 and bounds.n > 0 and bounds.k > 0
         # Dtype round-trips through TTGIRParser._normalize_dtype.
         # All the _DTYPE_TOKENS values are already in canonical form.
-        assert bounds.data_dtype == {
-            "f32": "float32", "f16": "float16", "bf16": "bfloat16",
-            "i32": "int32", "i64": "int64",
-        }[params["dtype"]]
+        assert (
+            bounds.data_dtype
+            == {
+                "f32": "float32",
+                "f16": "float16",
+                "bf16": "bfloat16",
+                "i32": "int32",
+                "i64": "int64",
+            }[params["dtype"]]
+        )
 
     @given(params=_bmm_params())
     @_PROP_SETTINGS
@@ -522,7 +539,8 @@ class TestPropertyBasedExtraction:
     def test_property_elementwise_extracts_total(self, params: dict) -> None:
         """For any shape, total_elements == product of shape dims."""
         ir_text = _build_elementwise_ir(
-            shape=params["shape"], dtype=params["dtype"],
+            shape=params["shape"],
+            dtype=params["dtype"],
         )
         bounds = self.extractor.extract(ir_text, KernelKind.ELEMENTWISE)
         expected = 1
@@ -640,5 +658,6 @@ class TestBoundsExtractionError:
         with pytest.raises(BoundsExtractionError):
             BoundsExtractor().extract("garbage", KernelKind.MATMUL)
         assert isinstance(
-            BoundsExtractionError("x"), Exception,
+            BoundsExtractionError("x"),
+            Exception,
         )
