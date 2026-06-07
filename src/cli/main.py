@@ -5,15 +5,20 @@ Provides:
   nautilus-tune         tune a single Triton kernel via TVM MetaSchedule
   nautilus-build        build a fat binary for a kernel
   nautilus-shard        shard a PyTorch model across a device mesh
+  nautilus-pipeline     run the full end-to-end pipeline (all 4 bridges)
   nautilus-verify       print environment / hardware status
+  nautilus-bench        run, compare, and browse benchmark results
 """
 
 from __future__ import annotations
 
 import click
 
+from src.cli.commands.bench import cli as bench_cmd
 from src.cli.commands.build import cli as build_cmd
+from src.cli.commands.cluster import cli as cluster_cmd
 from src.cli.commands.inspect import cli as inspect_cmd
+from src.cli.commands.pipeline import cli as pipeline_cmd
 from src.cli.commands.shard import cli as shard_cmd
 from src.cli.commands.tune import cli as tune_cmd
 from src.cli.commands.verify import cli as verify_cmd
@@ -53,8 +58,11 @@ def cli(ctx: click.Context, log_level: str, log_json: bool) -> None:
 cli.add_command(tune_cmd, name="tune")
 cli.add_command(build_cmd, name="build")
 cli.add_command(shard_cmd, name="shard")
+cli.add_command(pipeline_cmd, name="pipeline")
 cli.add_command(verify_cmd, name="verify")
 cli.add_command(inspect_cmd, name="inspect")
+cli.add_command(bench_cmd, name="bench")
+cli.add_command(cluster_cmd, name="cluster")
 
 
 __all__ = ["cli"]

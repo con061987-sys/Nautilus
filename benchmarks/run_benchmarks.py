@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import statistics
 import time
 import sys
 from pathlib import Path
@@ -23,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.common.logging import get_logger, configure_logging, span as span_context
-from src.common.errors import NautilusError, DependencyMissingError
+from src.common.errors import DependencyMissingError
 
 log = get_logger("nautilus.benchmark")
 

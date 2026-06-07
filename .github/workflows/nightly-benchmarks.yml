@@ -1,0 +1,358 @@
+# .github/workflows/nightly-benchmarks.yml
+#
+# Nightly benchmark run. Every day at 06:00 UTC:
+#   1. Run the full benchmark suite via `nautilus bench run`.
+#   2. Compare the new run against the previous nightly run.
+#   3. Upload the result sets as artifacts.
+#   4. Open a GitHub issue if regressions are found.
+#
+# The "previous nightly run" is the most recent bench_<id>.json under
+# benchmarks/results/ that pre-dates the current one. On a clean
+# checkout (no history), the compare step is skipped.
+#
+# The workflow is also triggerable manually via workflow_dispatch.
+# The AMD and Intel cloud jobs run only on push to main (gated) so a
+# fork PR can't burn our cloud credits; the CPU job always runs.
+
+name: Nightly Benchmarks
+
+on:
+  schedule:
+    # 06:00 UTC daily. GitHub Actions cron uses UTC.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      full_compare:
+        description: "Compare against the previous nightly run"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: nightly-benchmarks
+  cancel-in-progress: false
+
+# Triton loads its MetaSchedule backend via TRITON_PLUGIN_DIRS rather
+# than entry points (see pyproject.toml note).
+env:
+  TRITON_PLUGIN_DIRS: ${{ github.workspace }}/src/bridges/triton_tvm/backend
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  NAUTILUS_BENCH_DIR: ${{ github.workspace }}/benchmarks/results
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # CPU baseline — always runs. Acts as the gate for the next-night
+  # compare step on the CPU machine.
+  # ---------------------------------------------------------------------------
+  bench-cpu:
+    name: "bench (cpu)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Required for `gh issue create` to file regression issues.
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+          key: pip-nightly-bench-cpu-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pip-nightly-bench-cpu-${{ runner.os }}-py3.11-
+            pip-${{ runner.os }}-py3.11-
+
+      - name: Install Nautilus
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ".[dev,cuda]"
+          pip install torch==2.4.1 triton==3.0.0 \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Discover benchmarks
+        run: |
+          nautilus bench list
+
+      # Persist a stable copy of the previous nightly result so the
+      # compare step has something to diff against. On a clean
+      # checkout (e.g. the first nightly), this is a no-op.
+      - name: Fetch previous nightly result (best-effort)
+        continue-on-error: true
+        run: |
+          mkdir -p "$NAUTILUS_BENCH_DIR"
+          # Pull the most recent bench_*.json committed to the repo
+          # (if any). This catches the case where the prior nightly
+          # uploaded an artifact that wasn't merged back.
+          git fetch --depth=200 origin main
+          PREV=$(git ls-tree -r --name-only origin/main benchmarks/results/ \
+            | grep -E '^benchmarks/results/bench_.*\.json$' \
+            | tail -n 1 || true)
+          if [ -n "$PREV" ] && [ "$PREV" != "benchmarks/results/" ]; then
+            git show "origin/main:$PREV" > "$PREV"
+            echo "loaded previous result: $PREV"
+          else
+            echo "no previous result found; first-nightly"
+          fi
+
+      - name: Run benchmarks
+        run: |
+          # --fail-fast stops on the first real error; we want to
+          # record skips as skips, not errors.
+          nautilus bench run \
+            --output-dir "$NAUTILUS_BENCH_DIR" \
+            --trials 5 \
+            --warmup 2 \
+            --timeout 600
+
+      - name: Compare against previous nightly
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full_compare)
+        id: compare
+        continue-on-error: true
+        run: |
+          # --latest 2 picks the two newest result files. If we
+          # only have one (first nightly), the compare fails
+          # gracefully and we proceed.
+          nautilus bench compare --latest 2 --format markdown \
+            --exit-on-regression > bench_diff.md || true
+          cat bench_diff.md || true
+          echo "has_diff=$(if [ -s bench_diff.md ]; then echo true; else echo false; fi)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload result sets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-cpu
+          path: |
+            benchmarks/results/bench_*.json
+            bench_diff.md
+          if-no-files-found: warn
+
+      - name: Commit result set back to main
+        if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/results/
+          # Only commit if there's a real change.
+          if ! git diff --cached --quiet; then
+            git commit -m "bench(nightly): update result set"
+            git push
+          fi
+
+      - name: Open regression issue
+        if: github.event_name == 'schedule' && steps.compare.outputs.has_diff == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Parse the markdown for the regression count. We use a
+          # simple grep because the format is stable.
+          if grep -q "regressions: 0" bench_diff.md; then
+            echo "no regressions; no issue"
+            exit 0
+          fi
+          BODY=$(cat bench_diff.md)
+          gh issue create \
+            --title "Nightly benchmark regression ($(date -u +%Y-%m-%d))" \
+            --label "benchmark,regression" \
+            --body "$BODY" \
+            --assignee "" || true
+
+  # ---------------------------------------------------------------------------
+  # AMD nightly — gated to main-branch pushes + manual dispatch.
+  # ---------------------------------------------------------------------------
+  bench-amd:
+    name: "bench (amd)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'schedule')
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-nightly-bench-amd-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+      - name: Install Nautilus
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ".[amd,all,dev]"
+      - name: Provision AMD Developer Cloud
+        env:
+          AMD_DEV_CLOUD_KEY: ${{ secrets.AMD_DEV_CLOUD_KEY }}
+        run: |
+          if [ -z "$AMD_DEV_CLOUD_KEY" ]; then
+            echo "::error::Secret AMD_DEV_CLOUD_KEY is not configured." >&2
+            exit 1
+          fi
+          ./scripts/setup-amd-cloud.sh "$AMD_DEV_CLOUD_KEY" > amd_instance.json
+          AMD_HOST=$(jq -r .host amd_instance.json)
+          AMD_USER=$(jq -r .user amd_instance.json)
+          {
+            echo "AMD_HOST=$AMD_HOST"
+            echo "AMD_USER=$AMD_USER"
+          } >> "$GITHUB_ENV"
+      - name: Run benchmarks on AMD
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.AMD_HOST }}
+          username: ${{ env.AMD_USER }}
+          key: ${{ secrets.AMD_DEV_CLOUD_SSH_KEY }}
+          command_timeout: 80m
+          script: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends \
+              lld spirv-tools cmake ninja-build jq git ca-certificates
+            if ! command -v lld >/dev/null 2>&1 && command -v ld.lld >/dev/null 2>&1; then
+              sudo ln -sf "$(command -v ld.lld)" /usr/local/bin/lld
+            fi
+            git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" nautilus
+            cd nautilus
+            git checkout "$GITHUB_SHA"
+            git submodule update --init --recursive
+            pip install --upgrade pip setuptools wheel
+            pip install -e ".[amd,all,dev]"
+            export TRITON_PLUGIN_DIRS="$PWD/src/bridges/triton_tvm/backend"
+            export NAUTILUS_BENCH_DIR="$PWD/benchmarks/results"
+            mkdir -p "$NAUTILUS_BENCH_DIR"
+            # Limit to AMD targets so the cloud machine doesn't try
+            # to time CUDA kernels.
+            nautilus bench run \
+              --output-dir "$NAUTILUS_BENCH_DIR" \
+              --target amd/gfx942 \
+              --target amd/gfx90a \
+              --trials 5 --warmup 2 --timeout 600
+            # Copy the result set out of the cloud VM.
+            mkdir -p /tmp/bench-out
+            cp "$NAUTILUS_BENCH_DIR"/bench_*.json /tmp/bench-out/ 2>/dev/null || true
+      - name: Pull results from cloud
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.AMD_HOST }}
+          username: ${{ env.AMD_USER }}
+          key: ${{ secrets.AMD_DEV_CLOUD_SSH_KEY }}
+          source: "/tmp/bench-out/bench_*.json"
+          target: "benchmarks/results/"
+      - name: Upload AMD results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-amd
+          path: benchmarks/results/bench_*.json
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Intel nightly — gated identically to AMD.
+  # ---------------------------------------------------------------------------
+  bench-intel:
+    name: "bench (intel)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'schedule')
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-nightly-bench-intel-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+      - name: Install Nautilus
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ".[intel,all,dev]"
+      - name: Provision Intel Tiber AI Cloud
+        env:
+          INTEL_TIBER_KEY: ${{ secrets.INTEL_TIBER_KEY }}
+        run: |
+          if [ -z "$INTEL_TIBER_KEY" ]; then
+            echo "::error::Secret INTEL_TIBER_KEY is not configured." >&2
+            exit 1
+          fi
+          ./scripts/setup-intel-tiber.sh "$INTEL_TIBER_KEY" > intel_instance.json
+          INTEL_HOST=$(jq -r .host intel_instance.json)
+          INTEL_USER=$(jq -r .user intel_instance.json)
+          {
+            echo "INTEL_HOST=$INTEL_HOST"
+            echo "INTEL_USER=$INTEL_USER"
+          } >> "$GITHUB_ENV"
+      - name: Run benchmarks on Intel
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.INTEL_HOST }}
+          username: ${{ env.INTEL_USER }}
+          key: ${{ secrets.INTEL_TIBER_SSH_KEY }}
+          command_timeout: 80m
+          script: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends \
+              lld spirv-tools cmake ninja-build jq git ca-certificates
+            if ! command -v lld >/dev/null 2>&1 && command -v ld.lld >/dev/null 2>&1; then
+              sudo ln -sf "$(command -v ld.lld)" /usr/local/bin/lld
+            fi
+            git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" nautilus
+            cd nautilus
+            git checkout "$GITHUB_SHA"
+            git submodule update --init --recursive
+            pip install --upgrade pip setuptools wheel
+            pip install -e ".[intel,all,dev]"
+            export TRITON_PLUGIN_DIRS="$PWD/src/bridges/triton_tvm/backend"
+            export NAUTILUS_BENCH_DIR="$PWD/benchmarks/results"
+            mkdir -p "$NAUTILUS_BENCH_DIR"
+            nautilus bench run \
+              --output-dir "$NAUTILUS_BENCH_DIR" \
+              --target intel/xe_hpg \
+              --target intel/gaudi2 \
+              --trials 5 --warmup 2 --timeout 600
+            mkdir -p /tmp/bench-out
+            cp "$NAUTILUS_BENCH_DIR"/bench_*.json /tmp/bench-out/ 2>/dev/null || true
+      - name: Pull results from cloud
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.INTEL_HOST }}
+          username: ${{ env.INTEL_USER }}
+          key: ${{ secrets.INTEL_TIBER_SSH_KEY }}
+          source: "/tmp/bench-out/bench_*.json"
+          target: "benchmarks/results/"
+      - name: Upload Intel results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-intel
+          path: benchmarks/results/bench_*.json
+          if-no-files-found: warn

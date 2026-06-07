@@ -79,6 +79,26 @@ class ShardingConfig:
     skip_dtensor: bool = False
     skip_fat_binary: bool = False
 
+    # Optional cross-vendor cluster view. When set AND multi-node, the
+    # bridge runs the VendorAwareScheduler + CommunicationPlanner to
+    # produce a cluster-aware OrchestrationPlan. The local device_mesh
+    # is treated as the local node's slice; the cluster view adds
+    # cross-node routing and per-vendor shard placement. Single-node
+    # clusters are a no-op (the existing single-node path is preserved).
+    cluster_topology: Any = None  # src.runtime.cluster_orchestrator.ClusterTopology
+
+    # How many shards the model is split into. Only consumed when
+    # ``cluster_topology`` is multi-node; ignored otherwise.
+    num_shards: int = 0
+
+    # Per-shard comm volume hint, in bytes. Forwarded to the
+    # VendorAwareScheduler when cluster_topology is set.
+    comm_volume_per_shard_bytes: int = 0
+
+    # Policy override for cluster-aware scheduling. None means use
+    # SchedulingPolicy defaults (vendor-affinity ON, cross-node split OFF).
+    scheduling_policy: Any = None  # src.runtime.cluster_orchestrator.SchedulingPolicy
+
 
 @dataclass
 class ShardingResult:
@@ -89,6 +109,9 @@ class ShardingResult:
     gspmd_result: GSPMDResult | None = None
     dtensor_plan: DTensorPlan | None = None
     shard_executions: list[ShardExecutionResult] = field(default_factory=list)
+    # Cluster-aware plan, populated when ``ShardingConfig.cluster_topology``
+    # is provided AND multi-node. Single-node runs leave this None.
+    orchestration_plan: Any = None  # src.runtime.cluster_orchestrator.OrchestrationPlan
     error: str | None = None
     total_duration_ms: float = 0.0
     stage_durations: dict[str, float] = field(default_factory=dict)
@@ -96,6 +119,11 @@ class ShardingResult:
     @property
     def is_usable(self) -> bool:
         return self.success and self.dtensor_plan is not None
+
+    @property
+    def used_cluster_aware_scheduling(self) -> bool:
+        """True iff the bridge ran cluster-aware scheduling for this run."""
+        return self.orchestration_plan is not None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -106,6 +134,7 @@ class ShardingResult:
             "stablehlo": self.stablehlo_module is not None,
             "gspmd": self.gspmd_result is not None,
             "dtensor": self.dtensor_plan is not None,
+            "used_cluster_aware_scheduling": self.used_cluster_aware_scheduling,
         }
 
 
@@ -167,6 +196,22 @@ class AutoShardingBridge:
 
         start = time.perf_counter()
         stage_durations: dict[str, float] = {}
+
+        # Cluster-aware scheduling: only triggered when the caller
+        # provides a multi-node cluster topology. Single-node clusters
+        # are a no-op so the existing single-host code path is
+        # preserved byte-for-byte.
+        orchestration_plan = self._build_orchestration_plan(
+            config, device_mesh,
+        )
+        if orchestration_plan is not None:
+            stage_durations["cluster_schedule"] = 0.0
+            logger.info(
+                "cluster-aware scheduling active",
+                num_nodes=orchestration_plan.num_nodes,
+                num_shards=orchestration_plan.num_shards,
+                is_heterogeneous=orchestration_plan.topology.is_heterogeneous,
+            )
 
         # Set up per-mesh infrastructure
         self.comm_backend = CommBackend(device_mesh)
@@ -251,9 +296,53 @@ class AutoShardingBridge:
             gspmd_result=gspmd_result,
             dtensor_plan=dtensor_plan,
             shard_executions=shard_executions,
+            orchestration_plan=orchestration_plan,
             total_duration_ms=(time.perf_counter() - start) * 1000,
             stage_durations=stage_durations,
         )
+
+    def _build_orchestration_plan(
+        self,
+        config: "ShardingConfig",
+        device_mesh: DeviceMesh,
+    ) -> Any:
+        """Run cluster-aware scheduling when the cluster is multi-node.
+
+        Returns ``None`` for single-node clusters so the existing
+        single-host code path runs unchanged. The import is local to
+        avoid a top-of-file cycle with
+        :mod:`src.runtime.cluster_orchestrator` (which itself imports
+        from this module's package).
+        """
+        cluster = getattr(config, "cluster_topology", None)
+        if cluster is None:
+            return None
+        # Defer the import to break the runtime <-> bridges cycle.
+        from src.runtime.cluster_orchestrator import build_orchestration_plan
+
+        # Single-node clusters get the existing single-host path.
+        is_multi = getattr(cluster, "is_multi_node", None)
+        if is_multi is not True:
+            return None
+        num_shards = int(getattr(config, "num_shards", 0) or 0)
+        if num_shards <= 0:
+            num_shards = device_mesh.num_devices
+        try:
+            return build_orchestration_plan(
+                cluster=cluster,
+                num_shards=num_shards,
+                comm_volume_per_shard_bytes=int(
+                    getattr(config, "comm_volume_per_shard_bytes", 0) or 0,
+                ),
+                policy=getattr(config, "scheduling_policy", None),
+            )
+        except Exception as exc:  # noqa: BLE001 — surface as warning
+            logger.warning(
+                "cluster-aware scheduling failed: %s; "
+                "falling back to single-host path",
+                exc,
+            )
+            return None
 
     def _run_gspmd_safe(
         self,

@@ -163,6 +163,11 @@ def _safe_filename_slug(s: str) -> str:
 def evidence_dir(request: pytest.FixtureRequest) -> Path | None:
     """Resolved ``--evidence-dir`` or ``None`` when evidence capture is off.
 
+    When the CLI option is not given, the harness looks for a default
+    location: ``<repo_root>/.omo/evidence``. This keeps evidence capture
+    opt-out (set ``--evidence-dir=`` to an empty string to disable)
+    while still landing artifacts somewhere reviewable.
+
     The directory is created (parents included) when set. The fixture is
     session-scoped so the directory exists for the entire test run; the
     per-test timestamp inside :class:`EvidenceCapture` is what makes
@@ -170,8 +175,12 @@ def evidence_dir(request: pytest.FixtureRequest) -> Path | None:
     """
     raw = request.config.getoption("--evidence-dir")
     if raw is None:
+        repo_root = Path(__file__).resolve().parents[2]
+        p = (repo_root / ".omo" / "evidence").expanduser().resolve()
+    elif raw == "":
         return None
-    p = Path(raw).expanduser().resolve()
+    else:
+        p = Path(raw).expanduser().resolve()
     p.mkdir(parents=True, exist_ok=True)
     return p
 
