@@ -132,8 +132,7 @@ exclude = ["src.tests*", "src.*.tests", "tests*", "third_party*", "docs*", ".ope
 [tool.setuptools.package-data]
 "src.bridges.triton_tvm.lib" = ["*.so", "*.dylib", "*.dll", "CMakeLists.txt", "*.h", "*.cpp"]
 "src.bridges.aot_packager" = ["*.c", "*.h"]
-"src.c_api" = ["*.h"]
-"src.stubs/**" = ["N801", "N805", "I001", "UP035", "F401"]
+ "src.c_api" = ["*.h"]
 "src" = ["py.typed"]
 
 [tool.pytest.ini_options]
@@ -186,7 +185,7 @@ ignore = ["E501", "B008", "SIM108", "RUF012"]
 "src/**/tests/*.py" = ["B011", "B010", "N802", "N803"]
 "src/**/__init__.py" = ["F401", "F403"]
 "src/c_api/**" = ["N802", "N803"]
-"src.stubs/**" = ["N801", "N805", "I001", "UP035", "F401"]
+"src/stubs/**" = ["N801", "N805", "I001", "UP035", "F401"]
 
 [[tool.mypy.overrides]]
 module = ["src.common.tests.*"]
