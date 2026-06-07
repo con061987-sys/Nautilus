@@ -872,8 +872,12 @@ class Pipeline:
                 # The builder result exposes the per-vendor
                 # compilation result; if it failed, mark skipped.
                 sub = getattr(result, f"{vendor_str}_result", None)
-                if sub is not None and not getattr(sub, "success", True) and vendor_str not in self.ctx.skipped_vendors:
-                        self.ctx.skipped_vendors.append(vendor_str)
+                if (
+                    sub is not None
+                    and not getattr(sub, "success", True)
+                    and vendor_str not in self.ctx.skipped_vendors
+                ):
+                    self.ctx.skipped_vendors.append(vendor_str)
         return {
             "output_path": (str(result.output_path) if result.output_path else None),
             "vendors": ([v.value for v in result.fat_binary.vendors] if result.fat_binary else []),

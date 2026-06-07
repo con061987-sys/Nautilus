@@ -580,7 +580,9 @@ class TestCrossVendorBridgePrimitives:
             patch.object(comm_bridge, "TORCH_AVAILABLE", False),
             patch.object(comm_bridge, "dist", None),
             patch.object(comm_bridge, "torch", None),
-            pytest.raises((TypeError, ValueError, RuntimeError, AttributeError, DependencyMissingError)),
+            pytest.raises(
+                (TypeError, ValueError, RuntimeError, AttributeError, DependencyMissingError)
+            ),
         ):
             bridge.all_reduce(tensor)
 
@@ -768,5 +770,7 @@ class TestTorchlessImport:
 
         b = NCCLBackend(device_id=0)
         assert b.is_available is False
-        with pytest.raises((TypeError, ValueError, RuntimeError, AttributeError, DependencyMissingError)):
+        with pytest.raises(
+            (TypeError, ValueError, RuntimeError, AttributeError, DependencyMissingError)
+        ):
             b.all_reduce(None)

@@ -265,16 +265,19 @@ class CircuitBreaker:
         self.failure_count = 0  # reset on success
         self.success_count += 1
 
-        if self.state == CircuitState.HALF_OPEN and self.success_count >= self.config.success_threshold:
-                self.state = CircuitState.CLOSED
-                self.success_count = 0
-                logger.info(
-                    "Circuit '%s' CLOSED after %d successful trials",
-                    self.name,
-                    self.config.success_count_threshold
-                    if hasattr(self.config, "success_count_threshold")
-                    else self.config.success_threshold,
-                )
+        if (
+            self.state == CircuitState.HALF_OPEN
+            and self.success_count >= self.config.success_threshold
+        ):
+            self.state = CircuitState.CLOSED
+            self.success_count = 0
+            logger.info(
+                "Circuit '%s' CLOSED after %d successful trials",
+                self.name,
+                self.config.success_count_threshold
+                if hasattr(self.config, "success_count_threshold")
+                else self.config.success_threshold,
+            )
 
     def _maybe_transition_to_half_open(self) -> None:
         """If we're in OPEN and cooldown has elapsed, go to HALF_OPEN."""

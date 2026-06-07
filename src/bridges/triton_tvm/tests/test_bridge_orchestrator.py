@@ -119,6 +119,7 @@ class TestAutotuneConfigs:
         """Should generate configs even without TVM."""
         try:
             import importlib
+
             _ = importlib.util.find_spec("src.bridges.triton_tvm.bridge_orchestrator")
         except (ImportError, AttributeError):
             pytest.skip("triton not installed, skipping integration test")

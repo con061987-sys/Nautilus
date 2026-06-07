@@ -59,7 +59,9 @@ class TestAMDBackend:
         """compile_kernel should return an AMDCompilationResult."""
         fake_hsaco = b"hsaco-mock"
         fake_result = AMDCompilationResult(
-            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
+            success=True,
+            arch="gfx942",
+            hsaco_bytes=fake_hsaco,
             compilation_time_s=0.001,
         )
         with mock.patch.object(AMDBackend, "compile_kernel", return_value=fake_result):
@@ -84,12 +86,18 @@ class TestAMDBackend:
         """Subsequent compilations of the same kernel should hit cache."""
         fake_hsaco = b"hsaco-mock"
         fake_result = AMDCompilationResult(
-            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
-            compilation_time_s=0.001, cache_hit=False,
+            success=True,
+            arch="gfx942",
+            hsaco_bytes=fake_hsaco,
+            compilation_time_s=0.001,
+            cache_hit=False,
         )
         cached_result = AMDCompilationResult(
-            success=True, arch="gfx942", hsaco_bytes=fake_hsaco,
-            compilation_time_s=0.001, cache_hit=True,
+            success=True,
+            arch="gfx942",
+            hsaco_bytes=fake_hsaco,
+            compilation_time_s=0.001,
+            cache_hit=True,
         )
         call_count = [0]
 

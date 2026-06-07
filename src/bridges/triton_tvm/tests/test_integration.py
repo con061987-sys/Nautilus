@@ -393,7 +393,14 @@ class TestFallbackTiers:
           The Err result has context.tier == L4_TRITON_DEFAULT.
         """
         assert auto_tuning_bridge.tvm_adapter is not None
-        auto_tuning_bridge.tvm_adapter.tune = MagicMock(return_value=Err(TuningError("TVM unavailable for testing", context={"tier": FallbackTier.L4_TRITON_DEFAULT.name})))
+        auto_tuning_bridge.tvm_adapter.tune = MagicMock(
+            return_value=Err(
+                TuningError(
+                    "TVM unavailable for testing",
+                    context={"tier": FallbackTier.L4_TRITON_DEFAULT.name},
+                )
+            )
+        )
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
@@ -418,7 +425,9 @@ class TestFallbackTiers:
           even when TVM tuning fails.
         """
         assert auto_tuning_bridge.tvm_adapter is not None
-        auto_tuning_bridge.tvm_adapter.tune = MagicMock(return_value=Err(TuningError("simulated failure")))
+        auto_tuning_bridge.tvm_adapter.tune = MagicMock(
+            return_value=Err(TuningError("simulated failure"))
+        )
         result = auto_tuning_bridge.tune(
             kernel_fn=_dummy_kernel,
             grid=(1, 1, 1),
@@ -442,7 +451,9 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L5_SAFE_FALLBACK.name.
         """
-        auto_tuning_bridge._build_tir_template = MagicMock(side_effect=ValueError("invalid bounds for template"))
+        auto_tuning_bridge._build_tir_template = MagicMock(
+            side_effect=ValueError("invalid bounds for template")
+        )
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
@@ -463,7 +474,9 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L5_SAFE_FALLBACK.name.
         """
-        auto_tuning_bridge._build_tir_template = MagicMock(side_effect=ImportError("TVM not installed"))
+        auto_tuning_bridge._build_tir_template = MagicMock(
+            side_effect=ImportError("TVM not installed")
+        )
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",
@@ -484,7 +497,9 @@ class TestFallbackTiers:
         Passing means:
           The Err result has context.tier == L5_SAFE_FALLBACK.name.
         """
-        auto_tuning_bridge._build_tir_template = MagicMock(side_effect=OSError(13, "Permission denied: /tmp/tvm"))
+        auto_tuning_bridge._build_tir_template = MagicMock(
+            side_effect=OSError(13, "Permission denied: /tmp/tvm")
+        )
         result = auto_tuning_bridge._tuning_chain(
             sample_matmul_metadata,
             "nvidia/nvidia-a100",

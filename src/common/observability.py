@@ -145,15 +145,18 @@ class CircuitBreaker:
             self._stats.consecutive_failures += 1
             self._stats.last_failure_time = time.time()
             self._stats.last_error = f"{type(exc).__name__}: {exc}"
-            if self._stats.consecutive_failures >= self._config.failure_threshold and self._stats.state != CircuitState.OPEN:
-                    log.warning(
-                        "circuit_breaker opened",
-                        name=self._config.name,
-                        consecutive_failures=self._stats.consecutive_failures,
-                        last_error=self._stats.last_error,
-                    )
-                    self._stats.state = CircuitState.OPEN
-                    self._stats.last_state_change = time.time()
+            if (
+                self._stats.consecutive_failures >= self._config.failure_threshold
+                and self._stats.state != CircuitState.OPEN
+            ):
+                log.warning(
+                    "circuit_breaker opened",
+                    name=self._config.name,
+                    consecutive_failures=self._stats.consecutive_failures,
+                    last_error=self._stats.last_error,
+                )
+                self._stats.state = CircuitState.OPEN
+                self._stats.last_state_change = time.time()
 
     def call(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Invoke `fn(*args, **kwargs)` under circuit-breaker protection.
@@ -185,7 +188,9 @@ class CircuitBreaker:
         try:
             result = fn(*args, **kwargs)
         except Exception as exc:
-            if self._config.excluded_exceptions and isinstance(exc, self._config.excluded_exceptions):
+            if self._config.excluded_exceptions and isinstance(
+                exc, self._config.excluded_exceptions
+            ):
                 # Don't count toward breaker
                 raise
             self._record_failure(exc)

@@ -646,7 +646,9 @@ def sharding_bridge(
         pytest.skip(f"pytorch_xla bridge not importable: {exc}")
 
     fake_sharding_spec = (
-        MagicMock(spec=sharding_spec_cls) if not isinstance(sharding_spec_cls, type) else MagicMock()
+        MagicMock(spec=sharding_spec_cls)
+        if not isinstance(sharding_spec_cls, type)
+        else MagicMock()
     )
     fake_gspmd_result = MagicMock()
     fake_gspmd_result.is_usable = True
@@ -705,7 +707,7 @@ def cuda_ingestor(
     """
     if _use_real_backend(request):
         try:
-            CudaKernelCompiler = _try_import(
+            cuda_kernel_compiler = _try_import(
                 "src.bridges.cuda_ingest.kernel_compiler",
                 "CudaKernelCompiler",
             )
@@ -716,24 +718,24 @@ def cuda_ingestor(
                 __import__(dep)
             except ImportError:
                 pytest.skip(f"{dep} not installed (required for real CUDA ingest)")
-        yield CudaKernelCompiler()
+        yield cuda_kernel_compiler()
         return
 
     # ── Mocked mode ──────────────────────────────────────────────────
     try:
-        CudaKernelCompiler = _try_import(
+        cuda_kernel_compiler = _try_import(
             "src.bridges.cuda_ingest.kernel_compiler",
             "CudaKernelCompiler",
         )
-        CudaParser = _try_import(
+        cuda_parser = _try_import(
             "src.bridges.cuda_ingest.parser",
             "CudaParser",
         )
-        TreeSitterCudaParser = _try_import(
+        tree_sitter_cuda_parser = _try_import(
             "src.bridges.cuda_ingest.parser",
             "TreeSitterCudaParser",
         )
-        CudaKernel = _try_import(
+        cuda_kernel = _try_import(
             "src.bridges.cuda_ingest.parser",
             "CudaKernel",
         )
@@ -749,20 +751,20 @@ def cuda_ingestor(
     fake_kernel.parameters = []
     fake_kernel.body = []
     fake_kernel.shared_mem = []
-    fake_kernel.__class__ = CudaKernel  # best-effort spec, may no-op
+    fake_kernel.__class__ = cuda_kernel  # best-effort spec, may no-op
 
     fake_parse = MagicMock(return_value=[fake_kernel])
 
     with ExitStack() as stack:
         # The parser's real entry points are parse_file / parse_source,
         # not parse. Patch both so callers using either path get the mock.
-        stack.enter_context(patch.object(TreeSitterCudaParser, "parse_file", fake_parse))
-        stack.enter_context(patch.object(TreeSitterCudaParser, "parse_source", fake_parse))
+        stack.enter_context(patch.object(tree_sitter_cuda_parser, "parse_file", fake_parse))
+        stack.enter_context(patch.object(tree_sitter_cuda_parser, "parse_source", fake_parse))
         # CudaParser is the public facade the compiler actually calls;
         # patch its methods so the seam is fully covered.
-        stack.enter_context(patch.object(CudaParser, "parse_file", fake_parse))
-        stack.enter_context(patch.object(CudaParser, "parse_source", fake_parse))
-        compiler = CudaKernelCompiler()
+        stack.enter_context(patch.object(cuda_parser, "parse_file", fake_parse))
+        stack.enter_context(patch.object(cuda_parser, "parse_source", fake_parse))
+        compiler = cuda_kernel_compiler()
         # Disable downstream phases so the test only exercises the parser
         # seam. Both phases call into Triton/TVM/AOT; we don't want that.
         compiler.enable_phase1_tuning = False
