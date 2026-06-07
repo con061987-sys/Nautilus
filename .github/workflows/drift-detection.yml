@@ -1,6 +1,28 @@
 # .github/workflows/drift-detection.yml
-# Daily check for upstream version drift. If Triton, TVM, or XLA
-# releases a breaking change, this workflow opens an issue.
+#
+# Daily upstream drift detection for Nautilus.
+#
+# Two checks:
+#   1. PyPI pin drift — runs scripts/check_upstream_drift.py, which
+#      compares pinned versions in pyproject.toml against the latest
+#      available versions on PyPI for the sensitive set
+#      (torch, triton, apache-tvm, torch_xla, aotriton, networkx, pyzmq).
+#   2. Submodule SHA drift — walks every git submodule under third_party/
+#      and compares the pinned commit against the upstream HEAD of its
+#      primary branch. If they diverge, the pinned commit is stale.
+#
+# Behavior:
+#   * Runs daily at 06:00 UTC.
+#   * Always uploads a drift report as an artifact.
+#   * If either check reports drift, opens a single GitHub issue with
+#     both reports concatenated, labeled `drift` and `dependencies`.
+#   * On manual dispatch, supports overriding the PyPI index URL and
+#     which branch is treated as "upstream" for submodules.
+#
+# Concurrency:
+#   Drift detection is idempotent and cheap, but we never cancel an
+#   in-progress run — the issue-creation side effect should always
+#   complete if it was triggered.
 
 name: Drift Detection
 
@@ -8,49 +30,237 @@ on:
   schedule:
     - cron: "0 6 * * *"  # 06:00 UTC daily
   workflow_dispatch:
+    inputs:
+      submodule_upstream:
+        description: "Comma-separated list of upstream branches to check (default: main,master,develop)"
+        required: false
+        default: "main,master,develop"
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
-  check-upstream:
-    name: Check upstream versions
+  check-drift:
+    name: Detect upstream drift
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Check pip for updates
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+          key: pip-drift-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pip-drift-${{ runner.os }}-py3.11-
+
+      - name: Install Nautilus
+        run: pip install -e ".[dev]"
+
+      # ------------------------------------------------------------------
+      # 1. PyPI drift. The script writes a Markdown table to stdout and
+      # exits 0 (no drift) or 1 (drift detected). We capture the output,
+      # look for the "## DRIFT" header, and propagate the result via
+      # the `drift` step output.
+      # ------------------------------------------------------------------
+      - name: Check PyPI pin drift
+        id: pypi
         run: |
-          pip install pip-check-updates==0.5.0
-          # The .outdated file lists all packages that have newer versions
-          pip-check-updates --format=columns --output-file=outdated.txt || true
-          cat outdated.txt
-      - name: Check for breaking changes
-        id: check
-        run: |
-          # If any of our pinned deps has moved past the pin, flag it.
-          python scripts/check_upstream_drift.py > drift_report.md
-          cat drift_report.md
-          if grep -q "DRIFT" drift_report.md; then
-            echo "drift_detected=true" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          python scripts/check_upstream_drift.py --md > pypi_drift.md
+          cat pypi_drift.md
+          if grep -q "^## DRIFT" pypi_drift.md; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # ------------------------------------------------------------------
+      # 2. Submodule drift. For each submodule, query its primary branch
+      # HEAD on `origin` and compare against the pinned commit. We try
+      # the configured branches in order (default: main, master, develop)
+      # and fall back to the submodule's own HEAD if none resolve.
+      # ------------------------------------------------------------------
+      - name: Check git submodule drift
+        id: submodules
+        env:
+          UPSTREAM_BRANCHES: ${{ github.event.inputs.submodule_upstream || 'main,master,develop' }}
+        run: |
+          set -euo pipefail
+          : > submodule_drift_raw.txt
+
+          # Only check submodules that actually exist in the working tree.
+          if [ ! -f .gitmodules ]; then
+            echo "No .gitmodules found; nothing to check." >&2
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IFS=',' read -ra BRANCHES <<< "$UPSTREAM_BRANCHES"
+
+          git submodule foreach --quiet --recursive 'true' >/dev/null
+          git submodule status --recursive > /tmp/sub_status.txt || true
+
+          drift_count=0
+          while IFS=' ' read -r entry path _rest; do
+            [ -z "${path:-}" ] && continue
+            [ "$path" = ".gitmodules" ] && continue
+            [ -d "$path" ] || continue
+
+            # Strip the status prefix (` `, `-`, `+`, `U`) from the SHA.
+            pinned_sha=$(printf '%s' "$entry" | sed -E 's/^[-+U ]//')
+            [ -z "$pinned_sha" ] && continue
+
+            name=$(basename "$path")
+            upstream_sha=""
+            for branch in "${BRANCHES[@]}"; do
+              candidate=$(git -C "$path" ls-remote --heads origin "$branch" 2>/dev/null \
+                | awk 'NR==1{print $1; exit}')
+              if [ -n "$candidate" ]; then
+                upstream_sha="$candidate"
+                break
+              fi
+            done
+            if [ -z "$upstream_sha" ]; then
+              upstream_sha=$(git -C "$path" rev-parse HEAD 2>/dev/null || echo "")
+            fi
+
+            short_pinned=$(git -C "$path" rev-parse --short "$pinned_sha" 2>/dev/null || echo "$pinned_sha")
+            short_upstream=$(git -C "$path" rev-parse --short "$upstream_sha" 2>/dev/null || echo "$upstream_sha")
+
+            if [ -n "$upstream_sha" ] && [ "$pinned_sha" != "$upstream_sha" ]; then
+              echo "DRIFT|${name}|${short_pinned}|${short_upstream}" >> submodule_drift_raw.txt
+              drift_count=$((drift_count + 1))
+            else
+              echo "OK|${name}|${short_pinned}" >> submodule_drift_raw.txt
+            fi
+          done < /tmp/sub_status.txt
+
+          {
+            echo "## Submodule drift report"
+            echo ""
+            echo "| Submodule | Pinned | Upstream HEAD | Status |"
+            echo "|---|---|---|---|"
+            if [ -s submodule_drift_raw.txt ]; then
+              while IFS='|' read -r status name pinned upstream; do
+                case "$status" in
+                  OK)
+                    echo "| \`$name\` | $pinned | $pinned | OK |"
+                    ;;
+                  DRIFT)
+                    echo "| \`$name\` | $pinned | $upstream | **DRIFT** |"
+                    ;;
+                esac
+              done < submodule_drift_raw.txt
+            else
+              echo "| _none_ | — | — | OK |"
+            fi
+          } > submodule_drift.md
+          cat submodule_drift.md
+
+          if [ "$drift_count" -gt 0 ]; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ------------------------------------------------------------------
+      # Compose a single report from both checks. Done as a separate
+      # step so the artifact is always present, even on partial failure.
+      # ------------------------------------------------------------------
+      - name: Compose combined report
+        if: always()
+        run: |
+          {
+            echo "# Upstream drift report"
+            echo ""
+            echo "_Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')_"
+            echo ""
+            echo "## PyPI pins"
+            echo ""
+            cat pypi_drift.md 2>/dev/null || echo "_PyPI check did not run._"
+            echo ""
+            echo "## Git submodules"
+            echo ""
+            cat submodule_drift.md 2>/dev/null || echo "_Submodule check did not run._"
+            echo ""
+            echo "## Action"
+            echo ""
+            echo "Bump the pin in \`pyproject.toml\` and re-pin each affected submodule:"
+            echo ""
+            echo '```bash'
+            echo "git submodule update --remote third_party/<name>"
+            echo "pip install -e '.[all,dev]'    # refresh the wheel set"
+            echo "python scripts/check_upstream_drift.py"
+            echo '```'
+          } > drift_report.md
+          cat drift_report.md
+
+      # ------------------------------------------------------------------
+      # Open a single issue when any drift is detected. We deduplicate by
+      # checking the open issues list for a recent drift report with the
+      # same date so we don't spam the tracker if the workflow is retriggered.
+      # ------------------------------------------------------------------
       - name: Open issue on drift
-        if: steps.check.outputs.drift_detected == 'true'
+        if: |
+          steps.pypi.outputs.drift == 'true' ||
+          steps.submodules.outputs.drift == 'true'
+        env:
+          REPORT_PATH: drift_report.md
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const body = fs.readFileSync('drift_report.md', 'utf8');
-            const title = 'Upstream drift detected: ' + new Date().toISOString().split('T')[0];
+            const today = new Date().toISOString().split('T')[0];
+            const title = `Upstream drift detected — ${today}`;
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+
+            // Dedupe: don't open another issue today if one is already open.
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'drift',
+              per_page: 50,
+            });
+            const duplicate = issues.find(
+              (i) => i.title === title || i.title.startsWith('Upstream drift detected — '),
+            );
+            if (duplicate) {
+              core.info(`Drift issue already open: #${duplicate.number}; skipping.`);
+              return;
+            }
+
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: title,
               body: body,
-              labels: ['drift', 'dependencies']
+              labels: ['drift', 'dependencies'],
             });
-      - name: Upload report
+
+      - name: Upload drift report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: drift-report
           path: drift_report.md
+          if-no-files-found: warn

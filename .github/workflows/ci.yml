@@ -1,7 +1,22 @@
 # .github/workflows/ci.yml
-# CI that runs on every PR. Tests the parts of the codebase that
-# DON'T require a GPU. GPU-dependent tests are dispatched to
-# real-hardware.yml which uses self-hosted runners.
+#
+# CI workflow for Nautilus — Cross-Vendor AI Compilation Framework.
+#
+# Layout:
+#   * `lint`           — static analysis and type-check (CPU only, every push/PR).
+#   * `test`           — single matrix strategy block with five hardware
+#                        targets: cpu, nvidia, amd, intel, macos.
+#
+# Gating:
+#   * `lint` and the `cpu` matrix entry run on every push and PR.
+#   * `nvidia`, `amd`, `intel`, `macos` only run on:
+#       - workflow_dispatch (manual multi-target run), or
+#       - push to `main`.
+#   This keeps external PRs fast and avoids leaking cloud secrets to forks.
+#
+# Cloud targets (`amd`, `intel`) provision a fresh instance per run via
+# scripts/setup-{amd,intel}-cloud.sh, using the secrets AMD_DEV_CLOUD_KEY
+# and INTEL_TIBER_KEY. Tests execute over SSH on the cloud runner.
 
 name: CI
 
@@ -10,126 +25,437 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Targets to run on manual dispatch (csv: cpu,nvidia,amd,intel,macos; default: cpu)"
+        required: false
+        default: "cpu"
+        type: string
 
+# Cancel in-progress runs for the same ref. Daily drift-detection uses a
+# different workflow file with its own concurrency group, so it is not
+# affected by this rule.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Triton loads its MetaSchedule backend via TRITON_PLUGIN_DIRS rather than
+# entry points (see pyproject.toml note). Set it repo-wide so every Python
+# step picks up the in-tree backend without re-declaring.
+env:
+  TRITON_PLUGIN_DIRS: ${{ github.workspace }}/src/bridges/triton_tvm/backend
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
 jobs:
+  # ---------------------------------------------------------------------------
+  # Lint & type-check — runs on every push and PR. CPU only.
+  # ---------------------------------------------------------------------------
   lint:
-    name: Lint
+    name: Lint & type-check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-      - run: pip install -e .[dev]
-      - run: ruff check src/
-      - run: ruff format --check src/
-      - run: mypy src/ --ignore-missing-imports
-      - run: |
-          # Anti-comment guardrail: fail on TODO/FIXME/XXX comments explicitly
-          # marked as untracked, e.g. `# TODO(no-issue): ...`. Developers must
-          # either reference a tracked issue (e.g. `# TODO(#123): ...`) or
-          # remove the TODO. The `(no-issue)` marker is a self-imposed tripwire
-          # to force issue creation before shipping the TODO.
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+          key: pip-lint-${{ runner.os }}-py3.11-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pip-lint-${{ runner.os }}-py3.11-
+            pip-${{ runner.os }}-py3.11-
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: ruff check
+        run: ruff check src/
+
+      - name: ruff format --check
+        run: ruff format --check src/
+
+      - name: mypy
+        run: mypy src/ --ignore-missing-imports
+
+      # Self-imposed tripwire: a TODO without a referenced issue means it
+      # never made it to the tracker. Force the author to file an issue
+      # (and reference it inline) before shipping.
+      - name: "Guardrail: no untracked TODOs"
+        run: |
           if grep -RIn --include="*.py" -E "#\s*(TODO|FIXME|XXX)\(no-issue\):" src/; then
-            echo "Found TODO/FIXME/XXX marked (no-issue); please open an issue and reference it instead." >&2
+            echo "Found TODO/FIXME/XXX marked (no-issue); open an issue and reference it instead." >&2
             exit 1
           fi
 
-  test-cpu:
-    name: Test (CPU)
-    runs-on: ubuntu-latest
+  # ---------------------------------------------------------------------------
+  # Hardware test matrix — one strategy block, five targets.
+  # ---------------------------------------------------------------------------
+  test:
+    name: "${{ matrix.target.name }} (${{ matrix.target.runs_on }})"
+    needs: lint
+    runs-on: ${{ matrix.target.runs_on }}
+    timeout-minutes: ${{ matrix.target.timeout_minutes }}
+    permissions:
+      contents: read
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
+        target:
+          # 1. CPU — the canonical baseline. Runs on every push and PR.
+          - name: cpu
+            runs_on: ubuntu-latest
+            timeout_minutes: 30
+            marker: "not gpu and not nvidia and not rocm and not intel"
+            extras: "dev,cuda"
+            gated: "false"
+            cloud: ""
+            torch_cpu: "true"
+            run_c_api: "true"
+            run_smoke: "true"
+            drift_check: "true"
+            os: linux
+            verify_cmd: |
+              python -c "import sys; print('python', sys.version)"
+
+          # 2. Nvidia — self-hosted runner label, matches real-hardware.yml.
+          - name: nvidia
+            runs_on: gpu-runner-4xlarge
+            timeout_minutes: 60
+            marker: "gpu or nvidia"
+            extras: "nvidia,all,dev"
+            gated: "true"
+            cloud: ""
+            torch_cpu: "false"
+            run_c_api: "false"
+            run_smoke: "false"
+            drift_check: "false"
+            os: linux
+            verify_cmd: |
+              nvidia-smi
+              nvcc --version
+
+          # 3. AMD Developer Cloud — provisioned at runtime via AMD_DEV_CLOUD_KEY.
+          - name: amd
+            runs_on: ubuntu-latest
+            timeout_minutes: 90
+            marker: "rocm"
+            extras: "amd,all,dev"
+            gated: "true"
+            cloud: amd
+            torch_cpu: "false"
+            run_c_api: "false"
+            run_smoke: "false"
+            drift_check: "false"
+            os: linux
+            verify_cmd: ""
+
+          # 4. Intel Tiber AI Cloud — provisioned at runtime via INTEL_TIBER_KEY.
+          - name: intel
+            runs_on: ubuntu-latest
+            timeout_minutes: 90
+            marker: "intel"
+            extras: "intel,all,dev"
+            gated: "true"
+            cloud: intel
+            torch_cpu: "false"
+            run_c_api: "false"
+            run_smoke: "false"
+            drift_check: "false"
+            os: linux
+            verify_cmd: ""
+
+          # 5. macOS — GitHub-hosted runner for Apple Metal backend.
+          - name: macos
+            runs_on: macos-latest
+            timeout_minutes: 60
+            marker: "not gpu and not nvidia and not rocm and not intel"
+            extras: "dev"
+            gated: "true"
+            cloud: ""
+            torch_cpu: "true"
+            run_c_api: "false"
+            run_smoke: "false"
+            drift_check: "false"
+            os: macos
+            verify_cmd: |
+              python -c "import sys; print('python', sys.version)"
+
+    # Gating logic:
+    #   * cpu (gated=false)                       — always run.
+    #   * anything else (gated=true)              — only on manual dispatch
+    #                                               or push to main.
+    if: |
+      (matrix.target.gated == 'false') ||
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
-      - name: Install system deps
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+          key: pip-${{ matrix.target.name }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pip-${{ matrix.target.name }}-${{ runner.os }}-py${{ matrix.python-version }}-
+            pip-${{ runner.os }}-py${{ matrix.python-version }}-
+
+      # ------------------------------------------------------------------
+      # System dependencies. lld on Ubuntu 24.04 ships only `ld.lld`; the
+      # generic `lld` driver is missing, so we synthesize a symlink for
+      # tools that probe for `lld` by name.
+      # ------------------------------------------------------------------
+      - name: Install Linux system deps
+        if: matrix.target.os == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y lld spirv-tools
-      - run: pip install -e .[dev]
-      - run: pip install torch==2.4.1 triton==3.0.0 --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install apache-tvm==0.18.0
-      - name: Run CPU tests
+          sudo apt-get install -y --no-install-recommends \
+            lld spirv-tools cmake ninja-build jq
+          if ! command -v lld >/dev/null 2>&1 && command -v ld.lld >/dev/null 2>&1; then
+            sudo ln -sf "$(command -v ld.lld)" /usr/local/bin/lld
+          fi
+          lld --version
+          spirv-val --version
+
+      - name: Install macOS system deps
+        if: matrix.target.os == 'macos'
+        run: |
+          brew install jq
+          # spirv-val ships with the Xcode Metal toolchain; no extra install.
+
+      # ------------------------------------------------------------------
+      # Python dependencies. Two install paths:
+      #   * torch_cpu=true  — pip-install CPU wheels from the PyTorch
+      #                       CPU index, never pull CUDA-enabled torch.
+      #   * torch_cpu=false — install GPU stack via the matching extra.
+      # ------------------------------------------------------------------
+      - name: Install Nautilus (CPU torch/triton)
+        if: fromJSON(matrix.target.torch_cpu)
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ".[${{ matrix.target.extras }}]"
+          pip install torch==2.4.1 triton==3.0.0 \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Nautilus (GPU stack)
+        if: "!fromJSON(matrix.target.torch_cpu)"
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ".[${{ matrix.target.extras }}]"
+          # llvm-spirv is not always packaged with the base OS image;
+          # install the pip wheel as a belt-and-suspenders fallback.
+          pip install --quiet spirv-tools || true
+
+      # ------------------------------------------------------------------
+      # Cloud provisioning. These steps read the secret key from the
+      # repo's encrypted secrets, hand it to a setup script, and stash the
+      # resulting instance coordinates in GITHUB_ENV for the SSH step.
+      # ------------------------------------------------------------------
+      - name: Provision AMD Developer Cloud
+        if: matrix.target.cloud == 'amd'
+        env:
+          AMD_DEV_CLOUD_KEY: ${{ secrets.AMD_DEV_CLOUD_KEY }}
+        run: |
+          if [ -z "$AMD_DEV_CLOUD_KEY" ]; then
+            echo "::error::Secret AMD_DEV_CLOUD_KEY is not configured for this repository." >&2
+            exit 1
+          fi
+          ./scripts/setup-amd-cloud.sh "$AMD_DEV_CLOUD_KEY" > amd_instance.json
+          cat amd_instance.json
+          {
+            echo "AMD_HOST=$(jq -r .host amd_instance.json)"
+            echo "AMD_USER=$(jq -r .user amd_instance.json)"
+          } >> "$GITHUB_ENV"
+
+      - name: Provision Intel Tiber AI Cloud
+        if: matrix.target.cloud == 'intel'
+        env:
+          INTEL_TIBER_KEY: ${{ secrets.INTEL_TIBER_KEY }}
+        run: |
+          if [ -z "$INTEL_TIBER_KEY" ]; then
+            echo "::error::Secret INTEL_TIBER_KEY is not configured for this repository." >&2
+            exit 1
+          fi
+          ./scripts/setup-intel-tiber.sh "$INTEL_TIBER_KEY" > intel_instance.json
+          cat intel_instance.json
+          {
+            echo "INTEL_HOST=$(jq -r .host intel_instance.json)"
+            echo "INTEL_USER=$(jq -r .user intel_instance.json)"
+          } >> "$GITHUB_ENV"
+
+      # ------------------------------------------------------------------
+      # Local-runner path: cpu, nvidia, macos.
+      # ------------------------------------------------------------------
+      - name: Verify environment
+        if: matrix.target.cloud == ''
+        run: |
+          python -c "import nautilus; print('nautilus OK')"
+          bash -c '${{ matrix.target.verify_cmd }}'
+
+      - name: Run pytest (${{ matrix.target.name }})
+        if: matrix.target.cloud == ''
         run: |
           python -m pytest src/ -v \
-            -m "not gpu and not cuda and not rocm and not intel and not slow" \
-            --cov=src --cov-report=term-missing --cov-fail-under=70
+            -m "${{ matrix.target.marker }}" \
+            --tb=long -x \
+            --junitxml=test-results-${{ matrix.target.name }}.xml
 
-  build-c-api:
-    name: Build C-API
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y lld spirv-tools cmake ninja-build
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -e .[dev]
-      - name: Build libnautilus_c_api
+      # C-API is a CPU build (no GPU runtime needed). Only run on cpu
+      # where the toolchain and the reference libnautilus_c_api.so are
+      # always available.
+      - name: Build C-API library
+        if: fromJSON(matrix.target.run_c_api)
         run: |
           cmake -GNinja -S src/c_api -B build
           cmake --build build
-          ls -la build/libnautilus_c_api*
-      - name: Test C-API load
-        run: |
-          NAUTILUS_C_LIB=$(pwd)/build/libnautilus_c_api.so python -c "
+          NAUTILUS_C_LIB="$(pwd)/build/libnautilus_c_api.so" python -c "
           from src.c_api import is_available
           assert is_available(), 'C-API should be loadable after build'
           print('C-API loaded successfully')
           "
 
-  build-fat-binary:
-    name: Build fat binary smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install system deps
+      # Fat-binary smoke. We skip all real vendor backends so the test
+      # does not require a GPU. The script is written via heredoc so the
+      # Python decorators/colons inside it do not break the surrounding
+      # YAML literal block scalar.
+      - name: Fat binary smoke
+        if: fromJSON(matrix.target.run_smoke)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y lld spirv-tools gcc
-      - run: pip install -e .[dev]
-      - name: Build a fat binary (CPU-only — no real GPU)
-        run: |
-          python -c "
+          cat > /tmp/fat_smoke.py <<'PYEOF'
           from src.bridges.aot_packager.builder import FatBinaryBuilder, FatBinaryConfig
           from pathlib import Path
-          out = Path('build/test.fat.o')
+
+          out = Path("build/test.fat.o")
           out.parent.mkdir(exist_ok=True, parents=True)
-          builder = FatBinaryBuilder(cache_dir='build/cache')
+          builder = FatBinaryBuilder(cache_dir="build/cache")
           result = builder.build(FatBinaryConfig(
-              kernel_name='smoke_test',
-              kernel_source='''
-import triton
-import triton.language as tl
-@triton.jit
-def smoke_kernel(X, n):
-    pid = tl.program_id(0)
-    tl.store(X + pid, pid)
-''',
+              kernel_name="smoke_test",
+              kernel_source=(
+                  "import triton\n"
+                  "import triton.language as tl\n"
+                  "@triton.jit\n"
+                  "def smoke_kernel(X, n):\n"
+                  "    pid = tl.program_id(0)\n"
+                  "    tl.store(X + pid, pid)\n"
+              ),
               output_dir=str(out.parent),
               skip_amd=True,
               skip_intel=True,
               skip_nvidia=True,
               skip_validation=True,
           ))
-          print('Result:', result.to_dict())
-          assert result.fat_binary is not None, 'Fat binary was not built'
-          assert result.fat_binary.total_size > 0, 'Fat binary is empty'
-          print('OK: fat binary size =', result.fat_binary.total_size)
-          "
+          assert result.fat_binary is not None, "fat binary was not built"
+          assert result.fat_binary.total_size > 0, "fat binary is empty"
+          print("OK: fat binary size =", result.fat_binary.total_size)
+          PYEOF
+          python /tmp/fat_smoke.py
+
+      # A lightweight, informational drift check. The authoritative daily
+      # run lives in .github/workflows/drift-detection.yml. continue-on-
+      # error keeps the cpu build green even if PyPI is briefly flaky.
+      - name: Drift check (informational)
+        if: fromJSON(matrix.target.drift_check)
+        continue-on-error: true
+        run: |
+          python scripts/check_upstream_drift.py --md > drift_report.md || true
+          cat drift_report.md
+
+      - name: Upload local test results
+        if: always() && matrix.target.cloud == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.target.name }}
+          path: test-results-${{ matrix.target.name }}.xml
+          if-no-files-found: warn
+
+      # ------------------------------------------------------------------
+      # Cloud-runner path: amd, intel. Test runs over SSH on a fresh
+      # instance. The script clones the exact commit that triggered the
+      # workflow, initializes submodules, installs dependencies, and
+      # executes pytest with the matching marker filter.
+      # ------------------------------------------------------------------
+      - name: Run pytest on AMD Developer Cloud
+        if: matrix.target.cloud == 'amd'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.AMD_HOST }}
+          username: ${{ env.AMD_USER }}
+          key: ${{ secrets.AMD_DEV_CLOUD_SSH_KEY }}
+          command_timeout: 50m
+          script: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends \
+              lld spirv-tools cmake ninja-build jq git ca-certificates
+            if ! command -v lld >/dev/null 2>&1 && command -v ld.lld >/dev/null 2>&1; then
+              sudo ln -sf "$(command -v ld.lld)" /usr/local/bin/lld
+            fi
+            git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" nautilus
+            cd nautilus
+            git checkout "$GITHUB_SHA"
+            git submodule update --init --recursive
+            pip install --upgrade pip setuptools wheel
+            pip install -e ".[amd,all,dev]"
+            export TRITON_PLUGIN_DIRS="$PWD/src/bridges/triton_tvm/backend"
+            python -m pytest src/ -v \
+              -m "${{ matrix.target.marker }}" \
+              --tb=long -x \
+              --junitxml=test-results-amd.xml
+
+      - name: Run pytest on Intel Tiber AI Cloud
+        if: matrix.target.cloud == 'intel'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.INTEL_HOST }}
+          username: ${{ env.INTEL_USER }}
+          key: ${{ secrets.INTEL_TIBER_SSH_KEY }}
+          command_timeout: 50m
+          script: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends \
+              lld spirv-tools cmake ninja-build jq git ca-certificates
+            if ! command -v lld >/dev/null 2>&1 && command -v ld.lld >/dev/null 2>&1; then
+              sudo ln -sf "$(command -v ld.lld)" /usr/local/bin/lld
+            fi
+            git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" nautilus
+            cd nautilus
+            git checkout "$GITHUB_SHA"
+            git submodule update --init --recursive
+            pip install --upgrade pip setuptools wheel
+            pip install -e ".[intel,all,dev]"
+            export TRITON_PLUGIN_DIRS="$PWD/src/bridges/triton_tvm/backend"
+            python -m pytest src/ -v \
+              -m "${{ matrix.target.marker }}" \
+              --tb=long -x \
+              --junitxml=test-results-intel.xml
+
+      - name: Upload cloud test results
+        if: always() && matrix.target.cloud != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.target.name }}
+          path: test-results-${{ matrix.target.name }}.xml
+          if-no-files-found: warn

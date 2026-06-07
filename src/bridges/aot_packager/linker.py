@@ -44,7 +44,6 @@ import struct
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from src.common.errors import LinkingError
 from src.common.logging import get_logger
@@ -95,6 +94,7 @@ class FatBinaryLinker:
         self,
         cache_dir: str | None = None,
         timeout_seconds: float = 30.0,
+        stub_path: str | None = None,
     ) -> None:
         self.cache_dir = Path(cache_dir or os.environ.get(
             "NAUTILUS_LINK_CACHE",
@@ -102,6 +102,14 @@ class FatBinaryLinker:
         ))
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.timeout_seconds = timeout_seconds
+        # Default to <repo_root>/build/runtime_stub.o, the artifact of
+        # setup.py build_runtime_stub(). __file__ is
+        # .../src/bridges/aot_packager/linker.py — four .parent hops
+        # reach the repo root.
+        if stub_path is None:
+            repo_root = Path(__file__).resolve().parent.parent.parent.parent
+            stub_path = str(repo_root / "build" / "runtime_stub.o")
+        self.default_stub_path = Path(stub_path)
         self._lld_path = self._find_lld()
         self._lld_version = self._detect_lld_version()
 
@@ -122,7 +130,9 @@ class FatBinaryLinker:
             nvidia_cubin: Cubin binary for Nvidia GPUs (bytes).
             amd_hsaco: HSACO binary for AMD GPUs (bytes).
             intel_spv: SPIR-V binary for Intel GPUs (bytes).
-            runtime_stub_o: C runtime stub object file (bytes).
+            runtime_stub_o: C runtime stub object file (bytes). If None,
+                bytes are loaded from self.default_stub_path (set in
+                __init__, defaulting to <repo>/build/runtime_stub.o).
             kernel_name: Name of the kernel.
             output_path: Where to write the fat binary (default: cache).
 
@@ -131,6 +141,9 @@ class FatBinaryLinker:
         """
         import time
         start = time.perf_counter()
+
+        if runtime_stub_o is None and self.default_stub_path.exists():
+            runtime_stub_o = self.default_stub_path.read_bytes()
 
         output_path = output_path or (self.cache_dir / f"{kernel_name}.fat.o")
 
@@ -419,7 +432,7 @@ class FatBinaryLinker:
 
     def _find_lld(self) -> str | None:
         """Find the LLVM linker (lld) on the system."""
-        for name in ("lld", "ld.lld", "lld-link"):
+        for name in ("ld.lld", "lld", "lld-link"):
             path = shutil.which(name)
             if path:
                 return path

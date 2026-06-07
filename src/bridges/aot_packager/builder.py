@@ -18,11 +18,9 @@ Production features:
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 import subprocess
-import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -254,19 +252,7 @@ class FatBinaryBuilder:
             t0 = time.perf_counter()
             for section in fat_binary.sections:
                 binary_path = linking_result.output_path
-                if section.format == SectionFormat.HSACO and amd_result:
-                    validation_results.append(self.validator.validate(
-                        binary_path=binary_path,
-                        vendor=section.vendor,
-                        arch=section.arch,
-                    ))
-                elif section.format == SectionFormat.SPV and intel_result:
-                    validation_results.append(self.validator.validate(
-                        binary_path=binary_path,
-                        vendor=section.vendor,
-                        arch=section.arch,
-                    ))
-                elif section.format == SectionFormat.PTX and nvidia_result:
+                if (section.format == SectionFormat.HSACO and amd_result) or (section.format == SectionFormat.SPV and intel_result) or (section.format == SectionFormat.PTX and nvidia_result):
                     validation_results.append(self.validator.validate(
                         binary_path=binary_path,
                         vendor=section.vendor,
@@ -432,4 +418,4 @@ class FatBinaryBuilder:
                 return stub.read_text()
             raise NautilusError(
                 f"runtime_stub.c not found in package; looked at {here}",
-            )
+            ) from None

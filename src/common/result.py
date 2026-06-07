@@ -28,9 +28,9 @@ Usage
 
 from __future__ import annotations
 
-import functools
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 T = TypeVar("T")
 E = TypeVar("E", bound=BaseException)
@@ -57,16 +57,16 @@ class Ok(Generic[T]):
     def unwrap_or_else(self, fn: Callable[[], T]) -> T:
         return self.value
 
-    def map(self, fn: Callable[[T], U]) -> "Ok[U]":
+    def map(self, fn: Callable[[T], U]) -> Ok[U]:
         return Ok(fn(self.value))
 
-    def map_err(self, fn: Callable[[E], Any]) -> "Ok[T]":
+    def map_err(self, fn: Callable[[E], Any]) -> Ok[T]:
         return self
 
-    def and_then(self, fn: Callable[[T], "Result[U, E]"]) -> "Result[U, E]":
+    def and_then(self, fn: Callable[[T], Result[U, E]]) -> Result[U, E]:
         return fn(self.value)
 
-    def or_else(self, fn: Callable[[E], "Result[T, Any]"]) -> "Ok[T]":
+    def or_else(self, fn: Callable[[E], Result[T, Any]]) -> Ok[T]:
         return self
 
     def __repr__(self) -> str:
@@ -93,16 +93,16 @@ class Err(Generic[E]):
     def unwrap_or_else(self, fn: Callable[[E], T]) -> T:
         return fn(self.error)
 
-    def map(self, fn: Callable[[T], U]) -> "Err[E]":
+    def map(self, fn: Callable[[T], U]) -> Err[E]:
         return self
 
-    def map_err(self, fn: Callable[[E], Any]) -> "Err":
+    def map_err(self, fn: Callable[[E], Any]) -> Err:
         return Err(fn(self.error))
 
-    def and_then(self, fn: Callable[[T], "Result[U, E]"]) -> "Err[E]":
+    def and_then(self, fn: Callable[[T], Result[U, E]]) -> Err[E]:
         return self
 
-    def or_else(self, fn: Callable[[E], "Result[T, Any]"]) -> "Result[T, Any]":
+    def or_else(self, fn: Callable[[E], Result[T, Any]]) -> Result[T, Any]:
         return fn(self.error)
 
     def __repr__(self) -> str:
@@ -113,12 +113,12 @@ class Err(Generic[E]):
 Result = Union[Ok[T], Err[E]]
 
 
-def is_ok(r: "Result[T, E]") -> bool:
+def is_ok(r: Result[T, E]) -> bool:
     """Type-narrowing helper."""
     return isinstance(r, Ok)
 
 
-def is_err(r: "Result[T, E]") -> bool:
+def is_err(r: Result[T, E]) -> bool:
     """Type-narrowing helper."""
     return isinstance(r, Err)
 
@@ -131,5 +131,5 @@ def try_catch(fn: Callable[..., T], *args: Any, **kwargs: Any) -> Result[T, Exce
     """
     try:
         return Ok(fn(*args, **kwargs))
-    except Exception as exc:  # noqa: BLE001 — explicit Result boundary
+    except Exception as exc:
         return Err(exc)

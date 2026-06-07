@@ -18,7 +18,7 @@ from __future__ import annotations
 import traceback
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 
 class ErrorCode(str, Enum):
@@ -143,7 +143,7 @@ class NautilusError(Exception):
             "traceback": self._traceback,
         }
 
-    def with_context(self, **kwargs: Any) -> "NautilusError":
+    def with_context(self, **kwargs: Any) -> NautilusError:
         """Return a copy with additional context. Chainable."""
         new_ctx = dict(self.context)
         new_ctx.update(kwargs)
@@ -405,44 +405,44 @@ class CallbackError(NautilusError):
 
 
 __all__ = [
-    "ErrorCode",
-    "NautilusError",
-    "CompilationError",
-    "CompilationTimeoutError",
-    "CompilationOutputMissingError",
-    "LinkingError",
+    "AOTritonError",
     "BackendTimeoutError",
-    "TuningError",
-    "TuningTimeoutError",
-    "ShardingError",
-    "GSPMDError",
-    "GraphCaptureError",
-    "StableHLOExportError",
+    "BitExactMismatchError",
+    "BridgeError",
+    "CallbackError",
+    "CircuitOpenError",
+    "CompilationError",
+    "CompilationOutputMissingError",
+    "CompilationTimeoutError",
+    "ConfigError",
     "DTensorApplyError",
-    "KernelNotFoundError",
-    "HardwareNotFoundError",
-    "HardwareProbeError",
-    "NoGPUAvailableError",
     "DependencyMissingError",
     "DependencyVersionMismatchError",
-    "LLVMError",
-    "LLDError",
-    "AOTritonError",
-    "TorchXLAError",
-    "TritonMissingError",
-    "TVMMissingError",
+    "ErrorCode",
+    "GSPMDError",
+    "GraphCaptureError",
+    "HardwareNotFoundError",
+    "HardwareProbeError",
+    "IRConversionError",
+    "IRLoweringError",
+    "IRParseError",
     "IngestionError",
     "IngestionParseError",
     "IngestionUnsupportedIntrinsicError",
-    "IRConversionError",
-    "IRParseError",
-    "IRLoweringError",
-    "ValidationError",
-    "BitExactMismatchError",
-    "ConfigError",
-    "CircuitOpenError",
+    "KernelNotFoundError",
+    "LLDError",
+    "LLVMError",
+    "LinkingError",
+    "NautilusError",
+    "NoGPUAvailableError",
+    "ShardingError",
+    "StableHLOExportError",
     "StageTimeoutError",
+    "TVMMissingError",
+    "TorchXLAError",
     "TotalBudgetExceededError",
-    "BridgeError",
-    "CallbackError",
+    "TritonMissingError",
+    "TuningError",
+    "TuningTimeoutError",
+    "ValidationError",
 ]

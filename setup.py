@@ -9,9 +9,85 @@ This script handles:
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+
+def build_runtime_stub() -> None:
+    """Compile the AOT fat-binary C runtime stub.
+
+    Compiles ``src/bridges/aot_packager/runtime_stub.c`` with gcc
+    targeting the host architecture (auto-detected via ``os.uname()``)
+    to ``build/runtime_stub.o``. The resulting object is the vendor
+    detection + dispatch shim that gets linked into every fat binary
+    the packager produces.
+
+    The flags (-nostdlib -ffreestanding) match the runtime_stub.c
+    header comment, which intentionally avoids libc to stay portable
+    across every supported target.
+
+    Skipped silently if gcc is not on PATH — the linker pipeline has
+    its own gcc invocation (see FatBinaryBuilder._compile_runtime_stub)
+    that will surface a clear error at build time.
+    """
+    if not shutil.which("gcc"):
+        print(
+            "Note: gcc not found in PATH — skipping runtime_stub build.\n"
+            "Fat binary linking will fail at build time without gcc; "
+            "install gcc (apt install gcc / brew install gcc) to enable.",
+            file=sys.stderr,
+        )
+        return
+
+    repo_root = Path(__file__).parent
+    src_c = repo_root / "src" / "bridges" / "aot_packager" / "runtime_stub.c"
+    if not src_c.exists():
+        print(
+            f"Note: {src_c} not found — skipping runtime_stub build.",
+            file=sys.stderr,
+        )
+        return
+
+    # os.uname() over platform.machine() — the former reports what
+    # the kernel actually sees, the latter is a Python-layer shim
+    # that has been observed to disagree with the binary format gcc
+    # emits on cross-compiled CI images.
+    host_arch = os.uname().machine
+    supported = {"x86_64", "aarch64"}
+    if host_arch not in supported:
+        print(
+            f"Note: host arch {host_arch!r} not in {sorted(supported)} — "
+            "skipping runtime_stub build. The fat binary packager will "
+            "re-attempt at build time and fail loudly if unsupported.",
+            file=sys.stderr,
+        )
+        return
+
+    out_dir = repo_root / "build"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_o = out_dir / "runtime_stub.o"
+
+    cmd = [
+        "gcc", "-c",
+        "-nostdlib", "-ffreestanding",
+        "-Wall", "-Werror", "-std=c11",
+        "-o", str(out_o),
+        str(src_c),
+    ]
+    print(f"Building runtime stub: arch={host_arch} out={out_o}")
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"Error: gcc failed to compile runtime_stub.c (rc={exc.returncode}).\n"
+            f"Command: {' '.join(cmd)}",
+            file=sys.stderr,
+        )
+        raise
+
+    print(f"Runtime stub built: {out_o}")
 
 
 def build_cpp_plugin() -> None:
@@ -86,11 +162,13 @@ try:
     class CustomBuildPy(_build_py):
         def run(self) -> None:
             build_cpp_plugin()
+            build_runtime_stub()
             super().run()
 
     class CustomDevelop(_develop):
         def run(self) -> None:
             build_cpp_plugin()
+            build_runtime_stub()
             super().run()
 
     # Re-export with custom commands
@@ -108,5 +186,6 @@ except ImportError:
 
 
 if __name__ == "__main__":
-    # When run directly (not via pip), just build the C++ plugin
+    # When run directly (not via pip), build the C++ plugin and runtime stub
     build_cpp_plugin()
+    build_runtime_stub()

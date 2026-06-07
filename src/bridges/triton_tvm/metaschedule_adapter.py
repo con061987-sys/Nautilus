@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -26,7 +25,7 @@ from src.common.result import Err, Ok, Result
 
 try:
     from tvm import meta_schedule as ms
-    from tvm import tirx
+    from tvm import tir
     from tvm.target import Target
 
     TVM_AVAILABLE = True
@@ -164,7 +163,7 @@ class MetaScheduleAdapter:
         # Run MetaSchedule with timeout
         try:
             os.makedirs(work_dir, exist_ok=True)
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.error("Cannot create work_dir %s: %s", work_dir, exc)
             return Err(TuningError(
                 f"Cannot create tuning work_dir: {work_dir}",
@@ -241,7 +240,7 @@ class MetaScheduleAdapter:
                 f"MetaSchedule tuning: missing dependency: {exc}",
                 context={"target": target_str, "cause": str(exc)},
             ))
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             logger.error(
                 "MetaSchedule tuning: filesystem error (%s)", exc,
             )
@@ -299,7 +298,7 @@ class MetaScheduleAdapter:
                 )
                 if not timed_out.is_set():
                     result_holder.append(database)
-            except BaseException as exc:  # noqa: BLE001
+            except BaseException as exc:
                 if not timed_out.is_set():
                     error_holder.append(exc)
 

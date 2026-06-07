@@ -62,11 +62,11 @@ class TestConfigMapper:
         trace = {
             "instructions": [],
             "decisions": {
-                "thread_binding": [4, 1],  # 4×32=128 threads → 128/32=4 warps
+                "thread_binding": [128, 1],  # 128 threads → 128/32 = 4 warps
             },
         }
         config = mapper.map_record(trace)
-        assert config.num_warps == 4  # 4*1 = 4, ×32=128 threads, /32 = 4 warps
+        assert config.num_warps == 4  # 128*1 = 128 threads, /32 = 4 warps
 
     def test_map_empty_trace(self) -> None:
         """Empty trace should return default config."""

@@ -35,11 +35,11 @@ typedef struct nautilus_kernel_s nautilus_kernel_t;
 
 /* Vendor for which a kernel is being compiled. */
 typedef enum {
-    NAUTILUS_VENDOR_NVIDIA = 0,
-    NAUTILUS_VENDOR_AMD    = 1,
-    NAUTILUS_VENDOR_INTEL  = 2,
-    NAUTILUS_VENDOR_APPLE  = 3,
-    NAUTILUS_VENDOR_HOST   = 4,   /* compile for current host (debug) */
+    NAUTILUS_VENDOR_NVIDIA  = 0,
+    NAUTILUS_VENDOR_AMD     = 1,
+    NAUTILUS_VENDOR_INTEL   = 2,
+    NAUTILUS_VENDOR_APPLE   = 3,
+    NAUTILUS_VENDOR_UNKNOWN = -1,  /* no GPU detected / runtime fallback */
 } nautilus_vendor_t;
 
 /* Compute capability / arch id. */

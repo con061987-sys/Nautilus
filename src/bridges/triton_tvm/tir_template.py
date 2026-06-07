@@ -26,8 +26,8 @@ from src.common.logging import get_logger
 
 try:
     import tvm
-    import tvm.tirx as tirx
-    from tvm.script import tirx as T
+    import tvm.tir as tir
+    from tvm.script import tir as T
 
     TVM_AVAILABLE = True
 except ImportError:
@@ -210,17 +210,17 @@ class TIRTemplateBuilder:
         """Execute TVMScript text to produce a TVM IRModule.
 
         This wraps the TVMScript string in a namespace where
-        tvm.script.tirx is available, then evaluates it. The
+        tvm.script.tir is available, then evaluates it. The
         resulting PrimFunc is wrapped in an IRModule.
         """
         import tvm
-        from tvm.script import tirx as T
+        from tvm.script import tir as T
 
         # Build a namespace for the TVMScript to evaluate in
         namespace: dict[str, Any] = {
             "T": T,
             "tvm": tvm,
-            "tirx": tirx if TVM_AVAILABLE else None,
+            "tir": tir if TVM_AVAILABLE else None,
         }
 
         # Execute the TVMScript in this namespace

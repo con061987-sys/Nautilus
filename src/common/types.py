@@ -4,6 +4,19 @@ Vendor-neutral type definitions shared across all bridges.
 These types are the *contracts* between bridges. The previous design
 had bridges passing untyped `Any` around; this module is the
 restoration of a real type system.
+
+Dependency direction
+--------------------
+This module imports ONLY from ``src.common.primitives`` and from
+``src.common.errors``. It MUST NOT import from ``src.common.result``
+or ``src.common.logging`` (a previous version did, creating a cycle).
+
+Base types (Vendor, Arch, ErrorCode, NautilusError, Result/Ok/Err,
+HardwareTarget) are defined in ``primitives`` and re-exported here
+so existing imports like ``from src.common.types import Vendor``
+keep working. The ``Vendor.from_string`` convenience that raises
+``ConfigError`` is attached below — primitives stays free of
+bridge-specific exceptions.
 """
 
 from __future__ import annotations
@@ -11,148 +24,57 @@ from __future__ import annotations
 import functools
 import hashlib
 import time
+import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 from src.common.errors import (
     ConfigError,
     DependencyMissingError,
-    NautilusError,
+)
+from src.common.primitives import (
+    Arch,
+    Err,
+    HardwareTarget,
+    Ok,
+    Result,
+)
+from src.common.primitives import (
+    Vendor as _PrimitiveVendor,
 )
 
-# --- Re-export Result from result module ---
-from src.common.result import Err, Ok, Result  # noqa: E402
-
-# --- Vendors and architectures ---
+# Re-export so ``from src.common.types import Vendor`` keeps working.
+Vendor = _PrimitiveVendor
 
 
-class Vendor(str, Enum):
-    """Hardware vendor. Single source of truth for all bridges."""
-    NVIDIA = "nvidia"
-    AMD = "amd"
-    INTEL = "intel"
-    APPLE = "apple"
-    UNKNOWN = "unknown"
+# Vendor.from_string raises ConfigError, so it lives here (not in
+# primitives) to avoid an errors→primitives dependency.
+@classmethod  # type: ignore[misc]
+def _vendor_from_string(cls, s: str, strict: bool = True) -> Vendor:
+    """Parse a vendor name into a Vendor.
 
-    @classmethod
-    def from_string(cls, s: str, strict: bool = True) -> "Vendor":
-        """Parse a vendor name into a Vendor.
+    Args:
+        s: Input string. Case-insensitive.
+        strict: If True, raise ConfigError on unknown input.
+            If False, return Vendor.UNKNOWN (legacy behavior).
 
-        Args:
-            s: Input string. Case-insensitive.
-            strict: If True, raise ConfigError on unknown input.
-                If False, return Vendor.UNKNOWN (legacy behavior).
-
-        Defaults to strict=True so that typos surface at config-load
-        time rather than as silent Vendor.UNKNOWN at runtime.
-        """
-        try:
-            return cls(s.lower())
-        except ValueError:
-            if strict:
-                raise ConfigError(
-                    f"Unknown vendor: {s!r}",
-                    context={"input": s, "valid": [v.value for v in cls]},
-                ) from None
-            return cls.UNKNOWN
+    Defaults to strict=True so that typos surface at config-load
+    time rather than as silent Vendor.UNKNOWN at runtime.
+    """
+    try:
+        return cls(s.lower())
+    except ValueError:
+        if strict:
+            raise ConfigError(
+                f"Unknown vendor: {s!r}",
+                context={"input": s, "valid": [v.value for v in cls]},
+            ) from None
+        return cls.UNKNOWN
 
 
-class Arch(str, Enum):
-    """GPU architecture. Vendor-agnostic identifier (e.g. sm_90, gfx942, xe_hpg)."""
-    # NVIDIA
-    SM_70 = "sm_70"      # V100
-    SM_75 = "sm_75"      # Turing
-    SM_80 = "sm_80"      # A100
-    SM_86 = "sm_86"      # A100
-    SM_89 = "sm_89"      # RTX 4090
-    SM_90 = "sm_90"      # H100 Hopper
-    SM_100 = "sm_100"    # B100 Blackwell
-    SM_120 = "sm_120"    # B200 Blackwell
-    # AMD
-    GFX900 = "gfx900"    # MI50
-    GFX906 = "gfx906"    # MI60
-    GFX908 = "gfx908"    # MI100
-    GFX90A = "gfx90a"    # MI200 / MI250
-    GFX942 = "gfx942"    # MI300X
-    GFX950 = "gfx950"    # MI325X
-    # Intel
-    XE = "intel_gpu_xe"
-    XE_LP = "intel_gpu_xelp"
-    XE_HPG = "intel_gpu_xehpg"  # Arc
-    XE_HPC = "intel_gpu_xehpc"  # Ponte Vecchio
-    XE2 = "intel_gpu_xe2"        # Lunar Lake / Battlemage
-    GAUDI2 = "intel_gaudi2"
-    GAUDI3 = "intel_gaudi3"
-    # Apple
-    APPLE_M1 = "apple_m1"
-    APPLE_M2 = "apple_m2"
-    APPLE_M3 = "apple_m3"
-    APPLE_M4 = "apple_m4"
-    # Generic
-    GENERIC = "generic"
-
-    @property
-    def vendor(self) -> Vendor:
-        v = self.value
-        if v.startswith("sm_"):
-            return Vendor.NVIDIA
-        if v.startswith("gfx"):
-            return Vendor.AMD
-        if v.startswith("intel") or v.startswith("xe") or v.startswith("gaudi"):
-            return Vendor.INTEL
-        if v.startswith("apple"):
-            return Vendor.APPLE
-        return Vendor.UNKNOWN
-
-
-# --- Targets ---
-
-
-# (vendor, arch) → TVM target alias. Entries here override the
-# default "<prefix>/<arch>" rule in HardwareTarget.to_tvm_target.
-TVM_TARGET_ALIASES: dict[tuple[Vendor, Arch], str] = {
-    (Vendor.NVIDIA, Arch.SM_90): "nvidia/nvidia-h100",
-    (Vendor.NVIDIA, Arch.SM_80): "nvidia/nvidia-a100",
-    (Vendor.AMD, Arch.GFX942): "rocm/gfx942",
-    (Vendor.INTEL, Arch.GAUDI2): "intel/gaudi-2",
-}
-
-_TVM_VENDOR_PREFIX: dict[Vendor, str] = {
-    Vendor.NVIDIA: "nvidia",
-    Vendor.AMD: "rocm",
-    Vendor.INTEL: "intel",
-}
-
-
-@dataclass(frozen=True)
-class HardwareTarget:
-    """A (vendor, arch) pair, possibly with an alias for downstream tools."""
-    vendor: Vendor
-    arch: Arch
-    alias: str = ""  # e.g. "nvidia/nvidia-h100" for TVM
-
-    def to_tvm_target(self) -> str:
-        if self.alias:
-            return self.alias
-        aliased = TVM_TARGET_ALIASES.get((self.vendor, self.arch))
-        if aliased is not None:
-            return aliased
-        prefix = _TVM_VENDOR_PREFIX.get(self.vendor)
-        if prefix is None:
-            return "cuda"
-        return f"{prefix}/{self.arch.value}"
-
-    def to_triton_target(self) -> str:
-        if self.vendor == Vendor.NVIDIA:
-            return "cuda"
-        if self.vendor == Vendor.AMD:
-            return "rocm"
-        if self.vendor == Vendor.INTEL:
-            return "xpu"
-        if self.vendor == Vendor.APPLE:
-            return "metal"
-        return "cuda"
+_PrimitiveVendor.from_string = _vendor_from_string  # type: ignore[attr-defined]
 
 
 # --- Fat binary ---
@@ -269,7 +191,7 @@ class FatBinary:
         return bytes(out)
 
     @classmethod
-    def from_bytes(cls, blob: bytes) -> "FatBinary":
+    def from_bytes(cls, blob: bytes) -> FatBinary:
         """Deserialize from the compact binary format produced by `to_bytes`."""
         import struct
         if blob[:4] != b"NFAT":
@@ -347,7 +269,7 @@ class TuningConfig:
     num_ctas: int = 1
     vendor_overrides: dict[Vendor, dict[str, int]] = field(default_factory=dict)
 
-    def to_triton_config(self) -> "object":
+    def to_triton_config(self) -> object:
         """Lazily build a triton.Config without importing triton at module load."""
         return _build_triton_config(
             self.block_m,
@@ -362,7 +284,7 @@ class TuningConfig:
         return dict(self.vendor_overrides.get(vendor, {}))
 
     @classmethod
-    def defaults(cls) -> "TuningConfig":
+    def defaults(cls) -> TuningConfig:
         return cls()
 
 
@@ -374,7 +296,7 @@ def _build_triton_config(
     num_warps: int,
     num_stages: int,
     num_ctas: int,
-) -> "object":
+) -> object:
     try:
         import triton
     except ImportError as exc:
@@ -523,11 +445,12 @@ class StableHLOModule:
     def __post_init__(self) -> None:
         if self.is_usable and not self.is_real_stablehlo:
             # Soft-warn: fallback is allowed in tests but should be loud in prod
-            from src.common.logging import get_logger
-            get_logger(__name__).warning(
+            warnings.warn(
                 "StableHLOModule is_usable=True but is_real_stablehlo=False; "
                 "this is a fallback representation, not actual StableHLO. "
-                "GSPMD will not produce real sharding."
+                "GSPMD will not produce real sharding.",
+                UserWarning,
+                stacklevel=2,
             )
 
 
@@ -587,19 +510,31 @@ class SpanRecord:
 
 
 __all__ = [
-    # Result
-    "Result", "Ok", "Err",
-    # Vendors / archs
-    "Vendor", "Arch", "HardwareTarget",
-    # Fat binary
-    "SectionFormat", "KernelSection", "FatBinary",
+    "Arch",
+    "Err",
+    "FatBinary",
+    "HardwareTarget",
+    # IR
+    "IRModule",
     "KernelHandle",
+    "KernelSection",
+    # Logging
+    "LogLevel",
+    # Sharding
+    "MeshShape",
+    "Ok",
+    # Result
+    "Result",
+    # Fat binary
+    "SectionFormat",
+    "ShardingSpecLite",
+    "SourceLocation",
+    "SpanRecord",
+    "StableHLOModule",
+    "StageRecord",
+    "TensorShardingLite",
     # Tuning
     "TuningConfig",
-    # Sharding
-    "MeshShape", "TensorShardingLite", "ShardingSpecLite",
-    # IR
-    "IRModule", "StableHLOModule",
-    # Logging
-    "LogLevel", "SourceLocation", "StageRecord", "SpanRecord",
+    # Vendors / archs
+    "Vendor",
 ]

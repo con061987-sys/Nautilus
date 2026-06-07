@@ -1,0 +1,27 @@
+# Pre-commit hooks for Nautilus — Universal Compiler Framework.
+#
+# Standard pre-commit workflow:
+#   pip install pre-commit
+#   pre-commit install
+#   pre-commit run --all-files
+#
+# Hooks fetch ruff from the upstream `astral-sh/ruff-pre-commit` mirror of
+# the PyPI release (no local install required). The other hooks come from
+# the canonical `pre-commit/pre-commit-hooks` repo.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format

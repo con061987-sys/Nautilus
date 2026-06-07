@@ -47,24 +47,24 @@ from .linker import FatBinaryLinker, LinkingResult
 from .nvidia_backend import NvidiaBackend, NvidiaCompilationResult
 
 __all__ = [
-    # Main builder
-    "FatBinaryBuilder",
-    "FatBinaryConfig",
-    "FatBinaryResult",
     # Per-backend
     "AMDBackend",
     "AMDCompilationResult",
-    "IntelBackend",
-    "IntelCompilationResult",
-    "NvidiaBackend",
-    "NvidiaCompilationResult",
-    # Linking
-    "FatBinaryLinker",
-    "LinkingResult",
     # Fat binary format
     "FatBinary",
-    "KernelSection",
+    # Main builder
+    "FatBinaryBuilder",
+    "FatBinaryConfig",
+    # Linking
+    "FatBinaryLinker",
+    "FatBinaryResult",
     # Hardware validation
     "HardwareValidator",
+    "IntelBackend",
+    "IntelCompilationResult",
+    "KernelSection",
+    "LinkingResult",
+    "NvidiaBackend",
+    "NvidiaCompilationResult",
     "ValidationResult",
 ]

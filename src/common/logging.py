@@ -21,15 +21,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 import threading
 import time
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterator, TextIO
+from typing import Any, TextIO
 
 from src.common.types import (
     LogLevel,
@@ -57,7 +57,7 @@ class StdoutLogSink(LogSink):
             try:
                 self._stream.write(json.dumps(record, default=str) + "\n")
                 self._stream.flush()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 # Never let logging crash the pipeline
                 pass
 
@@ -65,7 +65,7 @@ class StdoutLogSink(LogSink):
         with self._lock:
             try:
                 self._stream.flush()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
 
@@ -76,9 +76,8 @@ class JsonLogSink(LogSink):
         self._lock = threading.Lock()
 
     def emit(self, record: dict[str, Any]) -> None:
-        with self._lock:
-            with open(self._path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, default=str) + "\n")
+        with self._lock, open(self._path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
 
     def flush(self) -> None:
         # File is opened in append mode, no buffer to flush.
@@ -171,14 +170,14 @@ class _HumanReadableSink(LogSink):
                         "  " + json.dumps(extras, default=str) + "\n"
                     )
                 self._stream.flush()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     def flush(self) -> None:
         with self._lock:
             try:
                 self._stream.flush()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
 
@@ -192,13 +191,13 @@ configure_logging()
 @dataclass
 class _ActiveSpan:
     """Currently-active span for thread-local lookup."""
-    span: "Span"
+    span: Span
 
 
 _TLS = threading.local()
 
 
-def get_logger(name: str) -> "_NautilusLogger":
+def get_logger(name: str) -> _NautilusLogger:
     """Return a logger with the given name. Names with prefix `nautilus.`
     are auto-registered; any other name passes through.
     """
@@ -251,7 +250,7 @@ class Span:
     def span_id(self) -> str:
         return self._record.span_id
 
-    def set(self, **kwargs: Any) -> "Span":
+    def set(self, **kwargs: Any) -> Span:
         """Add metadata fields. Chainable."""
         self._record.metadata.update(kwargs)
         return self
@@ -281,7 +280,7 @@ class Span:
             },
         )
 
-    def __enter__(self) -> "Span":
+    def __enter__(self) -> Span:
         _TLS.active_span = _ActiveSpan(self)
         return self
 
@@ -319,7 +318,7 @@ class StageLog:
     def name(self) -> str:
         return self._name
 
-    def set(self, **kwargs: Any) -> "StageLog":
+    def set(self, **kwargs: Any) -> StageLog:
         self._record.metadata.update(kwargs)
         return self
 
@@ -339,7 +338,7 @@ class StageLog:
             },
         )
 
-    def __enter__(self) -> "StageLog":
+    def __enter__(self) -> StageLog:
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
@@ -402,7 +401,7 @@ class _NautilusLogger:
         for sink in _ACTIVE_SINKS:
             try:
                 sink.emit(record)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         # Mirror to stdlib (with safe extras only)
         std_level = {

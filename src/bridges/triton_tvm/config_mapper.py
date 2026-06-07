@@ -10,7 +10,7 @@ them into Triton compiler options.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -130,7 +130,14 @@ class ConfigMapper:
     # ------------------------------------------------------------------
 
     def _extract_trace(self, record: Any) -> dict[str, Any] | None:
-        """Extract the serialized trace from a tuning record."""
+        """Extract the serialized trace from a tuning record.
+
+        Handles four cases:
+          1. TVM record object with ``.trace`` attribute
+          2. Raw trace dict with ``instructions`` and ``decisions`` keys
+          3. Dict with a ``trace`` key wrapping the above
+          4. Bare decisions dict (e.g. ``{"tile_m": [1,2,4]}``)
+        """
         if hasattr(record, "trace"):
             trace = record.trace
             if hasattr(trace, "__dict__"):
@@ -138,7 +145,17 @@ class ConfigMapper:
             if isinstance(trace, dict):
                 return trace
         if isinstance(record, dict):
-            return record.get("trace") or record.get("decisions", {})
+            # Case 2: record IS the trace
+            if "instructions" in record or "decisions" in record:
+                return record
+            # Case 3: record has a "trace" key wrapping the real dict
+            trace_val = record.get("trace")
+            if isinstance(trace_val, dict):
+                return trace_val
+            # Case 4: record is just a decisions dict
+            decisions_val = record.get("decisions")
+            if isinstance(decisions_val, dict):
+                return decisions_val
         return None
 
     def _extract_tile_sizes(

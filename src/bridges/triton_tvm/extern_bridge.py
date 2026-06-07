@@ -22,11 +22,9 @@ The hybrid approach gives us the best of both worlds.
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -34,15 +32,15 @@ from src.common.logging import get_logger
 
 try:
     import tvm
-    from tvm.script import tirx as T
-    from tvm.tirx import PrimFunc
+    from tvm.script import tir as T
+    from tvm.tir import PrimFunc
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
 
 from src.common.errors import DependencyMissingError
 
-from .ir_capture import IRBounds, KernelKind
+from .ir_capture import IRBounds
 
 logger = get_logger(__name__)
 
@@ -371,8 +369,6 @@ def {name}(A, B):
         try:
             import importlib.util
 
-            import triton
-            import triton.language as tl
             spec = importlib.util.spec_from_file_location("kernel_mod", source_file)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)

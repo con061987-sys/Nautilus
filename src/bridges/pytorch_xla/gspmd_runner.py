@@ -22,6 +22,7 @@ Production features:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
@@ -65,11 +66,12 @@ class ShardingStrategy(Enum):
     These are hints passed to the underlying GSPMD implementation.
     The actual sharding decisions may differ based on cost model.
     """
-    AUTO = auto()               # Let GSPMD decide
-    REPLICATED = auto()         # Replicate across all devices
-    DATA_PARALLEL = auto()      # Shard batch dimension
-    MODEL_PARALLEL = auto()    # Shard model dimension
-    TENSOR_PARALLEL = auto()    # Shard specific tensor dimensions
+
+    AUTO = auto()  # Let GSPMD decide
+    REPLICATED = auto()  # Replicate across all devices
+    DATA_PARALLEL = auto()  # Shard batch dimension
+    MODEL_PARALLEL = auto()  # Shard model dimension
+    TENSOR_PARALLEL = auto()  # Shard specific tensor dimensions
 
 
 @dataclass
@@ -79,6 +81,7 @@ class TensorSharding:
     Backward-compatible with existing tests. Internally converted to
     ``TensorShardingLite`` for the canonical representation.
     """
+
     tensor_name: str
     mesh_axes: list[int] = field(default_factory=list)
     partition_shape: list[int] = field(default_factory=list)
@@ -109,6 +112,7 @@ class ShardingSpec:
     Backward-compatible with existing tests. Internally delegates to
     ``ShardingSpecLite`` where appropriate.
     """
+
     mesh_shape: list[int] = field(default_factory=list)
     tensor_shardings: dict[str, TensorSharding] = field(default_factory=dict)
     inserted_collectives: list[dict[str, Any]] = field(default_factory=list)
@@ -118,22 +122,22 @@ class ShardingSpec:
 
     @property
     def cache_key(self) -> str:
-        payload = json.dumps({
-            "mesh_shape": self.mesh_shape,
-            "tensor_count": len(self.tensor_shardings),
-            "collectives": len(self.inserted_collectives),
-            "strategy": self.strategy_used.name,
-        }, sort_keys=True)
+        payload = json.dumps(
+            {
+                "mesh_shape": self.mesh_shape,
+                "tensor_count": len(self.tensor_shardings),
+                "collectives": len(self.inserted_collectives),
+                "strategy": self.strategy_used.name,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
 
     def to_lite(self) -> ShardingSpecLite:
         mesh = MeshShape(axes=tuple(self.mesh_shape))
         return ShardingSpecLite(
             mesh=mesh,
-            tensor_shardings={
-                name: ts.to_lite()
-                for name, ts in self.tensor_shardings.items()
-            },
+            tensor_shardings={name: ts.to_lite() for name, ts in self.tensor_shardings.items()},
             inserted_collectives=tuple(self.inserted_collectives),
             estimated_comm_volume_bytes=self.estimated_comm_volume_bytes,
             estimated_compute_time_s=self.estimated_compute_time_s,
@@ -143,6 +147,7 @@ class ShardingSpec:
 @dataclass
 class GSPMDResult:
     """Result of GSPMD auto-sharding."""
+
     success: bool
     sharded_stablehlo: str = ""
     sharding_spec: ShardingSpec | None = None
@@ -195,7 +200,9 @@ class _CommCostModel:
 
     @classmethod
     def estimate_tensor_bytes(
-        cls, spec: TensorSharding, dtype_bytes: int = 4,
+        cls,
+        spec: TensorSharding,
+        dtype_bytes: int = 4,
     ) -> int:
         """Estimate the byte size of a tensor given its sharding."""
         shape = spec.partition_shape or [1]
@@ -215,6 +222,7 @@ class _TorchXLASharding:
     def is_available() -> bool:
         try:
             import torch_xla  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -228,7 +236,6 @@ class _TorchXLASharding:
         custom_shardings: dict[str, TensorSharding] | None,
     ) -> tuple[str, ShardingSpec]:
         """Run the real XLA GSPMD shard_module path."""
-        import torch
 
         # Try the experimental sharding_impl path
         try:
@@ -236,9 +243,12 @@ class _TorchXLASharding:
         except ImportError:
             # Fall back to the distributed/spmd path which is more stable
             from torch_xla.distributed.spmd import Mesh
-            from torch_xla.distributed.spmd import ShardingSpec as XlaShardingSpec
+
             return cls._shard_via_spmd_api(
-                module, mesh_shape, strategy, custom_shardings,
+                module,
+                mesh_shape,
+                strategy,
+                custom_shardings,
             )
 
         # Build the intermediate representation that shard_module expects
@@ -253,7 +263,9 @@ class _TorchXLASharding:
 
             # Convert strategy to partition spec
             partition_specs = cls._strategy_to_partition_specs(
-                module, strategy, mesh_shape,
+                module,
+                strategy,
+                mesh_shape,
             )
 
             # Call shard_module
@@ -269,7 +281,11 @@ class _TorchXLASharding:
                 sharded_text = str(sharded_mod.mlir_module())
 
             spec = cls._build_spec_from_sharded(
-                sharded_mod, module, mesh_shape, strategy, custom_shardings,
+                sharded_mod,
+                module,
+                mesh_shape,
+                strategy,
+                custom_shardings,
             )
             return sharded_text, spec
 
@@ -288,7 +304,6 @@ class _TorchXLASharding:
         custom_shardings: dict[str, TensorSharding] | None,
     ) -> tuple[str, ShardingSpec]:
         """Shard via torch_xla.distributed.spmd.mark_sharding API."""
-        import torch
 
         device_ids = list(range(_total_devices(mesh_shape)))
         from torch_xla.distributed.spmd import Mesh
@@ -309,7 +324,9 @@ class _TorchXLASharding:
             for inp in module.input_specs:
                 tname = inp.get("name", "input")
                 part_spec = cls._strategy_partition_spec(
-                    strategy, mesh_shape, len(inp.get("shape", [])) if "shape" in inp else 2,
+                    strategy,
+                    mesh_shape,
+                    len(inp.get("shape", [])) if "shape" in inp else 2,
                 )
                 if part_spec:
                     partition_specs[tname] = part_spec
@@ -321,16 +338,25 @@ class _TorchXLASharding:
 
         # Build the spec and annotate the StableHLO text
         spec = cls._build_spec_from_op_shardings(
-            op_shardings, module, mesh_shape, strategy, custom_shardings,
+            op_shardings,
+            module,
+            mesh_shape,
+            strategy,
+            custom_shardings,
         )
         sharded_text = _annotate_stablehlo_with_sharding(
-            module.mlir_text, spec,
+            module.mlir_text,
+            spec,
         )
         return sharded_text, spec
 
     @staticmethod
     def _total_devices(mesh_shape: list[int]) -> int:
-        return _total_devices(mesh_shape)
+        """Compute total devices from mesh shape (product of all dimensions)."""
+        total = 1
+        for d in mesh_shape:
+            total *= d
+        return total
 
     @staticmethod
     def _make_partition_spec(
@@ -388,7 +414,9 @@ class _TorchXLASharding:
             shape = inp.get("shape", [])
             rank = len(shape) if shape else 2
             part_spec = _TorchXLASharding._strategy_partition_spec(
-                strategy, mesh_shape, rank,
+                strategy,
+                mesh_shape,
+                rank,
             )
             if part_spec:
                 specs[tname] = part_spec
@@ -418,7 +446,8 @@ class _TorchXLASharding:
             else:
                 # Infer from strategy
                 part_spec = _TorchXLASharding._strategy_partition_spec(
-                    strategy, mesh_shape,
+                    strategy,
+                    mesh_shape,
                     len(inp.get("shape", [])) if "shape" in inp else 2,
                 )
                 axes = [i for i, p in enumerate(part_spec) if p is not None] if part_spec else []
@@ -432,7 +461,9 @@ class _TorchXLASharding:
 
         # Add inserted collectives
         spec.inserted_collectives = _compute_collectives(
-            spec, module, total_dev,
+            spec,
+            module,
+            total_dev,
         )
         spec.estimated_comm_volume_bytes = sum(
             c.get("estimated_bytes", 0) for c in spec.inserted_collectives
@@ -460,7 +491,6 @@ class _TorchXLASharding:
                 spec.tensor_shardings[tname] = custom_shardings[tname]
             elif tname in op_shardings:
                 # Extract sharding info from OpSharding proto
-                ops = op_shardings[tname]
                 spec.tensor_shardings[tname] = TensorSharding(
                     tensor_name=tname,
                     mesh_axes=[0] if strategy != ShardingStrategy.REPLICATED else [],
@@ -476,7 +506,9 @@ class _TorchXLASharding:
                 )
 
         spec.inserted_collectives = _compute_collectives(
-            spec, module, total_dev,
+            spec,
+            module,
+            total_dev,
         )
         spec.estimated_comm_volume_bytes = sum(
             c.get("estimated_bytes", 0) for c in spec.inserted_collectives
@@ -491,6 +523,7 @@ class _XlaClientSharding:
     def is_available() -> bool:
         try:
             from torch_xla._internal import pjrt  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -504,10 +537,6 @@ class _XlaClientSharding:
         custom_shardings: dict[str, TensorSharding] | None,
     ) -> tuple[str, ShardingSpec]:
         """Shard using XLA's OpSharding proto directly."""
-        from torch_xla._internal import pjrt
-
-        total_dev = _total_devices(mesh_shape)
-        device_ids = list(range(total_dev))
 
         # Build a ShardingSpec from strategy + custom overrides
         spec = ShardingSpec(
@@ -552,8 +581,11 @@ class _XlaClientSharding:
                 )
 
         # Compute collectives with real cost model
+        total_dev = _TorchXLASharding._total_devices(mesh_shape)
         spec.inserted_collectives = _compute_collectives(
-            spec, module, total_dev,
+            spec,
+            module,
+            total_dev,
         )
         spec.estimated_comm_volume_bytes = sum(
             c.get("estimated_bytes", 0) for c in spec.inserted_collectives
@@ -572,6 +604,7 @@ class _TVMMetaScheduleSharding:
     def is_available() -> bool:
         try:
             import tvm  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -597,9 +630,6 @@ class _TVMMetaScheduleSharding:
         attributes, giving a less-optimal but real sharding.
         """
         import tvm
-        from tvm import tir
-
-        total_dev = _total_devices(mesh_shape)
 
         # ── Build TIR module from the StableHLO description ──────
         # We create a TIR PrimFunc that represents the computation
@@ -638,8 +668,12 @@ class _TVMMetaScheduleSharding:
 
         # ── Extract sharding decisions from tuned results ────────
         spec = cls._build_spec_from_tvm(
-            tir_mod, module, mesh_shape, strategy,
-            custom_shardings, database,
+            tir_mod,
+            module,
+            mesh_shape,
+            strategy,
+            custom_shardings,
+            database,
         )
 
         # ── Generate sharded StableHLO with mhlo.sharding annotations ──
@@ -661,7 +695,6 @@ class _TVMMetaScheduleSharding:
         with block attributes that MetaSchedule recognizes.
         """
         import tvm
-        from tvm import tir
 
         ib = tvm.tir.ir_builder.create()
 
@@ -674,9 +707,10 @@ class _TVMMetaScheduleSharding:
 
         # Build TIR buffers
         buffers = []
-        for name, (shape, dtype) in input_tensors.items():
-            buf = ib.buffer("A" if not buffers else chr(ord(buffers[-1].name) + 1),
-                            dtype=dtype, shape=shape)
+        for _name, (shape, dtype) in input_tensors.items():
+            buf = ib.buffer(
+                "A" if not buffers else chr(ord(buffers[-1].name) + 1), dtype=dtype, shape=shape
+            )
             buffers.append(buf)
 
         if not buffers:
@@ -735,7 +769,12 @@ def {func_name}(
             )
             # Fallback: build a minimal IRModule with sharding metadata
             return cls._build_minimal_ir_module(
-                func_name, shape_m, shape_n, shape_k, strategy, mesh_shape,
+                func_name,
+                shape_m,
+                shape_n,
+                shape_k,
+                strategy,
+                mesh_shape,
             )
 
     @staticmethod
@@ -752,10 +791,6 @@ def {func_name}(
         from tvm import tir
 
         # Create a simple TIR function
-        var_m = tir.Var("m", "int32")
-        var_n = tir.Var("n", "int32")
-        var_k = tir.Var("k", "int32")
-
         a_buf = tir.decl_buffer((m, k), "float32", name="A")
         b_buf = tir.decl_buffer((k, n), "float32", name="B")
         c_buf = tir.decl_buffer((m, n), "float32", name="C")
@@ -766,16 +801,28 @@ def {func_name}(
         kk = tir.Var("k", "int32")
 
         body = tir.stmt_seq(
-            tir.For(i, 0, m, tir.ForKind.SERIAL,
-                tir.For(j, 0, n, tir.ForKind.SERIAL,
+            tir.For(
+                i,
+                0,
+                m,
+                tir.ForKind.SERIAL,
+                tir.For(
+                    j,
+                    0,
+                    n,
+                    tir.ForKind.SERIAL,
                     tir.stmt_seq(
                         tir.BufferStore(c_buf, [i, j], tir.FloatImm("float32", 0.0)),
-                        tir.For(kk, 0, k, tir.ForKind.SERIAL,
+                        tir.For(
+                            kk,
+                            0,
+                            k,
+                            tir.ForKind.SERIAL,
                             tir.BufferStore(
-                                c_buf, [i, j],
-                                tir.BufferLoad(c_buf, [i, j]) +
-                                tir.BufferLoad(a_buf, [i, kk]) *
-                                tir.BufferLoad(b_buf, [kk, j]),
+                                c_buf,
+                                [i, j],
+                                tir.BufferLoad(c_buf, [i, j])
+                                + tir.BufferLoad(a_buf, [i, kk]) * tir.BufferLoad(b_buf, [kk, j]),
                             ),
                         ),
                     ),
@@ -816,6 +863,7 @@ def {func_name}(
             "llvm"              fallback for CPU or when no device info
         """
         from src.bridges.pytorch_xla.device_mesh_utils import infer_target_from_mesh
+
         return infer_target_from_mesh(mesh)
 
     @classmethod
@@ -862,7 +910,9 @@ def {func_name}(
                 )
 
         spec.inserted_collectives = _compute_collectives(
-            spec, module, total_dev,
+            spec,
+            module,
+            total_dev,
         )
         spec.estimated_comm_volume_bytes = sum(
             c.get("estimated_bytes", 0) for c in spec.inserted_collectives
@@ -904,37 +954,43 @@ def _compute_collectives(
 
         # All-reduce is always needed for gradient synchronization
         all_reduce_bytes = cost.all_reduce_bytes(tensor_bytes, num_devices)
-        collectives.append({
-            "type": "all-reduce",
-            "op": "sum",
-            "tensor": tname,
-            "mesh_axes": list(ts.mesh_axes),
-            "num_devices": num_devices,
-            "estimated_bytes": all_reduce_bytes,
-        })
+        collectives.append(
+            {
+                "type": "all-reduce",
+                "op": "sum",
+                "tensor": tname,
+                "mesh_axes": list(ts.mesh_axes),
+                "num_devices": num_devices,
+                "estimated_bytes": all_reduce_bytes,
+            }
+        )
 
         # If the tensor is sharded, we also need all-gather or reduce-scatter
         if len(ts.mesh_axes) > 0:
             all_gather_bytes = cost.all_gather_bytes(tensor_bytes, num_devices)
-            collectives.append({
-                "type": "all-gather",
-                "op": "identity",
-                "tensor": tname,
-                "mesh_axes": list(ts.mesh_axes),
-                "num_devices": num_devices,
-                "estimated_bytes": all_gather_bytes,
-            })
+            collectives.append(
+                {
+                    "type": "all-gather",
+                    "op": "identity",
+                    "tensor": tname,
+                    "mesh_axes": list(ts.mesh_axes),
+                    "num_devices": num_devices,
+                    "estimated_bytes": all_gather_bytes,
+                }
+            )
 
         # Reduce-scatter for partial gradient aggregation
         reduce_scatter_bytes = cost.reduce_scatter_bytes(tensor_bytes, num_devices)
-        collectives.append({
-            "type": "reduce-scatter",
-            "op": "sum",
-            "tensor": tname,
-            "mesh_axes": list(ts.mesh_axes),
-            "num_devices": num_devices,
-            "estimated_bytes": reduce_scatter_bytes,
-        })
+        collectives.append(
+            {
+                "type": "reduce-scatter",
+                "op": "sum",
+                "tensor": tname,
+                "mesh_axes": list(ts.mesh_axes),
+                "num_devices": num_devices,
+                "estimated_bytes": reduce_scatter_bytes,
+            }
+        )
 
     return collectives
 
@@ -998,8 +1054,7 @@ def _sharding_spec_to_string(ts: TensorSharding, mesh_shape: list[int]) -> str:
         tile_str = ",".join(str(s) for s in ts.partition_shape)
     else:
         tile_str = ",".join(
-            str(mesh_shape[a]) if a < len(mesh_shape) else "1"
-            for a in ts.mesh_axes
+            str(mesh_shape[a]) if a < len(mesh_shape) else "1" for a in ts.mesh_axes
         )
 
     num_devices = 1
@@ -1064,7 +1119,7 @@ def _insert_sharding_attr(
         + func_match.group(1)
         + new_sig_args
         + func_match.group(3)
-        + mlir_text[func_match.end():]
+        + mlir_text[func_match.end() :]
     )
 
 
@@ -1151,9 +1206,11 @@ class GSPMDRunner:
         self._breakers = get_default_breakers()
 
         # Per-stage timeouts
-        self._timeout_mgr = TimeoutManager(StageBudgets(
-            sharding_seconds=timeout_seconds,
-        ))
+        self._timeout_mgr = TimeoutManager(
+            StageBudgets(
+                sharding_seconds=timeout_seconds,
+            )
+        )
 
     def run(
         self,
@@ -1272,7 +1329,9 @@ class GSPMDRunner:
                         # Run sharding with timeout
                         with self._timeout_mgr.stage("sharding"):
                             sharded_text, sharding_spec = tier_cls.shard(
-                                stablehlo_module, mesh_shape, strategy,
+                                stablehlo_module,
+                                mesh_shape,
+                                strategy,
                                 custom_shardings,
                             )
 
@@ -1280,7 +1339,8 @@ class GSPMDRunner:
                         if not _has_sharding_annotations(sharded_text):
                             # Try stronger annotation
                             sharded_text = _annotate_stablehlo_with_sharding(
-                                sharded_text, sharding_spec,
+                                sharded_text,
+                                sharding_spec,
                             )
 
                         if not _has_sharding_annotations(sharded_text):
@@ -1308,15 +1368,13 @@ class GSPMDRunner:
                         st.set(status="failed", error=str(exc))
                         # Record failure in circuit breaker
                         if tier_name in self._breakers:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self._breakers[tier_name]._record_failure(exc)
-                            except Exception:
-                                pass
 
             # ── All tiers failed ───────────────────────────────────────
             if not sharded_text or sharding_spec is None:
                 raise GSPMDError(
-                    f"All GSPMD sharding paths failed. Attempt history:\n"
+                    "All GSPMD sharding paths failed. Attempt history:\n"
                     + "\n".join(f"  [{i}] {a}" for i, a in enumerate(attempt_history)),
                     context={
                         "model": getattr(stablehlo_module, "function_name", "unknown"),
@@ -1363,8 +1421,8 @@ class GSPMDRunner:
 
 
 __all__ = [
-    "GSPMDRunner",
     "GSPMDResult",
+    "GSPMDRunner",
     "ShardingSpec",
     "ShardingStrategy",
     "TensorSharding",

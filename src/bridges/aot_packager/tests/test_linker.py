@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import struct
 from pathlib import Path
-
-import pytest
 
 from src.bridges.aot_packager.linker import (
     FatBinaryLinker,
@@ -67,8 +64,7 @@ class TestFatBinaryLinker:
     def test_link_with_runtime_stub(self, tmp_path: Path) -> None:
         """A fat binary can include a runtime stub."""
         linker = FatBinaryLinker(cache_dir=str(tmp_path / "link"))
-        # Minimal ELF header
-        runtime_stub = b"\x7fELF" + b"\x00" * 60
+        runtime_stub = linker._wrap_section_data(b"stub_code", ".stub", "PROGBITS")
         result = linker.link_fat_binary(
             nvidia_ptx=SAMPLE_PTX,
             runtime_stub_o=runtime_stub,
@@ -78,9 +74,11 @@ class TestFatBinaryLinker:
         assert result.is_usable
 
     def test_link_with_minimal_input(self, tmp_path: Path) -> None:
-        """A fat binary with no sections should still produce an output."""
+        """A fat binary with a single minimal section should still produce an output."""
         linker = FatBinaryLinker(cache_dir=str(tmp_path / "link"))
+        minimal_o = linker._wrap_section_data(b"test", ".test", "PROGBITS")
         result = linker.link_fat_binary(
+            runtime_stub_o=minimal_o,
             kernel_name="empty",
             output_path=tmp_path / "empty.fat.o",
         )

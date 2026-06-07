@@ -2,7 +2,7 @@
 
 Converts the converted AST (output of Pass 4) into TVMScript text —
 the Python-embedded TIR DSL that TVM's MetaSchedule can directly
-consume via `tvm.script.tirx.prim_func` and `tvm.s_tir.meta_schedule.tune_tir`.
+consume via `tvm.script.tir.prim_func` and `tvm.meta_schedule.tune_tir`.
 
 This is the ONLY module that produces TVM-specific output. All the
 conversion passes produce a generic AST; the emitter is the boundary
@@ -15,8 +15,7 @@ matches what TVM's example kernels do.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from src.common.logging import get_logger
 
@@ -36,7 +35,7 @@ class TVMScriptEmitter:
 
     The emitter walks the function's ops and produces TVMScript lines.
     The output is a string of Python code that, when wrapped in
-    `tvm.script.tirx.prim_func`, produces a valid TIR PrimFunc.
+    `tvm.script.tir.prim_func`, produces a valid TIR PrimFunc.
 
     Key design decisions:
       - Use Python f-strings for readability and debuggability
@@ -49,12 +48,12 @@ class TVMScriptEmitter:
         """Emit TVMScript text for the function.
 
         Returns a string of Python code that can be wrapped in
-        `@tvm.script.tirx.prim_func`.
+        `@tvm.script.tir.prim_func`.
         """
         lines: list[str] = []
 
         # Emit T.alloc_buffer for each function argument
-        lines.append(f"@T.prim_func")
+        lines.append("@T.prim_func")
         lines.append(f"def {func.name}({self._emit_signature(func)}):")
         lines.append("    # Function body — emitted from real Triton IR")
         lines.append("")

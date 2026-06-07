@@ -1,7 +1,7 @@
 """TVMScript executor — runs emitted TVMScript to produce a real TVM IRModule.
 
 The TVMScript emitter (tvmscript_emitter.py) produces a string of
-Python code that, when executed in a namespace with tvm.script.tirx
+Python code that, when executed in a namespace with tvm.script.tir
 available, produces a TVM PrimFunc. This module provides the
 production-grade execution of that string with:
 
@@ -16,9 +16,8 @@ a real TVM IRModule that MetaSchedule can consume".
 
 from __future__ import annotations
 
-import sys
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from src.common.logging import get_logger
@@ -27,7 +26,7 @@ logger = get_logger(__name__)
 
 try:
     import tvm
-    from tvm.script import tirx as T
+    from tvm.script import tir as T
     TVM_AVAILABLE = True
 except ImportError:
     TVM_AVAILABLE = False
@@ -152,16 +151,16 @@ class TVMScriptExecutor:
         the calling scope.
         """
         import tvm
-        from tvm.script import tirx as T
+        from tvm.script import tir as T
         namespace: dict[str, Any] = {
             "__builtins__": __builtins__,
             "tvm": tvm,
             "T": T,
         }
-        # Also expose tirx if available
+        # Also expose tir if available
         try:
-            import tvm.tirx as tirx
-            namespace["tirx"] = tirx
+            import tvm.tir as tir
+            namespace["tir"] = tir
         except ImportError:
             pass
         return namespace
@@ -176,16 +175,16 @@ class TVMScriptExecutor:
         prim_funcs: dict[str, Any] = {}
         # Common names to skip
         skip_names = {
-            "T", "tvm", "tirx", "__builtins__", "__name__", "__doc__",
+            "T", "tvm", "tir", "__builtins__", "__name__", "__doc__",
             "__package__", "__loader__", "__spec__", "__file__", "__cached__",
         }
         for name, obj in namespace.items():
             if name in skip_names or name.startswith("_"):
                 continue
-            # Check if it's a PrimFunc (TVM 0.18+ uses tvm.tirx.PrimFunc)
+            # Check if it's a PrimFunc (TVM 0.18+ uses tvm.tir.PrimFunc)
             if TVM_AVAILABLE:
                 try:
-                    from tvm.tirx import PrimFunc
+                    from tvm.tir import PrimFunc
                     if isinstance(obj, PrimFunc):
                         prim_funcs[name] = obj
                         continue

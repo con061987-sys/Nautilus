@@ -336,7 +336,7 @@ class TritonKernelHandle:
             lib.nautilus_release(c_void_p(self._c_handle))
             self._released = True
 
-    def __enter__(self) -> "TritonKernelHandle":
+    def __enter__(self) -> TritonKernelHandle:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -410,7 +410,7 @@ class TIRModuleHandle:
             lib.nautilus_tir_release(c_void_p(self._c_handle))
             self._released = True
 
-    def __enter__(self) -> "TIRModuleHandle":
+    def __enter__(self) -> TIRModuleHandle:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -457,7 +457,7 @@ class TuningRecordHandle:
             lib.nautilus_tuning_record_release(c_void_p(self._c_handle))
             self._released = True
 
-    def __enter__(self) -> "TuningRecordHandle":
+    def __enter__(self) -> TuningRecordHandle:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -568,7 +568,7 @@ class StableHLOHandle:
             lib.nautilus_stablehlo_release(c_void_p(self._c_handle))
             self._released = True
 
-    def __enter__(self) -> "StableHLOHandle":
+    def __enter__(self) -> StableHLOHandle:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -599,7 +599,7 @@ class MeshHandle:
             lib.nautilus_mesh_release(c_void_p(self._c_handle))
             self._released = True
 
-    def __enter__(self) -> "MeshHandle":
+    def __enter__(self) -> MeshHandle:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -630,7 +630,7 @@ class ShardingSpecHandle:
             lib.nautilus_sharding_spec_release(c_void_p(self._c_handle))
             self._released = True
 
-    def __enter__(self) -> "ShardingSpecHandle":
+    def __enter__(self) -> ShardingSpecHandle:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -794,40 +794,66 @@ xla_c_api = _XlaNamespace()
 
 
 __all__ = [
+    "ARCH_GAUDI2",
+    "ARCH_GAUDI3",
+    "ARCH_GFX90A",
+    "ARCH_GFX900",
+    "ARCH_GFX906",
+    "ARCH_GFX908",
+    "ARCH_GFX942",
+    "ARCH_GFX950",
+    "ARCH_SM_70",
+    "ARCH_SM_75",
+    "ARCH_SM_80",
+    "ARCH_SM_86",
+    "ARCH_SM_89",
+    "ARCH_SM_90",
+    "ARCH_SM_100",
+    "ARCH_SM_120",
+    "ARCH_XE2",
+    "ARCH_XE_HPC",
+    "ARCH_XE_HPG",
+    "ARCH_XE_LP",
+    # XLA sharding strategy constants
+    "SHARD_AUTO",
+    "SHARD_DATA_PARALLEL",
+    "SHARD_MODEL_PARALLEL",
+    "SHARD_REPLICATED",
+    "SHARD_TENSOR_PARALLEL",
+    # TVM strategy constants
+    "TUNING_AUTO",
+    "TUNING_RL_EVOLUTIONARY",
+    "TUNING_RL_GRADIENT",
+    "TUNING_XGBOOST_COST_MODEL",
+    "VENDOR_AMD",
+    "VENDOR_APPLE",
+    "VENDOR_HOST",
+    "VENDOR_INTEL",
+    # Triton vendor / arch constants
+    "VENDOR_NVIDIA",
     # Errors
     "CApiUnavailable",
-    # Triton C-API
-    "TritonKernelHandle",
-    "compile",
-    "triton_version",
-    "triton_c_api",
-    # TVM C-API
-    "TIRModuleHandle",
-    "TuningRecordHandle",
-    "tir_parse",
-    "tune",
-    "tvm_version",
-    "tvm_c_api",
-    # XLA C-API
-    "StableHLOHandle",
     "MeshHandle",
     "ShardingSpecHandle",
-    "stablehlo_from_fx",
-    "mesh_create",
+    # XLA C-API
+    "StableHLOHandle",
+    # TVM C-API
+    "TIRModuleHandle",
+    # Triton C-API
+    "TritonKernelHandle",
+    "TuningRecordHandle",
+    "compile",
     "gspmd_shard",
-    "xla_version",
-    "xla_c_api",
     # Availability probe
     "is_available",
-    # Triton vendor / arch constants
-    "VENDOR_NVIDIA", "VENDOR_AMD", "VENDOR_INTEL", "VENDOR_APPLE", "VENDOR_HOST",
-    "ARCH_SM_70", "ARCH_SM_75", "ARCH_SM_80", "ARCH_SM_86", "ARCH_SM_89",
-    "ARCH_SM_90", "ARCH_SM_100", "ARCH_SM_120",
-    "ARCH_GFX900", "ARCH_GFX906", "ARCH_GFX908", "ARCH_GFX90A", "ARCH_GFX942", "ARCH_GFX950",
-    "ARCH_XE_LP", "ARCH_XE_HPG", "ARCH_XE_HPC", "ARCH_XE2", "ARCH_GAUDI2", "ARCH_GAUDI3",
-    # TVM strategy constants
-    "TUNING_AUTO", "TUNING_RL_EVOLUTIONARY", "TUNING_RL_GRADIENT", "TUNING_XGBOOST_COST_MODEL",
-    # XLA sharding strategy constants
-    "SHARD_AUTO", "SHARD_REPLICATED", "SHARD_DATA_PARALLEL",
-    "SHARD_MODEL_PARALLEL", "SHARD_TENSOR_PARALLEL",
+    "mesh_create",
+    "stablehlo_from_fx",
+    "tir_parse",
+    "triton_c_api",
+    "triton_version",
+    "tune",
+    "tvm_c_api",
+    "tvm_version",
+    "xla_c_api",
+    "xla_version",
 ]

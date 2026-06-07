@@ -44,6 +44,8 @@ dependencies = [
     "pyzmq>=25.1,<27.0",
     "msgpack>=1.0,<2.0",
     "hypothesis>=6.100,<7.0",
+    "tree-sitter>=0.20,<0.26",
+    "tree-sitter-cpp>=0.20,<0.24",
 ]
 
 [project.optional-dependencies]
@@ -98,11 +100,11 @@ dev = [
     "pre-commit>=3.7,<5.0",
 ]
 
-[project.entry-points."triton.backends"]
-nautilus = "src.bridges.triton_tvm.backend:TVMBackend"
-
-[project.entry-points."triton.drivers"]
-nautilus = "src.bridges.triton_tvm.backend:TVMDriver"
+# Triton backend plugin is loaded via TRITON_PLUGIN_DIRS at runtime, not
+# via entry points, to avoid import-order conflicts when Triton starts up
+# and scans the entry-point group at import time. Set the env var:
+#   TRITON_PLUGIN_DIRS=$PWD/src/bridges/triton_tvm/backend
+# to activate the custom TVM MetaSchedule backend.
 
 [project.scripts]
 nautilus = "src.cli.main:cli"

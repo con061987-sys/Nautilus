@@ -27,6 +27,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../../c_api/triton_c_api.h"
+
 /* Avoid pulling in <stdio.h> for nostdlib builds; we implement what we need.
  * These are kept available for future expansion (e.g. a debug logger)
  * and marked __attribute__((unused)) so -Werror=unused-function doesn't
@@ -141,11 +143,17 @@ static int nautilus_check_apple(void) { return 0; }
  * Public API                                                            *
  * ------------------------------------------------------------------ */
 
-#define NAUTILUS_VENDOR_UNKNOWN  (-1)
-#define NAUTILUS_VENDOR_NVIDIA   0
-#define NAUTILUS_VENDOR_AMD      1
-#define NAUTILUS_VENDOR_INTEL    2
-#define NAUTILUS_VENDOR_APPLE    3
+/*
+ * Compile-time verification that the C enum values match what the
+ * Python side (src.common.primitives.Vendor) and the rest of the
+ * C runtime expect. If any of these break, the C and Python sides
+ * have drifted apart and fat-binary dispatch will misroute.
+ */
+_Static_assert(NAUTILUS_VENDOR_NVIDIA  ==  0, "Vendor enum drift: NVIDIA");
+_Static_assert(NAUTILUS_VENDOR_AMD     ==  1, "Vendor enum drift: AMD");
+_Static_assert(NAUTILUS_VENDOR_INTEL   ==  2, "Vendor enum drift: INTEL");
+_Static_assert(NAUTILUS_VENDOR_APPLE   ==  3, "Vendor enum drift: APPLE");
+_Static_assert(NAUTILUS_VENDOR_UNKNOWN == -1, "Vendor enum drift: UNKNOWN");
 
 /* Forward declarations of the per-vendor kernel entry points. The
  * linker resolves these from the per-vendor .o files (nvidia.o,
@@ -164,8 +172,7 @@ extern int nautilus_kernel_apple(void* args);
 /* The default kernel runs when no specific vendor is found. */
 extern int nautilus_kernel_default(void* args);
 
-/* detect_vendor: returns 0=Nvidia, 1=AMD, 2=Intel, 3=Apple, -1=unknown. */
-int nautilus_detect_vendor(void) {
+nautilus_vendor_t nautilus_detect_vendor(void) {
     if (nautilus_check_nvidia()) return NAUTILUS_VENDOR_NVIDIA;
     if (nautilus_check_amd())    return NAUTILUS_VENDOR_AMD;
     if (nautilus_check_intel())  return NAUTILUS_VENDOR_INTEL;
@@ -183,15 +190,13 @@ int nautilus_has_apple_gpu(void)  { return nautilus_check_apple(); }
  * the abort by logging and exiting.
  */
 int nautilus_dispatch(void* args) {
-    int vendor = nautilus_detect_vendor();
+    nautilus_vendor_t vendor = nautilus_detect_vendor();
     switch (vendor) {
         case NAUTILUS_VENDOR_NVIDIA: return nautilus_kernel_nvidia(args);
         case NAUTILUS_VENDOR_AMD:    return nautilus_kernel_amd(args);
         case NAUTILUS_VENDOR_INTEL:  return nautilus_kernel_intel(args);
         case NAUTILUS_VENDOR_APPLE:  return nautilus_kernel_apple(args);
         default:
-            /* Fall through to default; if that's not defined either,
-             * the program will hit an unresolved symbol at link time. */
             return nautilus_kernel_default(args);
     }
 }
