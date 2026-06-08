@@ -41,7 +41,7 @@ from pathlib import Path
 
 from src.common.logging import get_logger
 
-from .ttgir_parser import TTGIRFunction
+from .ttgir_parser import OpKind, TTGIRFunction
 
 logger = get_logger(__name__)
 
@@ -180,31 +180,31 @@ class MLIRNormalizer:
         # This generates standard MLIR Vector Dialect text from TTGIR AST.
         # The format follows the MLIR canonical textual representation.
         try:
-            from .ttgir_parser import OpKind, TTGIRParser
+            from .ttgir_parser import TTGIRParser
 
             parser = TTGIRParser()
             func = parser.parse(ttgir_text)
 
             mlir_lines: list[str] = []
-            mlir_lines.append(f"module {{")
+            mlir_lines.append("module {")
             mlir_lines.append(f"  func.func @{func.name}(")
 
             # Emit function arguments as memref parameters (MLIR convention)
             arg_parts: list[str] = []
-            for i, (arg_name, arg_type) in enumerate(func.args):
+            for _i, (arg_name, arg_type) in enumerate(func.args):
                 shape_str = "x".join(str(d) for d in arg_type.shape) if arg_type.shape else "?"
                 mlir_type = f"memref<{shape_str}x{arg_type.dtype}>"
                 arg_parts.append(f"%{arg_name}: {mlir_type}")
             mlir_lines.append(f"    {', '.join(arg_parts)}")
-            mlir_lines.append(f"  ) {{")
+            mlir_lines.append("  ) {")
 
             # Emit operations as MLIR Vector Dialect ops
             for idx, op in enumerate(func.ops):
                 mlir_lines.extend(self._emit_mlir_op(op, idx))
 
-            mlir_lines.append(f"    return")
-            mlir_lines.append(f"  }}")
-            mlir_lines.append(f"}}")
+            mlir_lines.append("    return")
+            mlir_lines.append("  }")
+            mlir_lines.append("}")
 
             mlir_text = "\n".join(mlir_lines)
             diagnostics.append(f"Generated {len(func.ops)} ops in MLIR Vector Dialect")
@@ -270,7 +270,7 @@ class MLIRNormalizer:
             # MLIR vector.contract for matmul
             m = shape[0] if len(shape) > 0 else "?"
             n = shape[1] if len(shape) > 1 else "?"
-            k = "?"  
+            k = "?"
             vec_type_a = f"vector<{k}x{dtype}>" if k != "?" else f"vector<{dtype}>"
             vec_type_b = f"vector<{k}x{dtype}>" if k != "?" else f"vector<{dtype}>"
             vec_type_c = f"vector<{m}x{n}x{dtype}>" if m != "?" and n != "?" else f"vector<{dtype}>"
@@ -291,7 +291,7 @@ class MLIRNormalizer:
             memref_shape = 'x'.join(str(d) for d in shape) if shape else '?'
             memref_type = f"memref<{memref_shape}x{dtype}>"
             lines.append(
-                f"    {result_id} = vector.transfer_read %arg[{', '.join(f'%c0' for _ in shape)}], "
+                f"    {result_id} = vector.transfer_read %arg[{', '.join('%c0' for _ in shape)}], "
                 f"%c0_f32 {{in_bounds = [{', '.join('true' for _ in shape)}]}} : "
                 f"{memref_type}, {vec_type}"
             )
@@ -301,7 +301,7 @@ class MLIRNormalizer:
             memref_shape = 'x'.join(str(d) for d in shape) if shape else '?'
             memref_type = f"memref<{memref_shape}x{dtype}>"
             lines.append(
-                f"    vector.transfer_write %{name}, %arg[{', '.join(f'%c0' for _ in shape)}] "
+                f"    vector.transfer_write %{name}, %arg[{', '.join('%c0' for _ in shape)}] "
                 f"{{in_bounds = [{', '.join('true' for _ in shape)}]}} : "
                 f"{vec_type}, {memref_type}"
             )
