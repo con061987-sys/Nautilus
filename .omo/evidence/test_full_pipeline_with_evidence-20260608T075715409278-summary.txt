@@ -1,0 +1,7 @@
+test: test_full_pipeline_with_evidence
+timestamp: 20260608T075715409278
+outcome: passed
+attachments: 2
+warning_count: 0
+  - test_full_pipeline_with_evidence-20260608T075715409278-build_result.json
+  - test_full_pipeline_with_evidence-20260608T075715409278-fat_binary_blob.bin

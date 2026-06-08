@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "kernel_name": "test_kernel",
+  "vendors": [
+    "nvidia"
+  ],
+  "total_size": 51,
+  "output_path": "/tmp/pytest-of-codespace/pytest-3/test_full_pipeline_with_eviden0/mock_kernel.fat.o",
+  "total_time_s": 0.03754097000000911,
+  "stage_times": {
+    "amd": 5.6473999848094536e-05,
+    "intel": 3.2367999892812804e-05,
+    "nvidia": 2.7330999955665902e-05,
+    "apple": 0.037225110999997923,
+    "runtime_stub": 5.231700015428942e-05,
+    "link": 3.34199999088014e-05,
+    "validation": 2.2334000050250324e-05
+  }
+}

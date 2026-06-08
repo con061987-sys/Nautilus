@@ -185,6 +185,7 @@ class BenchmarkIngester:
 
         return Measurement(
             kernel_signature=sig,
+            benchmark_name=result.benchmark,
             vendor=vendor,
             arch=arch,
             config=config,

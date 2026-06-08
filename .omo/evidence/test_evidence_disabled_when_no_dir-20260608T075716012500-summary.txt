@@ -1,0 +1,5 @@
+test: test_evidence_disabled_when_no_dir
+timestamp: 20260608T075716012500
+outcome: passed
+attachments: 0
+warning_count: 0

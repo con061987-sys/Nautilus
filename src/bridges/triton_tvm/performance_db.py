@@ -58,6 +58,7 @@ _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS measurements (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     kernel_signature  TEXT    NOT NULL,
+    benchmark_name    TEXT    NOT NULL DEFAULT '',
     vendor            TEXT    NOT NULL,
     arch              TEXT    NOT NULL,
     config            TEXT    NOT NULL,  -- JSON-serialised dict
@@ -69,10 +70,17 @@ CREATE TABLE IF NOT EXISTS measurements (
 
 CREATE INDEX IF NOT EXISTS idx_perf_lookup
     ON measurements (kernel_signature, vendor, arch, execution_time_ms);
+
+CREATE INDEX IF NOT EXISTS idx_perf_name
+    ON measurements (benchmark_name, vendor, arch, execution_time_ms);
+"""
+
+_MIGRATE_ADD_BENCHMARK_NAME = """
+ALTER TABLE measurements ADD COLUMN benchmark_name TEXT NOT NULL DEFAULT '';
 """
 
 _SELECT_BEST = """
-SELECT kernel_signature, vendor, arch, config,
+SELECT kernel_signature, benchmark_name, vendor, arch, config,
        execution_time_ms, bandwidth_gbps, timestamp, source
 FROM measurements
 WHERE kernel_signature = ? AND vendor = ? AND arch = ?
@@ -82,9 +90,9 @@ LIMIT 1
 
 _INSERT_SQL = """
 INSERT INTO measurements
-    (kernel_signature, vendor, arch, config,
+    (kernel_signature, benchmark_name, vendor, arch, config,
      execution_time_ms, bandwidth_gbps, timestamp, source)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 # ---------------------------------------------------------------------------
@@ -98,6 +106,7 @@ class Measurement:
 
     Attributes:
         kernel_signature: SHA-256 hash of the kernel IR text.
+        benchmark_name: Human-readable benchmark name, e.g. ``"kernels/matmul"``.
         vendor: Hardware vendor string, e.g. ``"nvidia"``, ``"amd"``.
         arch: Architecture identifier, e.g. ``"sm_90"``, ``"gfx942"``.
         config: Tuning configuration (block sizes, warps, stages) as a
@@ -117,6 +126,7 @@ class Measurement:
     execution_time_ms: float
     bandwidth_gbps: float
     timestamp: datetime
+    benchmark_name: str = ""
     source: str = "auto_tuned"
 
 
@@ -161,9 +171,10 @@ class PerformanceDB:
             _INSERT_SQL,
             (
                 measurement.kernel_signature,
+                measurement.benchmark_name,
                 measurement.vendor,
                 measurement.arch,
-                json.dumps(measurement.config, sort_keys=True),
+                json.dumps(measurement.config, sort_keys=True) if measurement.config else "{}",
                 measurement.execution_time_ms,
                 measurement.bandwidth_gbps,
                 measurement.timestamp.isoformat(),
@@ -202,6 +213,7 @@ class PerformanceDB:
         vendor: str | None = None,
         arch: str | None = None,
         kernel_pattern: str | None = None,
+        benchmark_name: str | None = None,
         since: datetime | None = None,
     ) -> list[Measurement]:
         """Query measurements with optional filters.
@@ -215,11 +227,13 @@ class PerformanceDB:
             kernel_pattern: If set, only measurements whose
                 ``kernel_signature`` matches ``LIKE '%<pattern>%'``.
                 The pattern is matched as a substring (case-sensitive).
+            benchmark_name: If set, only measurements whose
+                ``benchmark_name`` matches exactly.
             since: If set, only measurements on or after this timestamp.
 
         Returns:
             A list of matching ``Measurement`` objects, ordered by
-            ``execution_time_ms`` ascending (fastest first).
+            ``timestamp`` ascending (oldest first).
         """
         conn = self._connect()
         conditions: list[str] = []
@@ -234,16 +248,19 @@ class PerformanceDB:
         if kernel_pattern is not None:
             conditions.append("kernel_signature LIKE ?")
             params.append(f"%{kernel_pattern}%")
+        if benchmark_name is not None:
+            conditions.append("benchmark_name = ?")
+            params.append(benchmark_name)
         if since is not None:
             conditions.append("timestamp >= ?")
             params.append(since.isoformat())
 
         where = " AND ".join(conditions) if conditions else "1"
         sql = (
-            "SELECT kernel_signature, vendor, arch, config, "
+            "SELECT kernel_signature, benchmark_name, vendor, arch, config, "
             "       execution_time_ms, bandwidth_gbps, timestamp, source "
             f"FROM measurements WHERE {where} "
-            "ORDER BY execution_time_ms ASC"
+            "ORDER BY timestamp ASC"
         )
         cursor = conn.execute(sql, params)
         return [self._row_to_measurement(row) for row in cursor.fetchall()]
@@ -280,6 +297,15 @@ class PerformanceDB:
         conn = self._connect()
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
+        self._migrate_schema(conn)
+
+    def _migrate_schema(self, conn: sqlite3.Connection) -> None:
+        """Apply schema migrations for existing databases."""
+        cursor = conn.execute("PRAGMA table_info(measurements)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "benchmark_name" not in columns:
+            conn.executescript(_MIGRATE_ADD_BENCHMARK_NAME)
+            conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
         """Get a thread-local SQLite connection.
@@ -299,13 +325,14 @@ class PerformanceDB:
         """Convert a SQLite result row to a ``Measurement``."""
         return Measurement(
             kernel_signature=row[0],
-            vendor=row[1],
-            arch=row[2],
-            config=json.loads(row[3]),
-            execution_time_ms=row[4],
-            bandwidth_gbps=row[5],
-            timestamp=datetime.fromisoformat(row[6]),
-            source=row[7],
+            benchmark_name=row[1],
+            vendor=row[2],
+            arch=row[3],
+            config=json.loads(row[4]),
+            execution_time_ms=row[5],
+            bandwidth_gbps=row[6],
+            timestamp=datetime.fromisoformat(row[7]),
+            source=row[8],
         )
 
 
