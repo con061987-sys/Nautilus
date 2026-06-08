@@ -6,6 +6,7 @@ Subcommands
   compare   Diff two ResultSets and flag regressions.
   history   Show trend stats (last N runs) for a metric.
   list      List discovered benchmarks (smoke check that discovery works).
+  ingest    Load ResultSets into the performance database for trend analysis.
 
 Examples
 --------
@@ -58,8 +59,22 @@ compare_result_sets = _benchmarks_results_mod.compare_result_sets
 load_history = _benchmarks_results_mod.load_history
 trend_summary = _benchmarks_results_mod.trend_summary
 
+# Lazy import for RegressionDetector (avoids circular deps).
+_RegressionDetector = None
+
+def _get_detector() -> type:
+    global _RegressionDetector
+    if _RegressionDetector is None:
+        import benchmarks.regression as _reg_mod  # noqa: F811
+        _RegressionDetector = _reg_mod.RegressionDetector
+    return _RegressionDetector
+
 BenchmarkRunner = _benchmarks_runner_mod.BenchmarkRunner
 RunnerConfig = _benchmarks_runner_mod.RunnerConfig
+
+_ingestion_mod = importlib.import_module("benchmarks.ingestion")
+BenchmarkIngester = _ingestion_mod.BenchmarkIngester
+PerformanceDB = importlib.import_module("src.bridges.triton_tvm.performance_db").PerformanceDB
 
 NautilusError = _errors_mod.NautilusError
 
@@ -132,8 +147,13 @@ def _collect_threshold_overrides(
     compile_threshold: float | None,
     binary_size_threshold: float | None,
     memory_threshold: float | None,
+    bandwidth_threshold: float | None = None,
 ) -> dict[str, float]:
-    """Pack CLI flags into a {metric: fraction} dict for the comparator."""
+    """Pack CLI flags into a {metric: fraction} dict for the comparator.
+
+    Maps CLI flag names to the metric keys used by both
+    :func:`compare_result_sets` and :class:`RegressionDetector`.
+    """
     overrides: dict[str, float] = {}
     if exec_threshold is not None:
         overrides["exec_time_s"] = exec_threshold
@@ -143,6 +163,10 @@ def _collect_threshold_overrides(
         overrides["binary_size_b"] = binary_size_threshold
     if memory_threshold is not None:
         overrides["memory_mb"] = memory_threshold
+    if bandwidth_threshold is not None:
+        # The RegressionDetector uses "bandwidth_gbps" directly;
+        # legacy compare_result_sets doesn't check bandwidth.
+        overrides["bandwidth_gbps"] = bandwidth_threshold
     return overrides
 
 
@@ -336,9 +360,15 @@ def _run_impl(
 @cli.command(
     "compare",
     short_help="Compare two result sets and flag regressions",
-    help="""
+    help=    """
 Diff a baseline ResultSet against a candidate ResultSet and report
 regressions / improvements.
+
+By default, the ``RegressionDetector`` is used (``--detector``),
+which classifies regressions by severity (major/minor/improvement),
+gates findings with statistical significance (``--detector-sigma``),
+and detects bandwidth (GB/s) regressions. Pass ``--no-detector`` for
+the simpler legacy comparator.
 
 At least one of ``--baseline`` / ``--candidate`` / ``--latest`` is
 required. If only ``--latest N`` is given, the N most recent runs
@@ -422,12 +452,41 @@ filter out improvements (handy for CI gating).
     ),
 )
 @click.option(
+    "--bandwidth-threshold",
+    type=click.FloatRange(min=0.0, max=5.0),
+    default=None,
+    help=(
+        "Override bandwidth (GB/s) regression threshold "
+        "(RegressionDetector only). "
+        "Default: 0.05 (5%)."
+    ),
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["table", "json", "markdown"], case_sensitive=False),
     default="table",
     show_default=True,
     help="Output format.",
+)
+@click.option(
+    "--detector/--no-detector",
+    default=True,
+    show_default=True,
+    help=(
+        "Use RegressionDetector for statistical-significance gating "
+        "(threshold + 2× stdev) and severity classification."
+    ),
+)
+@click.option(
+    "--detector-sigma",
+    type=click.IntRange(min=0, max=10),
+    default=2,
+    show_default=True,
+    help=(
+        "Number of standard deviations beyond the threshold required "
+        "to flag a regression (0 disables statistical gating)."
+    ),
 )
 @click.option(
     "--exit-on-regression/--no-exit-on-regression",
@@ -444,7 +503,10 @@ def compare_cmd(
     compile_threshold: float | None,
     binary_size_threshold: float | None,
     memory_threshold: float | None,
+    bandwidth_threshold: float | None,
     fmt: str,
+    detector: bool,
+    detector_sigma: int,
     exit_on_regression: bool,
 ) -> None:
     """Compare two result sets."""
@@ -459,6 +521,9 @@ def compare_cmd(
             compile_threshold=compile_threshold,
             binary_size_threshold=binary_size_threshold,
             memory_threshold=memory_threshold,
+            bandwidth_threshold=bandwidth_threshold,
+            use_detector=detector,
+            detector_sigma=detector_sigma,
         )
     except NautilusError as exc:
         click.echo(f"nautilus: {exc.message}", err=True)
@@ -466,14 +531,52 @@ def compare_cmd(
             click.echo(f"  context: {exc.context}", err=True)
         sys.exit(2)
 
-    if fmt == "json":
-        click.echo(json.dumps(report.to_dict(), indent=2))
-    elif fmt == "markdown":
-        click.echo(_format_markdown(report))
-    else:
-        click.echo(_format_table(report, direction=direction))
+    # ── Detect whether result is a list[Regression] (detector path) ──
+    is_detector_output = isinstance(report, list)
 
-    if exit_on_regression and report.has_regressions:
+    if fmt == "json":
+        if is_detector_output:
+            DetectorCls = _get_detector()
+            click.echo(
+                DetectorCls().report(
+                    report, format="json"  # type: ignore[arg-type]
+                )
+            )
+        else:
+            click.echo(json.dumps(report.to_dict(), indent=2))
+    elif fmt == "markdown":
+        if is_detector_output:
+            # Convert detector findings to ComparisonReport for markdown.
+            from benchmarks.regression import RegressionDetector
+
+            click.echo(
+                _format_markdown(
+                    RegressionDetector().to_comparison_report(
+                        report, _baseline_rs, _candidate_rs  # type: ignore[arg-type]
+                    )
+                )
+            )
+        else:
+            click.echo(_format_markdown(report))
+    else:
+        if is_detector_output:
+            DetectorCls = _get_detector()
+            click.echo(
+                DetectorCls().report(
+                    report, format="text"  # type: ignore[arg-type]
+                )
+            )
+        else:
+            click.echo(_format_table(report, direction=direction))
+
+    # Determine if regressions exist.
+    has_regressions = False
+    if is_detector_output:
+        has_regressions = any(r.severity != "improvement" for r in report)
+    elif hasattr(report, "has_regressions"):
+        has_regressions = report.has_regressions
+
+    if exit_on_regression and has_regressions:
         sys.exit(1)
 
 
@@ -488,14 +591,24 @@ def _compare_impl(
     compile_threshold: float | None,
     binary_size_threshold: float | None,
     memory_threshold: float | None,
-) -> tuple[ComparisonReport, ResultSet, ResultSet]:
-    """Implementation of ``bench compare``."""
+    bandwidth_threshold: float | None = None,
+    use_detector: bool = True,
+    detector_sigma: int = 2,
+) -> tuple[Any, ResultSet, ResultSet]:
+    """Implementation of ``bench compare``.
+
+    When ``use_detector`` is True, returns a list of
+    :class:`benchmarks.regression.Regression` instead of a
+    :class:`ComparisonReport`, enabling statistical-significance
+    gating, severity classification, and bandwidth detection.
+    """
     rs_dir = (results_dir or DEFAULT_RESULTS_DIR).resolve()
     overrides = _collect_threshold_overrides(
         exec_threshold=exec_threshold,
         compile_threshold=compile_threshold,
         binary_size_threshold=binary_size_threshold,
         memory_threshold=memory_threshold,
+        bandwidth_threshold=bandwidth_threshold,
     )
     only_regressions = direction.lower() == "regressions"
 
@@ -526,8 +639,23 @@ def _compare_impl(
     baseline_rs = ResultSet.read(baseline)
     candidate_rs = ResultSet.read(candidate)
 
-    # Direction filter for "improvements" is symmetric: we run a
-    # full compare, then keep only improvements in the output.
+    # ── RegressionDetector path (statistical significance + severity) ──
+    if use_detector:
+        DetectorCls = _get_detector()
+        detector = DetectorCls(
+            thresholds=overrides or None,
+            sigma_threshold=detector_sigma,
+        )
+        regressions = detector.compare(
+            baseline_rs,
+            candidate_rs,
+            only_regressions=only_regressions,
+        )
+        if direction.lower() == "improvements":
+            regressions = [r for r in regressions if r.severity == "improvement"]
+        return regressions, baseline_rs, candidate_rs
+
+    # ── Legacy path (ComparisonReport) ──
     report = compare_result_sets(
         baseline_rs,
         candidate_rs,
@@ -729,6 +857,157 @@ def list_cmd() -> None:
         except Exception as exc:
             targets = [f"<error: {exc}>"]
         click.echo(f"{b.name():30s}  targets={','.join(targets)}")
+
+
+# ---------------------------------------------------------------------------
+# `nautilus bench ingest`
+# ---------------------------------------------------------------------------
+
+
+@cli.command(
+    "ingest",
+    short_help="Ingest benchmark results into the performance database",
+    help="""
+Load one or more ResultSet JSON files (from ``nautilus bench run``) and
+ingest every result into the performance database (``PerformanceDB``)
+for historical trend analysis and auto-tuning reference.
+
+At least one of ``--latest`` or ``--path`` is required.
+
+Examples::
+
+    # Ingest the 5 most recent runs from the default results dir
+    nautilus bench ingest --latest 5
+
+    # Ingest a specific result file
+    nautilus bench ingest --path benchmarks/results/bench_20250607T094215Z.json
+
+    # Use a non-default results dir and a custom database path
+    nautilus bench ingest --latest 3 --results-dir /tmp/results --db-path /tmp/perf.db
+""",
+)
+@click.option(
+    "--latest",
+    "-l",
+    type=click.IntRange(min=1, max=10000),
+    default=None,
+    help="Ingest the N most recent result sets from the results dir.",
+)
+@click.option(
+    "--path",
+    "-p",
+    "paths",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    multiple=True,
+    help="Path to a specific result set JSON file. Repeatable.",
+)
+@click.option(
+    "--results-dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help=(
+        f"Directory containing result sets. "
+        f"Default: $NAUTILUS_BENCH_DIR or {DEFAULT_RESULTS_DIR}."
+    ),
+)
+@click.option(
+    "--db-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Path to the PerformanceDB SQLite database. "
+        "Default: ~/.cache/nautilus/perf.db."
+    ),
+)
+def ingest_cmd(
+    latest: int | None,
+    paths: tuple[Path, ...],
+    results_dir: Path | None,
+    db_path: Path | None,
+) -> None:
+    try:
+        total = _ingest_impl(
+            latest=latest,
+            paths=list(paths) if paths else None,
+            results_dir=results_dir,
+            db_path=db_path,
+        )
+    except NautilusError as exc:
+        click.echo(f"nautilus: {exc.message}", err=True)
+        if exc.context:
+            click.echo(f"  context: {exc.context}", err=True)
+        sys.exit(2)
+    except KeyboardInterrupt:
+        click.echo("nautilus: interrupted", err=True)
+        sys.exit(130)
+
+    click.echo(f"Ingested {total} measurements from {_ingest_sources_desc(latest, paths)}")
+
+
+def _ingest_impl(
+    *,
+    latest: int | None,
+    paths: list[Path] | None,
+    results_dir: Path | None,
+    db_path: Path | None,
+) -> int:
+    if not latest and not paths:
+        raise NautilusError(
+            "At least one of --latest or --path is required",
+            context={"latest": latest, "paths": paths},
+        )
+
+    rs_dir = (results_dir or DEFAULT_RESULTS_DIR).resolve()
+    db = PerformanceDB(db_path) if db_path else PerformanceDB()
+    ingester = BenchmarkIngester(db)
+
+    total = 0
+
+    files: list[Path] = []
+    if latest:
+        all_runs = ResultSet.list_runs(rs_dir)
+        if len(all_runs) < latest:
+            log.warning(
+                "fewer runs available than requested",
+                requested=latest,
+                available=len(all_runs),
+                directory=str(rs_dir),
+            )
+        files.extend(all_runs[:latest])
+    if paths:
+        files.extend(Path(p).expanduser().resolve() for p in paths)
+
+    seen: set[Path] = set()
+    unique_files: list[Path] = []
+    for f in files:
+        resolved = f.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique_files.append(resolved)
+
+    if not unique_files:
+        raise NautilusError(
+            "No result set files to ingest",
+            context={"results_dir": str(rs_dir), "latest": latest, "paths": paths},
+        )
+
+    with span_context("bench_ingest") as sp:
+        sp.set(file_count=len(unique_files))
+        for f in unique_files:
+            count = ingester.ingest_file(f)
+            total += count
+            sp.set(last_file=str(f), last_count=count)
+
+    return total
+
+
+def _ingest_sources_desc(latest: int | None, paths: tuple[Path, ...] | None) -> str:
+    parts: list[str] = []
+    if latest:
+        parts.append(f"--latest {latest}")
+    if paths:
+        parts.append(f"--path ({len(paths)} file(s))")
+    return " + ".join(parts) if parts else "(empty)"
 
 
 # ---------------------------------------------------------------------------

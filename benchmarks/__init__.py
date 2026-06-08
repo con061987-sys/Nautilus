@@ -7,6 +7,7 @@ Public entry points
 -------------------
 - :mod:`benchmarks.runner`     — benchmark execution engine
 - :mod:`benchmarks.results`    — result storage / compare / history
+- :mod:`benchmarks.ingestion`  — result ingestion into performance database
 - :mod:`benchmarks.kernels`    — single-kernel benchmarks
 - :mod:`benchmarks.models`     — model-level benchmarks
 
@@ -31,10 +32,22 @@ from benchmarks.results import (  # noqa: E402
     RegressionFinding,
     ResultSet,
 )
+from benchmarks.regression import (  # noqa: E402
+    Regression,
+    RegressionDetector,
+    DETECTOR_THRESHOLDS,
+    DETECTOR_MIN_ABS_DELTA,
+    DEFAULT_SIGMA_THRESHOLD,
+)
 
 __all__ = [
     "BenchmarkResult",
     "ComparisonReport",
+    "DEFAULT_SIGMA_THRESHOLD",
+    "DETECTOR_MIN_ABS_DELTA",
+    "DETECTOR_THRESHOLDS",
+    "Regression",
+    "RegressionDetector",
     "RegressionFinding",
     "ResultSet",
     "SCHEMA_VERSION",
