@@ -18,6 +18,7 @@ Production features:
   - Persistent cache for sharding decisions
   - Graceful degradation chain
   - Full observability via structured logging
+  - Fault tolerance: stage-level auto-retry with AsyncCheckpointer
 """
 
 from __future__ import annotations
@@ -49,6 +50,18 @@ try:
     BRIDGE_INFRA = True
 except ImportError:
     BRIDGE_INFRA = False
+
+try:
+    from src.runtime.async_checkpointer import (
+        AsyncCheckpointer,
+        CheckpointConfig,
+    )
+
+    CHECKPOINTER_AVAILABLE = True
+except ImportError:
+    AsyncCheckpointer = None  # type: ignore[misc]
+    CheckpointConfig = None  # type: ignore[misc]
+    CHECKPOINTER_AVAILABLE = False
 
 logger = get_logger(__name__)
 
@@ -149,7 +162,12 @@ class AutoShardingBridge:
             ...
     """
 
-    def __init__(self, enable_circuit_breakers: bool = True) -> None:
+    def __init__(
+        self,
+        enable_circuit_breakers: bool = True,
+        auto_recover: bool = True,
+        max_retries: int = 3,
+    ) -> None:
         self.graph_capture = GraphCapture()
         self.stablehlo_exporter = StableHLOExporter()
         self.gspmd_runner = GSPMDRunner()
@@ -165,6 +183,100 @@ class AutoShardingBridge:
         else:
             self.breakers = None
             self.timeout_manager = None
+
+        self.auto_recover = auto_recover
+        self.max_retries = max_retries
+        self._retry_count = 0
+        self._checkpointer: AsyncCheckpointer | None = None
+        self._completed_stages: set[str] = set()
+
+    def set_checkpointer(
+        self,
+        checkpointer: AsyncCheckpointer | None,
+    ) -> None:
+        self._checkpointer = checkpointer
+        if checkpointer is not None:
+            self._completed_stages.clear()
+            self._retry_count = 0
+
+    def shard_with_retry(
+        self,
+        model: Any,
+        example_inputs: tuple[Any, ...],
+        device_mesh: DeviceMesh,
+        config: ShardingConfig | None = None,
+    ) -> ShardingResult:
+        """Run shard() with automatic retry on stage failure.
+
+        When ``auto_recover`` is enabled (default) and a pipeline
+        stage fails, the method:
+          1. Saves pipeline state via the attached checkpointer's
+             ``save_pipeline_state`` method.
+          2. Calls ``on_node_failure`` to trigger recovery.
+          3. Calls ``rebuild_topology`` to reconfigure for surviving
+             stages.
+          4. Retries the entire shard pipeline up to ``max_retries``
+             times.
+
+        If no checkpointer is attached, falls back to a simple
+        retry loop with no state persistence.
+
+        Returns the first successful result, or the last failure
+        result after exhausting all retries.
+        """
+        last_result: ShardingResult | None = None
+        for attempt in range(self.max_retries + 1):
+            result = self.shard(
+                model=model,
+                example_inputs=example_inputs,
+                device_mesh=device_mesh,
+                config=config,
+            )
+            last_result = result
+
+            if result.success:
+                if self._checkpointer is not None:
+                    self._checkpointer.save_pipeline_state(
+                        {
+                            "last_completed_stage": "all",
+                            "shard_attempt": attempt,
+                            "auto_recover": self.auto_recover,
+                        },
+                    )
+                return result
+
+            if not self.auto_recover or attempt >= self.max_retries:
+                break
+
+            failed_stage = (
+                result.error.split(":")[0].strip()
+                if result.error
+                else "unknown"
+            )
+            alive_nodes = list(self._completed_stages) if self._completed_stages else ["none"]
+
+            if self._checkpointer is not None:
+                self._checkpointer.save_pipeline_state(
+                    {
+                        "last_completed_stage": failed_stage,
+                        "failed_stage": failed_stage,
+                        "shard_attempt": attempt,
+                        "error": result.error,
+                        "auto_recover": self.auto_recover,
+                    },
+                )
+                self._checkpointer.on_node_failure(dead_node_id=failed_stage)
+                self._checkpointer.rebuild_topology(alive_nodes=alive_nodes)
+
+            self._retry_count += 1
+
+        if last_result is not None:
+            return last_result
+        return ShardingResult(
+            success=False,
+            error="shard_with_retry exhausted without producing a result",
+            total_duration_ms=0.0,
+        )
 
     def shard(
         self,

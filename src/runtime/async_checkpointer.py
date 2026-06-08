@@ -204,6 +204,9 @@ class AsyncCheckpointer:
             )
         self._io_breaker = breakers["checkpoint_io"]
 
+        # Pipeline state (separate from model checkpoints)
+        self._pipeline_state: dict[str, Any] | None = None
+
         # Stats
         self._total_saves = 0
         self._total_save_failures = 0
@@ -689,6 +692,45 @@ class AsyncCheckpointer:
         if has_pending:
             self._pending_event.set()
         log.info("Topology rebuilt", alive_nodes=len(alive_nodes))
+
+    def save_pipeline_state(self, pipeline_state: dict[str, Any]) -> None:
+        """Save pipeline execution state in a separate pipeline-state list.
+
+        Pipeline state is kept *completely separate* from model/
+        optimizer checkpoints — ``recover_latest`` will never find it,
+        and ``clear_pipeline_state`` will never remove model checkpoints.
+
+        Args:
+            pipeline_state: Serialisable dict with pipeline context
+                (completed stages, tuning configs, artifact paths, …).
+        """
+        with self._lock:
+            self._pipeline_state = pipeline_state
+
+        log.info(
+            "Pipeline state saved in memory",
+            stage=pipeline_state.get("last_completed_stage", "unknown"),
+        )
+
+    def load_pipeline_state(self) -> dict[str, Any] | None:
+        """Load the most recent pipeline state.
+
+        Returns:
+            The pipeline state dict saved by :meth:`save_pipeline_state`,
+            or ``None`` if no pipeline state has been saved.
+        """
+        with self._lock:
+            if self._pipeline_state is not None:
+                return dict(self._pipeline_state)
+        return None
+
+    def clear_pipeline_state(self) -> None:
+        """Clear the in-memory pipeline state.
+
+        Does NOT affect model/optimizer checkpoints.
+        """
+        with self._lock:
+            self._pipeline_state = None
 
     def get_stats(self) -> dict[str, Any]:
         with self._lock:

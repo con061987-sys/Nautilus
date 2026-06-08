@@ -432,15 +432,25 @@ def backends_cmd(fmt: str) -> None:
 
 @cli.command("compliance")
 @_FMT_OPTION
-def compliance_cmd(fmt: str) -> None:
-    """Validate IEEE-754 math settings.
+@click.option(
+    "--emulate/--no-emulate",
+    "emulate",
+    default=True,
+    show_default=True,
+    help="Enable software emulation of Nvidia features on non-Nvidia hardware.",
+)
+def compliance_cmd(fmt: str, emulate: bool) -> None:
+    """Validate IEEE-754 math and Nvidia feature emulation status.
 
     Reports the current ``MathValidator`` configuration: bit-exact
     mode, default strictness level, and the per-op overrides
-    registered so far. This is a *configuration* check — actually
-    validating that a kernel produces IEEE-754-correct results
-    requires running the kernel on real hardware and is out of scope
-    for ``inspect``.
+    registered so far. Also shows the software emulation status for
+    Nvidia-specific features (FP4, FP8, Transformer Engine) when
+    running on non-Nvidia hardware.
+
+    This is a *configuration* check — actually validating that a
+    kernel produces IEEE-754-correct results requires running the
+    kernel on real hardware and is out of scope for ``inspect``.
     """
     from src.runtime.math_validator import MathValidator, StrictnessLevel
 
@@ -473,6 +483,19 @@ def compliance_cmd(fmt: str) -> None:
             "available": False,
             "error": f"{type(exc).__name__}: {exc}",
         }
+
+    try:
+        from src.bridges.triton_tvm.sw_emulation import SWEmulationEngine, ModelGraph
+
+        engine = SWEmulationEngine(auto_emulate=emulate)
+        plans = engine.detect_nvidia_features(ModelGraph())
+        summary["sw_emulation"] = engine.get_summary(plans)
+    except Exception as exc:
+        summary["sw_emulation"] = {
+            "available": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
     _echo(summary, fmt)
 
 

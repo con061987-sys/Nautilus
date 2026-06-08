@@ -78,6 +78,16 @@ _LAZY_EXPORTS = {
     "span_context": "src.common.logging",
     "stage_context": "src.common.logging",
     "configure_logging": "src.common.logging",
+    # Software emulation
+    "SWEmulationEngine": "src.bridges.triton_tvm.sw_emulation",
+    "EmulationPlan": "src.bridges.triton_tvm.sw_emulation",
+    "FP4Emulation": "src.bridges.triton_tvm.sw_emulation",
+    "FP8Emulation": "src.bridges.triton_tvm.sw_emulation",
+    "TransformerEngineEmulation": "src.bridges.triton_tvm.sw_emulation",
+    "ModelGraph": "src.bridges.triton_tvm.sw_emulation",
+    "OpNode": "src.bridges.triton_tvm.sw_emulation",
+    "OpCategory": "src.bridges.triton_tvm.sw_emulation",
+    "build_graph_from_ops": "src.bridges.triton_tvm.sw_emulation",
 }
 
 

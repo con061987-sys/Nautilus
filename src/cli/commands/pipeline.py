@@ -93,6 +93,15 @@ from src.common.logging import (
 )
 from src.common.types import HardwareTarget, TuningConfig, Vendor
 
+try:
+    from src.runtime.async_checkpointer import AsyncCheckpointer, CheckpointConfig
+
+    CHECKPOINTER_AVAILABLE = True
+except ImportError:
+    AsyncCheckpointer = None  # type: ignore
+    CheckpointConfig = None  # type: ignore
+    CHECKPOINTER_AVAILABLE = False
+
 log = get_logger("nautilus.cli.pipeline")
 
 
@@ -275,6 +284,8 @@ class Pipeline:
         resume_from: PipelineStage | None = None,
         dry_run: bool = False,
         parallel: bool = True,
+        auto_recover: bool = False,
+        max_retries: int = 3,
     ) -> None:
         self.ctx = ctx
         self.targets = targets
@@ -282,71 +293,200 @@ class Pipeline:
         self.resume_from = resume_from
         self.dry_run = dry_run
         self.parallel = parallel
+        self.auto_recover = auto_recover
+        self.max_retries = max_retries
+        self._retry_count = 0
+        self._checkpointer: AsyncCheckpointer | None = None
         self.outcomes: list[StageOutcome] = []
         self.state_path = (ctx.output_dir or Path("nautilus-out")) / "state.json"
+        self._init_checkpointer()
+
+    def _init_checkpointer(self) -> None:
+        """Lazily initialise the AsyncCheckpointer for pipeline auto-recovery.
+
+        Only sets up a checkpointer when ``auto_recover`` is enabled.
+        The checkpointer stores pipeline execution state so failed
+        stages can resume from the last successful checkpoint.
+        """
+        if not self.auto_recover:
+            return
+        if not CHECKPOINTER_AVAILABLE:
+            log.warning(
+                "AsyncCheckpointer not available; auto-recover disabled",
+            )
+            self.auto_recover = False
+            return
+        cp_dir = (self.ctx.output_dir or Path("nautilus-out")) / ".checkpoints"
+        cfg = CheckpointConfig(
+            interval_seconds=30.0,
+            storage_path=str(cp_dir),
+            max_checkpoints=3,
+        )
+        self._checkpointer = AsyncCheckpointer(cfg)
+        self._checkpointer.start()
+        log.info("checkpointer initialised for pipeline auto-recover", path=str(cp_dir))
+
+    def set_checkpointer(self, checkpointer: AsyncCheckpointer | None) -> None:
+        self._checkpointer = checkpointer
+
+    def _cleanup_checkpointer(self) -> None:
+        if self._checkpointer is not None:
+            try:
+                self._checkpointer.stop()
+            except Exception:
+                pass
 
     # -- public API --------------------------------------------------------
 
     def run(self) -> list[StageOutcome]:
-        """Execute all stages in order. Returns per-stage outcomes."""
-        start_stage = self.resume_from or PipelineStage.CAPTURE
-        stages = PipelineStage.stages_from(start_stage)
+        """Execute all stages in order. Returns per-stage outcomes.
 
-        # If resuming, load state and skip the loadable stages.
-        if self.resume_from is not None and self.resume_from != PipelineStage.CAPTURE:
-            try:
-                self.ctx = PipelineContext.load_state(self.state_path)
-                # Preserve run-time overrides
-                self.ctx.output_dir = self.ctx.output_dir or Path("nautilus-out")
-                log.info(
-                    "resumed from previous state",
-                    state_path=str(self.state_path),
-                    start_stage=start_stage.value,
-                )
-            except FileNotFoundError as exc:
-                raise ConfigError(
-                    f"Cannot resume from {start_stage.value!r}: "
-                    f"no state file at {self.state_path}. Run the "
-                    f"pipeline at least once without --resume-from first.",
-                    context={"state_path": str(self.state_path)},
-                ) from exc
+        When ``auto_recover`` is enabled and a stage fails, the
+        pipeline automatically:
+          1. Calls ``on_node_failure`` on the attached checkpointer.
+          2. Calls ``rebuild_topology`` to reconfigure for surviving stages.
+          3. Reloads state from ``state.json`` (the last successful stage).
+          4. Retries from the failed stage up to ``max_retries`` times.
+        """
+        all_outcomes: list[StageOutcome] = []
 
-        log.info(
-            "pipeline starting",
-            start_stage=start_stage.value,
-            stages=[s.value for s in stages],
-            targets=[t.to_tvm_target() for t in self.targets],
-            dry_run=self.dry_run,
-        )
+        for attempt in range(self.max_retries + 1):
+            start_stage = self.resume_from or PipelineStage.CAPTURE
+            stages = PipelineStage.stages_from(start_stage)
 
-        with span_context(
-            "nautilus_pipeline",
-            start_stage=start_stage.value,
-            dry_run=self.dry_run,
-            targets=[t.to_tvm_target() for t in self.targets],
-        ) as sp:
-            for stage in stages:
-                handler = _STAGE_HANDLERS[stage]
-                outcome = self._run_one(stage, handler, sp)
-                self.outcomes.append(outcome)
-                if not outcome.success and not outcome.skipped:
-                    log.error(
-                        "pipeline failed at stage",
-                        stage=stage.value,
-                        error=outcome.error,
-                        duration_ms=outcome.duration_ms,
+            # If resuming, load state and skip the loadable stages.
+            if (
+                attempt > 0
+                and self.state_path.exists()
+            ):
+                # Reload state for retry — state.json reflects the
+                # last successful stage from a previous attempt.
+                try:
+                    self.ctx = PipelineContext.load_state(self.state_path)
+                    self.ctx.output_dir = self.ctx.output_dir or Path("nautilus-out")
+                    # Determine resume stage: find the failed stage
+                    # from the previous attempt.
+                    failed = [
+                        o
+                        for o in all_outcomes
+                        if not o.success and not o.skipped
+                    ]
+                    resume_from = (
+                        failed[-1].stage
+                        if failed
+                        else PipelineStage.CAPTURE
                     )
-                    # Mark the span with the error and stop.
-                    sp.set(failed_stage=stage.value, error=outcome.error)
-                    break
-                # Persist state after each successful stage so
-                # --resume-from can recover from any later failure.
-                if not self.dry_run:
-                    try:
-                        self.ctx.save_state(self.state_path)
-                    except Exception as exc:
-                        log.warning("could not persist state: %s", exc)
+                    stages = PipelineStage.stages_from(resume_from)
+                    log.info(
+                        "auto-recover: resuming from stage",
+                        stage=resume_from.value,
+                        attempt=attempt,
+                        max_retries=self.max_retries,
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "auto-recover: failed to reload state, restarting from capture",
+                        error=str(exc),
+                    )
+                    stages = PipelineStage.stages_from(PipelineStage.CAPTURE)
+            elif attempt == 0 and self.resume_from is not None and self.resume_from != PipelineStage.CAPTURE:
+                try:
+                    self.ctx = PipelineContext.load_state(self.state_path)
+                    self.ctx.output_dir = self.ctx.output_dir or Path("nautilus-out")
+                    log.info(
+                        "resumed from previous state",
+                        state_path=str(self.state_path),
+                        start_stage=start_stage.value,
+                    )
+                except FileNotFoundError as exc:
+                    raise ConfigError(
+                        f"Cannot resume from {start_stage.value!r}: "
+                        f"no state file at {self.state_path}. Run the "
+                        f"pipeline at least once without --resume-from first.",
+                        context={"state_path": str(self.state_path)},
+                    ) from exc
 
+            if attempt == 0:
+                log.info(
+                    "pipeline starting",
+                    start_stage=start_stage.value,
+                    stages=[s.value for s in stages],
+                    targets=[t.to_tvm_target() for t in self.targets],
+                    dry_run=self.dry_run,
+                )
+            else:
+                log.info(
+                    "pipeline retry attempt",
+                    attempt=attempt,
+                    max_retries=self.max_retries,
+                )
+
+            attempt_outcomes: list[StageOutcome] = []
+            with span_context(
+                "nautilus_pipeline",
+                start_stage=start_stage.value,
+                dry_run=self.dry_run,
+                targets=[t.to_tvm_target() for t in self.targets],
+                attempt=attempt,
+            ) as sp:
+                for stage in stages:
+                    handler = _STAGE_HANDLERS[stage]
+                    outcome = self._run_one(stage, handler, sp)
+                    attempt_outcomes.append(outcome)
+                    if not outcome.success and not outcome.skipped:
+                        log.error(
+                            "pipeline failed at stage",
+                            stage=stage.value,
+                            error=outcome.error,
+                            duration_ms=outcome.duration_ms,
+                        )
+                        sp.set(failed_stage=stage.value, error=outcome.error)
+                        break
+                    # Persist state after each successful stage so
+                    # --resume-from can recover from any later failure.
+                    if not self.dry_run:
+                        try:
+                            self.ctx.save_state(self.state_path)
+                        except Exception as exc:
+                            log.warning("could not persist state: %s", exc)
+
+            attempt_failed = [
+                o
+                for o in attempt_outcomes
+                if not o.success and not o.skipped
+            ]
+
+            if attempt_failed:
+                all_outcomes.extend(attempt_outcomes)
+
+                if self.auto_recover and attempt < self.max_retries:
+                    failed_stage = attempt_failed[0]
+                    if self._checkpointer is not None:
+                        self._checkpointer.on_node_failure(
+                            dead_node_id=failed_stage.stage.value,
+                        )
+                        self._checkpointer.rebuild_topology(
+                            alive_nodes=[
+                                o.stage.value
+                                for o in all_outcomes
+                                if o.success and not o.skipped
+                            ],
+                        )
+                    self._retry_count = attempt + 1
+                    continue
+
+                break
+
+            all_outcomes.extend(attempt_outcomes)
+            if self._checkpointer is not None:
+                try:
+                    self._checkpointer.clear_pipeline_state()
+                except Exception:
+                    pass
+            break
+
+        self.outcomes = all_outcomes
+        self._cleanup_checkpointer()
         return self.outcomes
 
     def _run_one(
@@ -1180,6 +1320,19 @@ Examples:
     default=False,
     help="Disable per-vendor build parallelism (default: parallel).",
 )
+@click.option(
+    "--auto-recover/--no-auto-recover",
+    default=True,
+    show_default=True,
+    help="Automatically retry failed stages with checkpoint recovery (default: enabled).",
+)
+@click.option(
+    "--max-retries",
+    type=click.IntRange(min=0, max=100),
+    default=3,
+    show_default=True,
+    help="Maximum number of stage retries before giving up.",
+)
 def cli(
     input_file: Path,
     targets: tuple[str, ...],
@@ -1190,6 +1343,8 @@ def cli(
     dry_run: bool,
     trials: int,
     no_parallel: bool,
+    auto_recover: bool,
+    max_retries: int,
 ) -> None:
     """Run the full cross-bridge pipeline."""
     try:
@@ -1203,6 +1358,8 @@ def cli(
             dry_run=dry_run,
             trials=trials,
             parallel=not no_parallel,
+            auto_recover=auto_recover,
+            max_retries=max_retries,
         )
     except NautilusError as exc:
         click.echo(f"nautilus: {exc.message}", err=True)
@@ -1224,6 +1381,8 @@ def _pipeline_impl(
     dry_run: bool,
     trials: int,
     parallel: bool,
+    auto_recover: bool = True,
+    max_retries: int = 3,
 ) -> None:
     """Implementation backing the click command.
 
@@ -1249,6 +1408,8 @@ def _pipeline_impl(
         resume_from=resume_stage,
         dry_run=dry_run,
         parallel=parallel,
+        auto_recover=auto_recover,
+        max_retries=max_retries,
     )
     log.info(
         "pipeline invoked",
