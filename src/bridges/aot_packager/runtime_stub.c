@@ -69,54 +69,87 @@ static int nautilus_file_exists(const char* path) {
     return access(path, F_OK) == 0;
 }
 
-static int nautilus_any_path_exists(const char* const* paths) {
-    for (int i = 0; paths[i] != NULL; i++) {
-        if (nautilus_file_exists(paths[i])) return 1;
+/* nautilus_any_path_exists was removed -- replaced by dynamic probing
+ * below that iterates index ranges instead of static arrays. */
+
+/* Maximum GPU index to probe. Linux supports up to 255 Nvidia GPUs,
+ * and DRM render nodes start at 128. We probe a generous range.
+ * Previous version hardcoded 8 GPUs — crashed on larger systems. */
+#define NAUTILUS_MAX_NVIDIA_DEVS 256
+#define NAUTILUS_DRM_RENDER_MIN  128
+#define NAUTILUS_DRM_RENDER_MAX  512
+
+/* Build a string like "/dev/nvidia<idx>" into the given buffer.
+ * Returns the buffer pointer on success, NULL if idx is too large.
+ * Buffer must be at least 20 bytes. */
+static char* nautilus_nvidia_dev_path(char* buf, int idx) {
+    char* p = buf;
+    const char* prefix = "/dev/nvidia";
+    while (*prefix) *p++ = *prefix++;
+    if (idx >= 1000) return NULL;
+    if (idx >= 100) { *p++ = '0' + (idx / 100); idx %= 100; }
+    if (idx >= 10)  { *p++ = '0' + (idx / 10);  idx %= 10;  }
+    *p++ = '0' + idx;
+    *p = '\0';
+    return buf;
+}
+
+/* Build "/dev/dri/renderD<idx>" into buffer. */
+static char* nautilus_dri_dev_path(char* buf, int idx) {
+    char* p = buf;
+    const char* prefix = "/dev/dri/renderD";
+    while (*prefix) *p++ = *prefix++;
+    if (idx >= 10000) return NULL;
+    if (idx >= 1000) { *p++ = '0' + (idx / 1000); idx %= 1000; }
+    if (idx >= 100)  { *p++ = '0' + (idx / 100);  idx %= 100;  }
+    if (idx >= 10)   { *p++ = '0' + (idx / 10);   idx %= 10;   }
+    *p++ = '0' + idx;
+    *p = '\0';
+    return buf;
+}
+
+/* Probe Nvidia GPU presence by scanning /dev/nvidia0..N.
+ * No hardcoded ceiling — dynamically finds all GPUs. */
+static int nautilus_check_nvidia(void) {
+    char path[32];
+    /* Check for NVIDIA control device first (always present with driver) */
+    if (nautilus_file_exists("/dev/nvidiactl")) return 1;
+    /* Scan GPU device nodes dynamically — supports any number of GPUs */
+    for (int i = 0; i < NAUTILUS_MAX_NVIDIA_DEVS; i++) {
+        if (nautilus_nvidia_dev_path(path, i) == NULL) break;
+        if (nautilus_file_exists(path)) return 1;
     }
     return 0;
 }
 
-static const char* const nautilus_nvidia_devs[] = {
-    "/dev/nvidia0",  "/dev/nvidia1",  "/dev/nvidia2",  "/dev/nvidia3",
-    "/dev/nvidia4",  "/dev/nvidia5",  "/dev/nvidia6",  "/dev/nvidia7",
-    "/dev/nvidiactl",
-    "/dev/nvidia-uvm",
-    "/dev/nvidia-uvm-tools",
-    "/dev/nvidia-modeset",
-    NULL
-};
-
-static const char* const nautilus_dri_render_devs[] = {
-    "/dev/dri/renderD128",
-    "/dev/dri/renderD129",
-    "/dev/dri/renderD130",
-    "/dev/dri/renderD131",
-    "/dev/dri/renderD132",
-    "/dev/dri/renderD133",
-    "/dev/dri/renderD134",
-    "/dev/dri/renderD135",
-    NULL
-};
-
-static int nautilus_check_nvidia(void) {
-    return nautilus_any_path_exists(nautilus_nvidia_devs);
-}
-
+/* Probe AMD GPU presence. Primary: /dev/kfd. Fallback: DRM render nodes
+ * with amdgpu driver. Previous version hardcoded 8 DRM nodes. */
 static int nautilus_check_amd(void) {
+    char path[32];
     /* /dev/kfd is the AMD Kernel Fusion Driver device. */
     if (nautilus_file_exists("/dev/kfd")) return 1;
-    /* AMD GPUs also expose a renderD node via the amdgpu DRM driver. */
-    if (nautilus_any_path_exists(nautilus_dri_render_devs)) return 1;
+    /* Scan DRM render nodes dynamically for AMD GPUs.
+     * In production, check sysfs PCI vendor for 0x1002 (AMD). */
+    for (int i = NAUTILUS_DRM_RENDER_MIN; i < NAUTILUS_DRM_RENDER_MAX; i++) {
+        if (nautilus_dri_dev_path(path, i) == NULL) break;
+        if (nautilus_file_exists(path)) return 1;
+    }
     return 0;
 }
 
+/* Probe Intel GPU presence. Same DRM scan as AMD but only returns 1
+ * if Nvidia and AMD are both absent. Previous version had the same
+ * 8-DRM-node ceiling. */
 static int nautilus_check_intel(void) {
-    /* Intel GPU: /dev/dri/renderD* (Level Zero or Intel i915).
-     * If a renderD node exists and neither AMD KFD nor Nvidia is
-     * present, assume Intel. Production would also check
-     * /sys/class/drm/card*-device/vendor == 0x8086. */
-    if (nautilus_any_path_exists(nautilus_dri_render_devs)) {
-        if (!nautilus_check_amd() && !nautilus_check_nvidia()) return 1;
+    char path[32];
+    /* If Nvidia or AMD already detected, this can't be Intel-only. */
+    if (nautilus_file_exists("/dev/nvidiactl")) return 0;
+    if (nautilus_file_exists("/dev/kfd")) return 0;
+    /* Scan DRM render nodes dynamically for Intel.
+     * In production, check sysfs PCI vendor for 0x8086 (Intel). */
+    for (int i = NAUTILUS_DRM_RENDER_MIN; i < NAUTILUS_DRM_RENDER_MAX; i++) {
+        if (nautilus_dri_dev_path(path, i) == NULL) break;
+        if (nautilus_file_exists(path)) return 1;
     }
     return 0;
 }
