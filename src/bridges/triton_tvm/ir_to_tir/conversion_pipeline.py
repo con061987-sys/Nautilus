@@ -13,8 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import TYPE_CHECKING
 
 from src.common.logging import get_logger
+
+if TYPE_CHECKING:
+    from .mlir_normalizer import MLIRNormalizer
 
 from .pass1_lower_tensor_idioms import LowerTensorIdioms
 from .pass2_rewrite_spmd import RewriteSPMDToLoops
@@ -65,7 +69,12 @@ class ConversionResult:
 
 
 class ConversionPipeline:
-    """Orchestrates the 4-pass conversion.
+    """Orchestrates the conversion pipeline with optional MLIR acceleration.
+
+    The pipeline has two paths:
+      1. MLIR Vector Dialect path (if MLIR is available) — the TECH_SPEC
+         prescribed TTGIR -> MLIR Vector Dialect -> TVM TIR path.
+      2. Python 4-pass path (always available) — the original pipeline.
 
     Usage:
         pipeline = ConversionPipeline()
@@ -78,7 +87,13 @@ class ConversionPipeline:
             ...
     """
 
-    def __init__(self) -> None:
+    def __init__(self, use_mlir: bool | None = None) -> None:
+        """Initialize pipeline.
+
+        Args:
+            use_mlir: Force MLIR path (True), force Python path (False),
+                or auto-detect (None, default).
+        """
         self.parser = TTGIRParser()
         self.dot_splitter = TTDotSplitter()
         self.pass1: TTGIRPass = LowerTensorIdioms()
@@ -86,9 +101,22 @@ class ConversionPipeline:
         self.pass3: TTGIRPass = ReplacePointersWithMemRefs()
         self.pass4: TTGIRPass = MaterializeTensorsToTVM()
         self.emitter = TVMScriptEmitter()
+        self._use_mlir = use_mlir
+        self._mlir_normalizer: MLIRNormalizer | None = None
+
+    def _get_mlir_normalizer(self):
+        """Lazy-import MLIR normalizer to avoid circular imports."""
+        if self._mlir_normalizer is None:
+            from .mlir_normalizer import MLIRNormalizer
+            self._mlir_normalizer = MLIRNormalizer(use_mlir=self._use_mlir)
+        return self._mlir_normalizer
 
     def convert(self, ir_text: str) -> ConversionResult:
         """Run the full conversion pipeline on IR text.
+
+        Two paths:
+          1. MLIR Vector Dialect (if MLIR is available) — try first, faster
+          2. Python 4-pass pipeline (always available) — fallback
 
         Args:
             ir_text: The TTGIR text captured from Triton's pipeline.
@@ -100,6 +128,40 @@ class ConversionPipeline:
         import time
 
         pass_times: dict[str, float] = {}
+
+        # Stage 0: MLIR Vector Dialect path (optional, requires MLIR)
+        if self._use_mlir is not False:
+            t0 = time.perf_counter()
+            normalizer = self._get_mlir_normalizer()
+            mlir_result = normalizer.normalize(ir_text, kernel_name="kernel")
+            elapsed = (time.perf_counter() - t0) * 1000
+            pass_times["mlir_normalizer"] = elapsed
+            if mlir_result.success:
+                logger.info(
+                    "MLIR normalizer succeeded (%s) in %.1fms",
+                    mlir_result.backend, elapsed,
+                )
+                status = ConversionStatus.SUCCESS
+                return ConversionResult(
+                    status=status,
+                    tvmscript_text=mlir_result.tvmscript,
+                    pass_times=pass_times,
+                )
+            if self._use_mlir is True:
+                # MLIR was forced but failed — report error
+                logger.warning(
+                    "MLIR normalizer failed (forced): %s",
+                    "; ".join(mlir_result.diagnostics),
+                )
+                return ConversionResult(
+                    status=ConversionStatus.FALLBACK,
+                    error=f"MLIR normalizer failed: {'; '.join(mlir_result.diagnostics)}",
+                )
+            # MLIR wasn't forced — silently fall through to Python path
+            logger.info(
+                "MLIR normalizer unavailable (%s), falling back to Python path",
+                mlir_result.backend,
+            )
 
         # Stage 1: Parse
         t0 = time.perf_counter()

@@ -65,7 +65,7 @@ _RegressionDetector = None
 def _get_detector() -> type:
     global _RegressionDetector
     if _RegressionDetector is None:
-        import benchmarks.regression as _reg_mod  # noqa: F811
+        import benchmarks.regression as _reg_mod
         _RegressionDetector = _reg_mod.RegressionDetector
     return _RegressionDetector
 
@@ -475,7 +475,7 @@ filter out improvements (handy for CI gating).
     show_default=True,
     help=(
         "Use RegressionDetector for statistical-significance gating "
-        "(threshold + 2× stdev) and severity classification."
+        "(threshold + 2x stdev) and severity classification."
     ),
 )
 @click.option(
@@ -536,10 +536,10 @@ def compare_cmd(
 
     if fmt == "json":
         if is_detector_output:
-            DetectorCls = _get_detector()
+            detector_cls = _get_detector()
             click.echo(
-                DetectorCls().report(
-                    report, format="json"  # type: ignore[arg-type]
+                detector_cls().report(
+                    report, format="json"
                 )
             )
         else:
@@ -552,7 +552,7 @@ def compare_cmd(
             click.echo(
                 _format_markdown(
                     RegressionDetector().to_comparison_report(
-                        report, _baseline_rs, _candidate_rs  # type: ignore[arg-type]
+                        report, _baseline_rs, _candidate_rs
                     )
                 )
             )
@@ -560,10 +560,10 @@ def compare_cmd(
             click.echo(_format_markdown(report))
     else:
         if is_detector_output:
-            DetectorCls = _get_detector()
+            detector_cls = _get_detector()
             click.echo(
-                DetectorCls().report(
-                    report, format="text"  # type: ignore[arg-type]
+                detector_cls().report(
+                    report, format="text"
                 )
             )
         else:
@@ -641,8 +641,8 @@ def _compare_impl(
 
     # ── RegressionDetector path (statistical significance + severity) ──
     if use_detector:
-        DetectorCls = _get_detector()
-        detector = DetectorCls(
+        detector_cls = _get_detector()
+        detector = detector_cls(
             thresholds=overrides or None,
             sigma_threshold=detector_sigma,
         )

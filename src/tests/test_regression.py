@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from typing import Any
-
-import pytest
 
 from benchmarks.regression import (
     DEFAULT_SIGMA_THRESHOLD,
@@ -21,7 +18,6 @@ from benchmarks.results import (
     ResultSet,
     new_run_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — build synthetic result sets
@@ -465,9 +461,9 @@ class TestEdgeCases:
 
 class TestPackageExports:
     def test_regression_detector_importable_from_benchmarks(self) -> None:
-        from benchmarks import RegressionDetector as RD  # noqa: F811
-        assert RD is RegressionDetector
+        from benchmarks import RegressionDetector as Rd
+        assert Rd is RegressionDetector
 
     def test_regression_importable_from_benchmarks(self) -> None:
-        from benchmarks import Regression as R  # noqa: F811
-        assert R is Regression
+        from benchmarks import Regression as Reg
+        assert Reg is Regression

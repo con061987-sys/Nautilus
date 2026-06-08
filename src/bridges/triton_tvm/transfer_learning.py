@@ -35,6 +35,7 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -46,11 +47,12 @@ from src.bridges.triton_tvm.config_mapper import MappedTuningConfig
 # Logger
 # ---------------------------------------------------------------------------
 
+logger: Any
+
 try:
     from src.common.logging import get_logger
     logger = get_logger(__name__)
 except ImportError:
-    import logging
     logger = logging.getLogger(__name__)
 
 

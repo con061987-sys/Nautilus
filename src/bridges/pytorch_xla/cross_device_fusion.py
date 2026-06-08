@@ -814,7 +814,8 @@ class CommunicationOverlapper:
         Raises:
             BridgeError: If the plan references an unknown collective type.
         """
-        if self._backend is None:
+        backend = self._backend
+        if backend is None:
             raise BridgeError(
                 "AsyncCollectiveBackend is not configured; cannot build operation",
                 context={"plan": str(plan)},
@@ -823,17 +824,17 @@ class CommunicationOverlapper:
         finish_fn = finish_fn or (lambda: None)
 
         if plan.communication_op == "all_reduce":
-            begin_fn = lambda: self._backend.begin_all_reduce(  # noqa: E731
+            begin_fn = lambda: backend.begin_all_reduce(  # noqa: E731
                 tensor,
                 group=comm_group,
             )
         elif plan.communication_op == "all_gather":
-            begin_fn = lambda: self._backend.begin_all_gather(  # noqa: E731
+            begin_fn = lambda: backend.begin_all_gather(  # noqa: E731
                 tensor,
                 group=comm_group,
             )
         elif plan.communication_op == "reduce_scatter":
-            begin_fn = lambda: self._backend.begin_reduce_scatter(  # noqa: E731
+            begin_fn = lambda: backend.begin_reduce_scatter(  # noqa: E731
                 tensor,
                 group=comm_group,
             )

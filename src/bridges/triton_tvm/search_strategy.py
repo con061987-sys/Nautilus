@@ -62,7 +62,7 @@ class KernelType(Enum):
         callers never explode at import time.
         """
         try:
-            return cls[kind.name]  # type: ignore[union-attr]
+            return cls[kind.name]
         except (AttributeError, KeyError, ValueError, TypeError):
             return cls.UNKNOWN
 

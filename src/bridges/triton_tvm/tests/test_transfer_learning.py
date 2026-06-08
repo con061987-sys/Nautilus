@@ -30,7 +30,7 @@ _sane_stages = st.integers(min_value=1, max_value=8)
 _sane_ctas = st.integers(min_value=1, max_value=4)
 
 config_dict_strategy = st.fixed_dictionaries(
-    {  # type: ignore[arg-type]
+    {
         "block_m": _sane_tile,
         "block_n": _sane_tile,
         "block_k": _sane_tile,

@@ -31,7 +31,6 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
-from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -40,9 +39,9 @@ from src.cli.commands.pipeline import (
     Pipeline,
     PipelineContext,
     PipelineStage,
-    _pipeline_impl,
     _parse_mesh,
     _parse_targets,
+    _pipeline_impl,
     _register_handlers,
     cli,
 )
@@ -115,6 +114,12 @@ def _make_context(
 
 def _default_targets() -> list[HardwareTarget]:
     return [HardwareTarget(vendor=Vendor.NVIDIA, arch=Arch.SM_90)]
+
+
+def _out(ctx: PipelineContext) -> Path:
+    """Return output_dir, asserting it's not None (always set in tests)."""
+    assert ctx.output_dir is not None, "output_dir must be set in test context"
+    return ctx.output_dir
 
 
 def _STAGE_HANDLERS_DICT():
@@ -306,7 +311,7 @@ class TestFullPipelineOutput:
         )
         # The output must contain per-stage timing lines
         output_lines = result.output.split("\n")
-        timing_lines = [l for l in output_lines if "ms" in l and ("CAPTURE" in l.upper() or "SHARD" in l.upper() or "EXTRACT" in l.upper() or "TUNE" in l.upper() or "BUILD" in l.upper() or "DISPATCH" in l.upper())]
+        timing_lines = [line for line in output_lines if "ms" in line and ("CAPTURE" in line.upper() or "SHARD" in line.upper() or "EXTRACT" in line.upper() or "TUNE" in line.upper() or "BUILD" in line.upper() or "DISPATCH" in line.upper())]
         # At minimum, expect some stage timing output
         assert len(timing_lines) >= 1
 
@@ -598,7 +603,7 @@ class TestStageTune:
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), trials=1)
         pipeline.stage_capture()
         pipeline.stage_extract()
-        summary = pipeline.stage_tune()
+        pipeline.stage_tune()
         # Should have a config for the kernel (may be defaults)
         assert "matmul_kernel" in ctx.tuning_configs
         config = ctx.tuning_configs["matmul_kernel"]
@@ -770,7 +775,7 @@ class TestStageDispatch:
         ctx = _make_context(tmp_path, kernel)
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), trials=1)
         pipeline.run()
-        manifest = ctx.output_dir / "dispatch_plan.json"
+        manifest = _out(ctx) / "dispatch_plan.json"
         if manifest.exists():
             plan = json.loads(manifest.read_text())
             assert isinstance(plan, dict)
@@ -928,7 +933,7 @@ class TestPipelineDryRun:
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), dry_run=True)
         pipeline.run()
         # The manifest is only written when not dry_run
-        manifest = ctx.output_dir / "dispatch_plan.json"
+        manifest = _out(ctx) / "dispatch_plan.json"
         assert not manifest.exists()
 
 
@@ -987,7 +992,7 @@ class TestPipelineResumeFrom:
         ctx.mesh_axes = [1]
         ctx.shard_count = 1
         ctx.sharding_cache_key = "k1"
-        ctx.save_state(ctx.output_dir / "state.json")
+        ctx.save_state(_out(ctx) / "state.json")
 
         targets = _default_targets()
         from src.cli.commands.pipeline import _STAGE_HANDLERS
@@ -1038,7 +1043,7 @@ class TestPipelineResumeFrom:
         ctx.mesh_axes = [1]
         ctx.shard_count = 1
         ctx.sharding_cache_key = "k1"
-        ctx.save_state(ctx.output_dir / "state.json")
+        ctx.save_state(_out(ctx) / "state.json")
 
         from src.cli.commands.pipeline import _STAGE_HANDLERS
 
@@ -1136,7 +1141,7 @@ class TestPipelineErrorPaths:
         tmp_path: Path,
     ) -> None:
         """_pipeline_impl raises BridgeError when a stage fails."""
-        kernel = _make_kernel_file(tmp_path)
+        _make_kernel_file(tmp_path)
         with pytest.raises(BridgeError):
             _pipeline_impl(
                 input_file=tmp_path / "nonexistent.py",
@@ -1330,7 +1335,7 @@ class TestPipelineContextOutput:
         ctx = _make_context(tmp_path, kernel)
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), trials=1)
         pipeline.run()
-        state_path = ctx.output_dir / "state.json"
+        state_path = _out(ctx) / "state.json"
         if state_path.exists():
             restored = PipelineContext.load_state(state_path)
             assert restored.dispatch_plan == ctx.dispatch_plan
@@ -1345,7 +1350,7 @@ class TestPipelineContextOutput:
         ctx = _make_context(tmp_path, kernel)
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), trials=1)
         pipeline.run()
-        state_path = ctx.output_dir / "state.json"
+        state_path = _out(ctx) / "state.json"
         if state_path.exists():
             restored = PipelineContext.load_state(state_path)
             assert restored.tuning_configs == ctx.tuning_configs
@@ -1359,7 +1364,7 @@ class TestPipelineContextOutput:
         ctx = _make_context(tmp_path, kernel)
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), trials=1)
         pipeline.run()
-        state_path = ctx.output_dir / "state.json"
+        state_path = _out(ctx) / "state.json"
         if state_path.exists():
             restored = PipelineContext.load_state(state_path)
             # Path objects should round-trip
@@ -1395,7 +1400,7 @@ class TestPipelineEdgeCases:
         kernel = _make_kernel_file(tmp_path)
         ctx = _make_context(tmp_path, kernel)
         ctx.kernel_name = "matmul_kernel"
-        ctx.save_state(ctx.output_dir / "state.json")
+        ctx.save_state(_out(ctx) / "state.json")
 
         pipeline = Pipeline(
             ctx=ctx,
@@ -1415,7 +1420,7 @@ class TestPipelineEdgeCases:
         ctx = _make_context(tmp_path, kernel, dry_run=True)
         pipeline = Pipeline(ctx=ctx, targets=_default_targets(), dry_run=True)
         pipeline.run()
-        state_path = ctx.output_dir / "state.json"
+        state_path = _out(ctx) / "state.json"
         # State must not exist after dry-run
         assert not state_path.exists()
 

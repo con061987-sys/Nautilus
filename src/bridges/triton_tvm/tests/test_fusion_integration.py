@@ -22,29 +22,7 @@ Every test documents:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
 
-import pytest
-
-from src.bridges.triton_tvm.fusion_analyzer import (
-    FUSION_PATTERNS,
-    FusionAnalyzer,
-    PatternMatch,
-)
-from src.bridges.triton_tvm.ir_capture import KernelKind
-from src.bridges.triton_tvm.ir_to_tir.ttgir_parser import (
-    OpKind,
-    TTGIRFunction,
-    TTGIROperation,
-    TTGIRParser,
-)
-from src.bridges.triton_tvm.kernel_fusion import (
-    FusionCodeGenerator,
-    FusionPlan,
-    FusionPlanner,
-    OpKind as FusionOpKind,
-    OpNode,
-)
 from src.bridges.pytorch_xla.collective_insertion import (
     CollectiveType,
     InsertedCollective,
@@ -62,6 +40,24 @@ from src.bridges.pytorch_xla.cross_device_fusion import (
     plan_and_overlap,
 )
 from src.bridges.pytorch_xla.device_mesh import DeviceVendor
+from src.bridges.triton_tvm.fusion_analyzer import (
+    FusionAnalyzer,
+    PatternMatch,
+)
+from src.bridges.triton_tvm.ir_to_tir.ttgir_parser import (
+    OpKind,
+    TTGIRFunction,
+    TTGIROperation,
+    TTGIRParser,
+)
+from src.bridges.triton_tvm.kernel_fusion import (
+    FusionCodeGenerator,
+    FusionPlanner,
+    OpNode,
+)
+from src.bridges.triton_tvm.kernel_fusion import (
+    OpKind as FusionOpKind,
+)
 
 # =========================================================================
 # Helpers — shared across all test sections
@@ -1055,7 +1051,6 @@ module {
         Passing means:
           The candidate with compute_time_us=300 is chosen over 100.
         """
-        planner = CrossDeviceFusionPlanner()
         successors = [
             ShardedGraphNode(
                 node_id="fast",

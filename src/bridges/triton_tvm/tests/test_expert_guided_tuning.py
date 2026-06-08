@@ -18,14 +18,12 @@ All tests use mocked TVM — no real GPU hardware or TVM installation required.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch
+from typing import Any, cast
 
 import pytest
-from hypothesis import HealthCheck, assume, given, settings, strategies as st
+from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import strategies as st
 
 from src.common.primitives import Vendor
 
@@ -375,7 +373,7 @@ class TestExpertRulesPropertyBased:
 
 
 class TestSearchStrategy:
-    """Verify that search strategies produce correct configs per kernel×vendor."""
+    """Verify that search strategies produce correct configs per kernel x vendor."""
 
     def test_get_strategy_all_combos_unique(self) -> None:
         """Every (kernel type, vendor) combination must return a strategy."""
@@ -397,7 +395,7 @@ class TestSearchStrategy:
 
         nvidia = get_strategy(KernelType.MATMUL, Vendor.NVIDIA)
         amd = get_strategy(KernelType.MATMUL, Vendor.AMD)
-        intel = get_strategy(KernelType.MATMUL, Vendor.INTEL)
+        _intel = get_strategy(KernelType.MATMUL, Vendor.INTEL)
         apple = get_strategy(KernelType.MATMUL, Vendor.APPLE)
 
         # Nvidia has the largest population (tensor-core heavy exploration)
@@ -450,7 +448,7 @@ class TestSearchStrategy:
 
     def test_get_strategy_with_any_object(self) -> None:
         """Any object with .name attribute matching a KernelType must work."""
-        from src.bridges.triton_tvm.search_strategy import KernelType, get_strategy
+        from src.bridges.triton_tvm.search_strategy import get_strategy
 
         class FakeKind:
             name = "MATMUL"
@@ -487,7 +485,7 @@ class TestSearchStrategy:
         from src.bridges.triton_tvm.search_strategy import list_strategies
 
         all_strategies = list_strategies()
-        # Must contain all the primary kernel×vendor combos
+        # Must contain all the primary kernel x vendor combos
         assert ("MATMUL", "nvidia") in all_strategies
         assert ("MATMUL", "amd") in all_strategies
         assert ("ATTENTION", "intel") in all_strategies
@@ -671,7 +669,7 @@ class TestConfigCache:
         cache.set("atomic_test", "nvidia", "sm_90", config)
 
         # Verify the file exists and is proper JSON
-        key = ConfigCache._make_key("atomic_test", "nvidia", "sm_90")
+        _key = ConfigCache._make_key("atomic_test", "nvidia", "sm_90")
         entries = list(cache.cache_dir.glob("*.json"))
         assert len(entries) == 1
 
@@ -695,11 +693,11 @@ class TestConfigCachePropertyBased:
         self, tmp_path: Path, block_m: int, block_n: int, block_k: int
     ) -> None:
         """Any valid config set into cache must be retrievable unchanged."""
-        from src.bridges.triton_tvm.config_cache import ConfigCache
-
         # Use a unique subdir per iteration so each generated example
         # starts with a clean cache (tmp_path is shared across examples).
         import uuid
+
+        from src.bridges.triton_tvm.config_cache import ConfigCache
 
         cache_dir = tmp_path / str(uuid.uuid4())
         cache = ConfigCache(cache_dir=cache_dir)
@@ -729,10 +727,10 @@ class TestKernelTemplatesImport:
             matmul_mi300x,
         )
 
-        assert matmul_h100.__name__ == "matmul_h100"
-        assert matmul_mi300x.__name__ == "matmul_mi300x"
-        assert matmul_gaudi.__name__ == "matmul_gaudi"
-        assert matmul_apple.__name__ == "matmul_apple"
+        assert cast(Any, matmul_h100).__name__ == "matmul_h100"
+        assert cast(Any, matmul_mi300x).__name__ == "matmul_mi300x"
+        assert cast(Any, matmul_gaudi).__name__ == "matmul_gaudi"
+        assert cast(Any, matmul_apple).__name__ == "matmul_apple"
 
     def test_attention_templates_import(self) -> None:
         """All vendor attention templates must import."""
@@ -743,33 +741,33 @@ class TestKernelTemplatesImport:
             attention_mi300x,
         )
 
-        assert attention_h100.__name__ == "attention_h100"
-        assert attention_mi300x.__name__ == "attention_mi300x"
-        assert attention_gaudi.__name__ == "attention_gaudi"
-        assert attention_apple.__name__ == "attention_apple"
+        assert cast(Any, attention_h100).__name__ == "attention_h100"
+        assert cast(Any, attention_mi300x).__name__ == "attention_mi300x"
+        assert cast(Any, attention_gaudi).__name__ == "attention_gaudi"
+        assert cast(Any, attention_apple).__name__ == "attention_apple"
 
     def test_normalization_templates_import(self) -> None:
         """All normalization templates must import."""
         from src.bridges.triton_tvm.kernel_templates import layer_norm, rms_norm, softmax
 
-        assert layer_norm.__name__ == "layer_norm"
-        assert rms_norm.__name__ == "rms_norm"
-        assert softmax.__name__ == "softmax"
+        assert cast(Any, layer_norm).__name__ == "layer_norm"
+        assert cast(Any, rms_norm).__name__ == "rms_norm"
+        assert cast(Any, softmax).__name__ == "softmax"
 
     def test_templates_are_triton_jit(self) -> None:
         """All templates must be @triton.jit decorated functions."""
         from src.bridges.triton_tvm.kernel_templates import (
+            matmul_apple,
+            matmul_gaudi,
             matmul_h100,
             matmul_mi300x,
-            matmul_gaudi,
-            matmul_apple,
         )
 
         for fn in (matmul_h100, matmul_mi300x, matmul_gaudi, matmul_apple):
             # JITFunction is the type of @triton.jit decorated functions
             from triton.runtime.jit import JITFunction
 
-            assert isinstance(fn, JITFunction), f"{fn.__name__} is not @triton.jit"
+            assert isinstance(fn, JITFunction), f"{cast(Any, fn).__name__} is not @triton.jit"
 
 
 # ===================================================================
@@ -812,7 +810,7 @@ class TestExpertRulesWithMetaScheduleAdapter:
         # Filter for a small problem
         filtered = filter_matmul_configs(rules, m=128, n=256, k=64)
         kwargs = build_search_space_kwargs(
-            type("FakeVendorRules", (), {"matmul": filtered})()  # type: ignore[arg-type]
+            type("FakeVendorRules", (), {"matmul": filtered})()
         )
         # After filtering, tile_m with only one value shouldn't appear
         if len(filtered.tile_m) <= 1:
@@ -848,7 +846,6 @@ class TestSearchStrategyWithBridgeOrchestrator:
         """Auto-tuning bridge must accept strategies when tuning."""
         from src.bridges.triton_tvm.search_strategy import (
             KernelType,
-            SearchStrategy,
             get_strategy,
         )
         from src.common.primitives import Vendor
