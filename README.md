@@ -19,7 +19,7 @@ across mixed-vendor clusters.
 
 ```bash
 # Install
-git clone https://github.com/nvindia-cud/NVINDIA_CUD
+git clone  https://github.com/con061987-sys/Nautilus
 cd nautilus
 ./scripts/setup-cuda.sh       # or setup-rocm.sh
 
